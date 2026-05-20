@@ -18,8 +18,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Design: tokens → component library → animations -->
-  <link rel="stylesheet" href="/pos-styles.css?v=3">
-  <link rel="stylesheet" href="/pos-styles-v2.css?v=2">
+  <link rel="stylesheet" href="/pos-styles.css?v=4">
+  <link rel="stylesheet" href="/pos-styles-v2.css?v=3">
 
   <style>
     /* Critical: no flash before CSS loads */
@@ -37,7 +37,7 @@
   </script>
 </head>
 <body>
-  <!-- ChainLine POS v2.0 — 2026-05-20 -->
+  <!-- ChainLine POS v2.1 — 2026-05-20 -->
   <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#5a5856;">Loading ChainLine POS...</div></div>
 
   <!-- React 18 CDN — no JSX, no Babel -->
@@ -47,43 +47,43 @@
   <!-- Load order: design system → utilities → features → app (LAST) -->
 
   <!-- 1. Design system: Toast, Modal, Shortcuts, CommandPalette, Avatar, Skeleton, StatCard -->
-  <script src="/pos-design.js?v=3"></script>
+  <script src="/pos-design.js?v=4"></script>
 
   <!-- 2. Auth: STAFF, PIN login, useAuth, AuthGuard -->
   <script src="/pos-auth.js?v=3"></script>
 
   <!-- 3. Print: printWorkOrder, printReceipt, exportCSV -->
-  <script src="/pos-print.js?v=3"></script>
+  <script src="/pos-print.js?v=4"></script>
 
   <!-- 4. Offline: OfflineQueue, ConnectionStatus, useSyncQueue -->
-  <script src="/pos-offline.js?v=2"></script>
+  <script src="/pos-offline.js?v=3"></script>
 
   <!-- 5. Performance: VirtualList, ItemSearchCache, PrefetchManager, SkeletonTable -->
   <script src="/pos-performance.js?v=2"></script>
 
   <!-- 6. Payments: RequestPaymentModal, CardPaymentModal, CashModal, TipModal, RefundModal -->
-  <script src="/pos-payments.js?v=2"></script>
+  <script src="/pos-payments.js?v=3"></script>
 
   <!-- 7. Inventory advanced: barcode scanner, low-stock alerts, QuickEditModal -->
-  <script src="/pos-inventory-advanced.js?v=2"></script>
+  <script src="/pos-inventory-advanced.js?v=3"></script>
 
   <!-- 8. Inventory screen: full catalog, click-through, R2 images, options menu -->
-  <script src="/pos-inventory.js?v=2"></script>
+  <script src="/pos-inventory.js?v=3"></script>
 
   <!-- 9. Customers CRM: bikes on file, purchase history, SMS, notes (loads when available) -->
-  <script src="/pos-customers.js?v=2"></script>
+  <script src="/pos-customers.js?v=3"></script>
 
   <!-- 10. Reports v2: SVG charts, sales overview, top items, mechanic breakdown, EOD -->
-  <script src="/pos-reports-v2.js?v=2"></script>
+  <script src="/pos-reports-v2.js?v=3"></script>
 
   <!-- 11. End of Day: cash count, variance, Z-report -->
-  <script src="/pos-eod.js?v=2"></script>
+  <script src="/pos-eod.js?v=3"></script>
 
   <!-- 12. Purchase Orders v2: vendor directory, receive items, HLC/LTP/OSS/OGC -->
-  <script src="/pos-purchase-orders-v2.js?v=2"></script>
+  <script src="/pos-purchase-orders-v2.js?v=3"></script>
 
   <!-- 13. Main app — ALWAYS LAST -->
-  <script src="/pos-app.js?v=8"></script>
+  <script src="/pos-app.js?v=9"></script>
 
   <script>
     if ('serviceWorker' in navigator) {
