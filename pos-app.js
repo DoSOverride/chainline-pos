@@ -493,9 +493,11 @@ function LoginScreen({ onLogin }) {
 /* ─────────────────────────────────────────
    SIDEBAR
 ───────────────────────────────────────── */
+const WO_ACTIVE_COUNT = MOCK_WO.filter(wo => wo.status !== 'done' && wo.status !== 'ready' && wo.status !== 'booked').length;
+
 const NAV_MAIN = [
   { id: 'dashboard',   label: 'Dashboard',   mobileLabel: 'Home',    Icon: 'Dashboard', count: null },
-  { id: 'work-orders', label: 'Work Orders', mobileLabel: 'WOs',     Icon: 'Wrench',    count: '23' },
+  { id: 'work-orders', label: 'Work Orders', mobileLabel: 'WOs',     Icon: 'Wrench',    count: null },
   { id: 'sales',       label: 'Sales',       mobileLabel: 'Sales',   Icon: 'Cart',      count: null },
   { id: 'customers',   label: 'Customers',   mobileLabel: 'Customers', Icon: 'Users',   count: null },
   { id: 'inventory',   label: 'Inventory',   mobileLabel: 'Stock',   Icon: 'Box',       count: null },
@@ -515,10 +517,11 @@ function ConnectionStatus() {
   );
 }
 
-function Sidebar({ screen, setScreen, staff }) {
+function Sidebar({ screen, setScreen, staff, onLogout }) {
   const activeNav = screen === 'new-wo' ? 'work-orders' : screen;
-  const navItem = (n) =>
-    h('a', {
+  const navItem = (n) => {
+    const count = n.id === 'work-orders' ? WO_ACTIVE_COUNT : n.count;
+    return h('a', {
       key: n.id,
       className: 'nav-item' + (activeNav === n.id ? ' active' : ''),
       onClick: () => setScreen(n.id),
@@ -526,8 +529,9 @@ function Sidebar({ screen, setScreen, staff }) {
       h('span', { className: 'nav-icon' }, h(Ico[n.Icon], { size: 14 })),
       h('span', { className: 'nav-item-label' }, n.label),
       h('span', { className: 'nav-item-label-mobile' }, n.mobileLabel || n.label),
-      n.count && h('span', { className: 'nav-count' }, n.count)
+      count ? h('span', { className: 'nav-count' }, count) : null
     );
+  };
 
   return h('aside', { className: 'sidebar' },
     h('div', { className: 'sidebar-brand' },
@@ -551,7 +555,17 @@ function Sidebar({ screen, setScreen, staff }) {
         h('span', { className: 'user-name' }, staff ? staff.name : 'ChainLine'),
         h('span', { className: 'user-role' }, staff ? staff.role : '')
       ),
-      h(ConnectionStatus)
+      h(ConnectionStatus),
+      onLogout && h('button', {
+        className: 'btn ghost',
+        title: 'Log out',
+        style: { height: 24, padding: '0 6px', marginLeft: 4, flexShrink: 0 },
+        onClick: onLogout,
+      },
+        h('svg', { viewBox: '0 0 16 16', width: 14, height: 14, fill: 'none', stroke: 'currentColor', strokeWidth: '1.3', strokeLinecap: 'round', strokeLinejoin: 'round' },
+          h('path', { d: 'M10 3h3v10h-3M7 5l3 3-3 3M2 8h8' })
+        )
+      )
     )
   );
 }
@@ -1403,7 +1417,7 @@ function ReceiptModal({ receipt, onClose }) {
 /* ─────────────────────────────────────────
    SCREEN D — SALES REGISTER
 ───────────────────────────────────────── */
-function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending }) {
+function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount, onSaleComplete }) {
   const [items, setItems] = useState([
     { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        qty: 1, price: 189.00 },
     { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip',  qty: 2, price: 84.00  },
@@ -1500,6 +1514,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending }) {
     setReceipt(null);
     setSaleCustomer(null);
     setCustomerName('');
+    onSaleComplete && onSaleComplete();
   }
 
   const totalUnits = items.reduce((a, i) => a + i.qty, 0);
@@ -1508,7 +1523,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending }) {
     receipt && h(ReceiptModal, { receipt, onClose: handleNewSale }),
     h(PageHead, {
       title: 'Sales Register',
-      sub: 'Sale #S-1188 \xb7 Drawer open',
+      sub: 'Sale #S-' + (1188 + (saleCount || 0)) + ' \xb7 Drawer open',
       actions: [
         h('button', { key: 'park', className: 'btn' }, 'Park sale'),
         h('button', { key: 'disc', className: 'btn' }, 'Discount'),
@@ -2371,6 +2386,24 @@ function SettingsScreen() {
 }
 
 /* ─────────────────────────────────────────
+   SCREEN — BOOKINGS
+───────────────────────────────────────── */
+function BookingsScreen({ setScreen }) {
+  return h(Fragment, null,
+    h(PageHead, { title: 'Bookings', sub: 'Tools' }),
+    h('div', { className: 'placeholder-screen' },
+      h('div', { className: 'label' }, 'Bookings module coming soon'),
+      h('p', { style: { color: 'var(--text-2)', marginTop: 8, marginBottom: 16, fontSize: 13 } },
+        'See Work Orders for service queue'
+      ),
+      h('button', { className: 'btn primary', onClick: () => setScreen('work-orders') },
+        h(Ico.Wrench, { size: 13 }), ' View Work Orders'
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    PLACEHOLDER MODULE (fallback)
 ───────────────────────────────────────── */
 function PlaceholderScreen({ name }) {
@@ -2392,6 +2425,7 @@ function App() {
   const [screen, setScreen]           = useState('dashboard');
   const [pendingCustomer, setPendingCustomer] = useState(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [saleCount, setSaleCount]     = useState(0);
   const topbarSearchRef = useRef(null);
 
   // G→D sequence state
@@ -2463,12 +2497,13 @@ function App() {
       case 'dashboard':      return h(DashboardScreen,       { setScreen });
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
-      case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null) });
+      case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
       case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
       case 'inventory':      return h(window.InventoryScreen      || InventoryScreen,       { staff, setScreen });
       case 'purchase-orders':return h(window.PurchaseOrdersScreen || PurchaseOrdersScreen);
       case 'reports':        return h(window.ReportsScreen        || ReportsScreen);
       case 'settings':       return h(SettingsScreen);
+      case 'bookings':       return h(BookingsScreen,        { setScreen });
       default:               return h(PlaceholderScreen, { name: screen });
     }
   }
@@ -2476,7 +2511,7 @@ function App() {
   return h(Fragment, null,
     showGlobalSearch && h(GlobalSearch, { onNavigate: handleGlobalNavigate, onClose: function() { setShowGlobalSearch(false); } }),
     h('div', { className: 'app' },
-      h(Sidebar, { screen, setScreen, staff }),
+      h(Sidebar, { screen, setScreen, staff, onLogout: function() { try { sessionStorage.removeItem('pos-staff'); } catch {} setStaff(null); } }),
       h('main', { className: 'main' },
         h(Topbar, { screen, topbarSearchRef, onOpenSearch: function() { setShowGlobalSearch(true); } }),
         h('div', { className: 'content' }, renderScreen()),
