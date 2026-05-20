@@ -654,7 +654,10 @@
       [fetchInventory]
     );
 
+    // Only fetch when user provides a query or dept filter — don't auto-load all 7766 items
     useEffect(() => {
+      const hasFilter = query.trim().length >= 2 || (deptFilter && deptFilter !== 'All Departments') || (stockFilter && stockFilter !== 'All');
+      if (!hasFilter) { setItems([]); setTotalCount(0); setLoading(false); return; }
       debouncedFetch(query, deptFilter, stockFilter, sort, page);
     }, [query, deptFilter, stockFilter, sort, page]);
 
@@ -897,7 +900,11 @@
             ),
             h('tbody', null,
               paginated.length === 0
-                ? h('tr', null, h('td', { colSpan: 20, style: { padding: '40px 20px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 12 } }, 'No items match.'))
+                ? h('tr', null, h('td', { colSpan: 20, style: { padding: '52px 20px', textAlign: 'center' } },
+                    h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text-3)' } },
+                      !query && (!deptFilter || deptFilter === 'All Departments') ? 'SEARCH OR FILTER TO BROWSE 7766 ITEMS' : 'NO ITEMS MATCH'
+                    )
+                  ))
                 : paginated.map(item =>
                     h('tr', {
                       key: item.id,
