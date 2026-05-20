@@ -1703,19 +1703,25 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           )
         ),
 
-        query && results.length > 0 && h('div', { className: 'item-results' },
-          results.map(c =>
+        query && searching && h('div', { className: 'item-results' },
+          h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
+            'Searching...')
+        ),
+        query && !searching && searchResults.length > 0 && h('div', { className: 'item-results' },
+          searchResults.map(c =>
             h('div', { key: c.sku, className: 'item-row', onClick: () => addItem(c) },
               h('div', null,
                 h('div', null, c.name),
                 h('div', { className: 'sku' }, c.sku)
               ),
-              h('div', { className: 'stock' + (c.low ? ' low' : '') }, c.stock + ' in stock'),
+              h('div', { className: 'stock' + (c.low ? ' low' : '') }, c.stock != null ? c.stock + ' in stock' : ''),
               h('div', { className: 'price' }, fmt$(c.price))
             )
-          )
+          ),
+          h('div', { style: { padding: '4px 14px 8px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 10 } },
+            searchResults.length + ' result' + (searchResults.length === 1 ? '' : 's'))
         ),
-        query && results.length === 0 && h('div', { className: 'item-results' },
+        query && !searching && searchResults.length === 0 && query.trim().length >= 2 && h('div', { className: 'item-results' },
           h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
             'No results for "' + query + '"')
         ),
