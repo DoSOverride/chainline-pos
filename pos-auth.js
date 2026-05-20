@@ -1,7 +1,7 @@
 // pos-auth.js — ChainLine POS V2 Auth Module
 // PIN-based staff auth with sessionStorage persistence
 
-const STAFF = [
+const _AUTH_STAFF = [
   { name: "Jason",   role: "warranty", pin: "1139", initials: "JA", color: "#c8392c", emoji: "🔧" },
   { name: "Phil",    role: "mechanic", pin: "1139", initials: "PH", color: "#e07b39", emoji: "🔧" },
   { name: "Steve",   role: "mechanic", pin: "1139", initials: "ST", color: "#d4a017", emoji: "🔧" },
@@ -224,7 +224,7 @@ function AuthScreen(onLogin) {
 
       ${!selectedStaff ? `
         <div class="staff-grid">
-          ${STAFF.map(s => `
+          ${_AUTH_STAFF.map(s => `
             <div class="staff-card" data-name="${s.name}" style="--staff-color:${s.color}">
               <div class="staff-avatar" style="background:${s.color}20;border:2px solid ${s.color}40;color:${s.color}">
                 ${s.initials}
@@ -239,7 +239,7 @@ function AuthScreen(onLogin) {
         </div>
       ` : `
         <div class="staff-grid">
-          ${STAFF.map(s => `
+          ${_AUTH_STAFF.map(s => `
             <div class="staff-card ${s.name === selectedStaff.name ? "selected" : ""}" data-name="${s.name}" style="--staff-color:${s.color}">
               <div class="staff-avatar" style="background:${s.color}20;border:2px solid ${s.name === selectedStaff.name ? s.color : s.color + "40"};color:${s.color}">
                 ${s.initials}
@@ -272,7 +272,7 @@ function AuthScreen(onLogin) {
     container.querySelectorAll(".staff-card").forEach(card => {
       card.addEventListener("click", () => {
         const name = card.dataset.name;
-        selectedStaff = STAFF.find(s => s.name === name) || null;
+        selectedStaff = _AUTH_STAFF.find(s => s.name === name) || null;
         pinBuffer = "";
         pinError = "";
         render();
@@ -419,4 +419,4 @@ function AuthGuard(appFactory) {
 window.AuthScreen = AuthScreen;
 window.useAuth = useAuth;
 window.AuthGuard = AuthGuard;
-window.POS_STAFF = STAFF;
+window.POS_STAFF = _AUTH_STAFF;
