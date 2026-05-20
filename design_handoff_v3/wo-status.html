@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f0f">
+<title>Your bike at ChainLine Cycle</title>
+<meta name="description" content="Live status of your bike service at ChainLine Cycle">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #0f0f0f; --bg2: #161616; --bg3: #1c1c1c;
+    --line: rgba(255,255,255,0.06); --line2: rgba(255,255,255,0.10); --line3: rgba(255,255,255,0.16);
+    --text: #f0ede8; --text2: #8a8784; --text3: #5a5856;
+    --accent: #c8392c; --accent-glow: rgba(200,57,44,0.12); --accent-dim: #8a2820;
+    --green-fg: #2f9e5b; --green-bg: rgba(47,158,91,0.12); --green-line: rgba(47,158,91,0.32);
+    --blue-fg: #4d8fd6; --blue-bg: rgba(77,143,214,0.12); --blue-line: rgba(77,143,214,0.32);
+    --amber-fg: #d29a3a; --amber-bg: rgba(210,154,58,0.12); --amber-line: rgba(210,154,58,0.32);
+    --red-fg: #d6463a; --red-bg: rgba(214,70,58,0.10);
+    --ui: 'Manrope', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--ui); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+  .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* Brand mark — same nested squares as the POS */
+  .brand-mark {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .brand-mark::before { content: ''; position: absolute; inset: 5px; background: var(--bg); }
+  .brand-mark::after  { content: ''; position: absolute; inset: 9px; background: var(--accent); }
+
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--line2);
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header .brand-name {
+    font-family: var(--mono);
+    font-size: 14px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  header .shop-sub {
+    font-family: var(--mono);
+    font-size: 10px; color: var(--text3);
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  .lead {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .lead .greeting {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--text2); margin-bottom: 6px;
+  }
+  .lead h1 {
+    font-size: 26px; font-weight: 600; letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .lead p {
+    color: var(--text2); font-size: 14px;
+    max-width: 480px; margin: 0 auto;
+  }
+
+  /* Status hero card */
+  .status-hero {
+    border: 1px solid var(--line2);
+    background: var(--bg2);
+    padding: 28px 24px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .status-hero .label {
+    font-family: var(--mono);
+    font-size: 10px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text3);
+    margin-bottom: 12px;
+  }
+  .status-hero .status {
+    font-size: 38px; font-weight: 700; letter-spacing: -0.02em;
+    line-height: 1; margin-bottom: 12px;
+  }
+  .status-hero .eta {
+    font-family: var(--mono); font-size: 13px;
+    color: var(--text2);
+    font-variant-numeric: tabular-nums;
+  }
+  .status-hero .eta b { color: var(--text); font-weight: 600; }
+
+  /* Status colours */
+  .status-ready       { color: var(--green-fg); }
+  .status-inprogress  { color: var(--text); }
+  .status-open        { color: var(--blue-fg); }
+  .status-booked      { color: var(--amber-fg); }
+  .status-waiting     { color: var(--amber-fg); }
+  .status-partsordered{ color: var(--amber-fg); }
+  .status-ra          { color: var(--accent); }
+  .status-overdue     { color: var(--red-fg); }
+
+  /* Timeline */
+  .timeline {
+    border-left: 2px solid var(--line2);
+    margin-left: 6px;
+    padding-left: 24px;
+    margin-bottom: 28px;
+  }
+  .timeline-row {
+    position: relative;
+    padding: 12px 0;
+  }
+  .timeline-row::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 18px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--line3);
+  }
+  .timeline-row.done::before { background: var(--green-fg); border-color: var(--green-fg); }
+  .timeline-row.current::before {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .timeline-row .step {
+    font-size: 14px; font-weight: 500;
+    color: var(--text);
+  }
+  .timeline-row:not(.done):not(.current) .step { color: var(--text3); }
+  .timeline-row .when {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text2); margin-top: 2px;
+    letter-spacing: 0.04em;
+  }
+
+  /* Detail cards */
+  .card {
+    border: 1px solid var(--line);
+    background: var(--bg2);
+    margin-bottom: 12px;
+  }
+  .card-row {
+    display: flex; justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    align-items: baseline;
+    gap: 12px;
+  }
+  .card-row:last-child { border-bottom: none; }
+  .card-row .k {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text2);
+  }
+  .card-row .v {
+    text-align: right;
+    color: var(--text);
+  }
+  .card-row .v.mono { font-family: var(--mono); }
+
+  /* Photos */
+  .photos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px;
+    margin: 12px 0 24px;
+  }
+  .photos .photo {
+    aspect-ratio: 4 / 3;
+    background: var(--bg3);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .photos .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* Notes */
+  .receipt-note {
+    padding: 16px 18px;
+    background: var(--bg3);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 12px 0;
+    white-space: pre-wrap;
+  }
+  .receipt-note-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 6px;
+  }
+
+  /* CTA */
+  .cta {
+    display: flex; gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+  }
+  .cta a {
+    flex: 1; min-width: 140px;
+    padding: 12px 16px;
+    border: 1px solid var(--line3);
+    color: var(--text);
+    text-decoration: none;
+    text-align: center;
+    font-family: var(--ui);
+    font-size: 13px; font-weight: 500;
+    transition: background 80ms, border-color 80ms;
+  }
+  .cta a:hover { background: var(--bg3); border-color: var(--text3); }
+  .cta a.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  footer {
+    text-align: center;
+    padding: 28px 24px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    border-top: 1px solid var(--line);
+  }
+  footer a { color: var(--text2); margin-left: 8px; }
+
+  .skeleton {
+    background: var(--bg3);
+    background-image: linear-gradient(90deg, var(--bg3) 0%, rgba(255,255,255,0.04) 40%, var(--bg3) 80%);
+    background-size: 400px 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }
+
+  /* Light theme — for customers viewing in daylight */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f8f7f5; --bg2: #f0eee9; --bg3: #ffffff;
+      --line: rgba(0,0,0,0.06); --line2: rgba(0,0,0,0.10); --line3: rgba(0,0,0,0.16);
+      --text: #1a1916; --text2: #5a5856; --text3: #8a8784;
+    }
+    .brand-mark::before { background: var(--bg); }
+  }
+
+  /* Error state */
+  .error-state {
+    text-align: center;
+    padding: 60px 24px;
+  }
+  .error-state .glyph {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 14px;
+  }
+  .error-state h2 {
+    font-size: 20px; font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .error-state p { color: var(--text2); max-width: 360px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand-mark"></div>
+  <div>
+    <div class="brand-name">ChainLine Cycle</div>
+    <div class="shop-sub">Kelowna · 250 860 1968</div>
+  </div>
+</header>
+
+<main id="content">
+  <div class="lead">
+    <div class="greeting">Loading your bike status</div>
+    <h1 style="opacity: 0.6">One second...</h1>
+  </div>
+</main>
+
+<footer>
+  <span>ChainLine Cycle · 1139 Ellis St, Kelowna BC</span>
+  <a href="tel:+12508601968">Call us</a>
+  <a href="https://chainline.ca">Visit site</a>
+</footer>
+
+<script>
+  // Pull token from URL: /wo-status.html?t=<token>
+  const params = new URLSearchParams(location.search);
+  const token = params.get('t') || params.get('token');
+  const root = document.getElementById('content');
+
+  function statusClass(status) {
+    return 'status-' + (status || '').toLowerCase().replace(/[^a-z]/g, '');
+  }
+
+  function fmtDate(s) {
+    if (!s) return '—';
+    try {
+      const d = new Date(s);
+      return d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+    } catch { return s; }
+  }
+
+  function render(wo) {
+    const customerName = (wo.cust || 'there').split(' ')[0];
+    const TIMELINE = [
+      { id: 'booked',     label: 'Booked' },
+      { id: 'open',       label: 'Checked in' },
+      { id: 'inprogress', label: 'In the workshop' },
+      { id: 'ready',      label: 'Ready for pickup' },
+    ];
+    const currentIdx = (function() {
+      const s = (wo.status || '').toLowerCase().replace(/\s+/g, '');
+      const i = TIMELINE.findIndex(function(t) { return t.id === s; });
+      return i >= 0 ? i : 1;
+    })();
+
+    const photosHtml = (wo.photos || []).length === 0 ? '' : `
+      <div class="receipt-note-label" style="margin-top:18px">Photos from the mechanic</div>
+      <div class="photos">
+        ${wo.photos.map(function(p) { return '<div class="photo"><img src="' + p.url + '" alt=""></div>'; }).join('')}
+      </div>`;
+
+    const noteHtml = wo.receiptNote ? `
+      <div class="receipt-note-label" style="margin-top:18px">Note from the mechanic</div>
+      <div class="receipt-note">${(wo.receiptNote || '').replace(/</g, '&lt;')}</div>` : '';
+
+    const isReady = (wo.status || '').toLowerCase() === 'ready';
+
+    root.innerHTML = `
+      <div class="lead">
+        <div class="greeting">Hi ${customerName} —</div>
+        <h1>Here's your ${wo.bike || 'bike'}</h1>
+      </div>
+
+      <div class="status-hero">
+        <div class="label">Status</div>
+        <div class="status ${statusClass(wo.status)}">${(wo.status || 'Open').replace(/[_-]/g, ' ')}</div>
+        <div class="eta">
+          ${isReady
+            ? 'Ready to pick up · come by anytime during shop hours'
+            : 'Estimated ready · <b>' + fmtDate(wo.due) + '</b>'}
+        </div>
+      </div>
+
+      <div class="timeline">
+        ${TIMELINE.map(function(t, i) {
+          const klass = i < currentIdx ? 'done' : i === currentIdx ? 'current' : '';
+          return '<div class="timeline-row ' + klass + '">' +
+                   '<div class="step">' + t.label + '</div>' +
+                   (i === currentIdx ? '<div class="when">Now</div>' : '') +
+                 '</div>';
+        }).join('')}
+      </div>
+
+      <div class="card">
+        <div class="card-row"><span class="k">Work order</span><span class="v mono">${wo.id}</span></div>
+        <div class="card-row"><span class="k">Bike</span><span class="v">${wo.bike || '—'}</span></div>
+        ${wo.svc ? '<div class="card-row"><span class="k">Service</span><span class="v">' + wo.svc + '</span></div>' : ''}
+        ${wo.mechName ? '<div class="card-row"><span class="k">Mechanic</span><span class="v">' + wo.mechName + '</span></div>' : ''}
+        ${wo.total ? '<div class="card-row"><span class="k">Estimate</span><span class="v mono">$' + (parseFloat(wo.total).toFixed(2)) + '</span></div>' : ''}
+      </div>
+
+      ${noteHtml}
+      ${photosHtml}
+
+      <div class="cta">
+        <a href="tel:+12508601968">Call the shop</a>
+        ${isReady ? '' : '<a href="sms:+12508601968?body=Hi%2C%20checking%20on%20work%20order%20' + (wo.id || '') + '">Text us</a>'}
+        <a class="primary" href="https://www.google.com/maps?q=ChainLine+Cycle+Kelowna">Get directions</a>
+      </div>
+    `;
+  }
+
+  function renderError(msg) {
+    root.innerHTML = `
+      <div class="error-state">
+        <div class="glyph">Work order not found</div>
+        <h2>That link is no longer active</h2>
+        <p>${msg || 'It may have expired, or the link is invalid. Give the shop a call and we\\'ll sort it out.'}</p>
+        <div class="cta" style="justify-content: center; margin-top: 24px">
+          <a class="primary" href="tel:+12508601968">Call us</a>
+        </div>
+      </div>`;
+  }
+
+  // Mocked fetch for offline preview. In production, swap for the real Worker endpoint.
+  async function fetchWO(token) {
+    // Try the live worker first
+    try {
+      const r = await fetch('https://still-term-f1ec.taocaruso77.workers.dev/api/wo-public/' + encodeURIComponent(token));
+      if (r.ok) return await r.json();
+    } catch {}
+    // Fallback: in-page demo
+    if (token === 'demo') {
+      return {
+        id: 'WO-2391',
+        cust: 'Devon Tran',
+        bike: 'Norco Sight C2 · 2023 · Forest Green',
+        svc: 'Drivetrain replace',
+        status: 'inprogress',
+        due: '2026-05-22',
+        mechName: 'Avery Miller',
+        total: 312.50,
+        receiptNote: 'Replacing full drivetrain — cassette, chain, chainrings. Customer reports skipping under load. ETA Friday.',
+        photos: []
+      };
+    }
+    return null;
+  }
+
+  if (!token) {
+    renderError('No work order token in this link.');
+  } else {
+    fetchWO(token).then(function(wo) {
+      if (wo) render(wo);
+      else renderError();
+    }).catch(function() {
+      renderError('We can\'t reach the shop right now. Try again in a minute.');
+    });
+  }
+</script>
+</body>
+</html>

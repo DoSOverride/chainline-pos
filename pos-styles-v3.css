@@ -1,0 +1,530 @@
+/* ChainLine POS — Design system v3 additions
+ * Tokens + classes for everything added in Round 3 (Lightspeed benchmark).
+ * Load AFTER pos-styles-v2.css.
+ *
+ * In index.html, add:
+ *   <link rel="stylesheet" href="/pos-styles-v3.css?v=1">
+ */
+
+/* ── New semantic colour: violet (for Estimate/Waiting/Consignment) ── */
+:root {
+  --violet-fg:   #a78bfa;
+  --violet-bg:   rgba(167, 139, 250, 0.12);
+  --violet-line: rgba(167, 139, 250, 0.32);
+
+  --teal-fg:     #4dc6c6;
+  --teal-bg:     rgba(77, 198, 198, 0.12);
+  --teal-line:   rgba(77, 198, 198, 0.32);
+}
+
+/* ── Expanded badge variants ── */
+.badge.violet,    .badge-violet,
+.badge.estimate,  .badge-estimate,
+.badge.waiting,   .badge-waiting,
+.badge.consignment, .badge-consignment {
+  color: var(--violet-fg);
+  background: var(--violet-bg);
+  border-color: var(--violet-line);
+}
+
+.badge.parts-ordered, .badge-parts-ordered {
+  color: var(--amber-fg);
+  background: var(--amber-bg);
+  border-color: var(--amber-line);
+}
+
+.badge.so-arrived, .badge-so-arrived {
+  color: var(--green-fg);
+  background: var(--green-bg);
+  border-color: var(--green-line);
+}
+
+.badge.ra, .badge-ra {
+  color: var(--accent);
+  background: var(--accent-glow);
+  border-color: var(--accent-dim);
+}
+
+.badge.done-paid, .badge-done-paid {
+  color: var(--text3);
+  background: var(--bg3);
+  border-color: var(--line2);
+}
+
+/* ── Customer type chip (STAFF / WHOLESALE / FRIENDS) ── */
+.customer-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--line3);
+  vertical-align: middle;
+}
+.customer-chip-staff       { color: var(--amber-fg);  border-color: var(--amber-line); }
+.customer-chip-wholesale   { color: var(--blue-fg);   border-color: var(--blue-line); }
+.customer-chip-friends     { color: var(--violet-fg); border-color: var(--violet-line); }
+.customer-chip-vip         { color: var(--accent);    border-color: var(--accent-dim); }
+
+/* ── WO action bar buttons (Print Tag, Request Payment) ── */
+.wo-action-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.wo-action-bar .btn {
+  height: 32px;
+  font-size: 12px;
+}
+
+/* ── Hook In/Out input — slightly emphasised ── */
+.hook-input {
+  background: var(--bg2) !important;
+  border-color: var(--line3) !important;
+  font-family: var(--mono) !important;
+  font-size: 12px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.hook-input::placeholder {
+  text-transform: none;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+/* ── Warranty/Save Parts inline toggles ── */
+.wo-flags {
+  display: flex;
+  gap: 18px;
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+}
+.wo-flags .toggle { gap: 8px; }
+.wo-flags .toggle .lbl { font-size: 12px; }
+.wo-flags .toggle .lbl-sub { font-size: 9px; }
+
+.wo-flag-warranty.is-on {
+  background: rgba(214,70,58,0.06);
+  border-color: rgba(214,70,58,0.32);
+}
+
+/* ── Mechanic timer (live ticker on WO) ── */
+.wo-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  font-family: var(--mono);
+}
+.wo-timer .wo-timer-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text3);
+}
+.wo-timer.is-running .wo-timer-dot {
+  background: var(--green-fg);
+  box-shadow: 0 0 6px var(--green-fg);
+  animation: pulse 2s ease-in-out infinite;
+}
+.wo-timer-elapsed {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.wo-timer-btn {
+  background: transparent;
+  border: 1px solid var(--line2);
+  color: var(--text);
+  padding: 3px 9px;
+  font-family: var(--ui);
+  font-size: 11px;
+  cursor: pointer;
+}
+.wo-timer-btn:hover { background: var(--bg3); }
+.wo-timer-btn.is-stop { color: var(--red-fg); border-color: rgba(214,70,58,0.32); }
+
+/* ── WO photos gallery ── */
+.wo-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+.wo-photo {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  overflow: hidden;
+  cursor: pointer;
+}
+.wo-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.wo-photo .wo-photo-del {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  background: rgba(0,0,0,0.6);
+  border: 0;
+  color: #fff;
+  font-family: var(--mono);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.wo-photo:hover .wo-photo-del { background: var(--red-fg); }
+.wo-photo-add {
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--line3);
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.wo-photo-add:hover { color: var(--text); border-color: var(--text3); }
+
+/* ── Cash denomination quick-buttons (port from EOD) ── */
+.cash-denom-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+}
+.cash-denom-btn {
+  padding: 12px 6px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 80ms, border-color 80ms;
+}
+.cash-denom-btn:hover { background: var(--bg3); border-color: var(--line3); }
+.cash-denom-btn:disabled,
+.cash-denom-btn.is-empty {
+  opacity: 0.3;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+/* ── Customer Items tab table ── */
+.customer-items-tbl td {
+  vertical-align: middle;
+}
+.customer-items-tbl .serial {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.04em;
+}
+
+/* ── Vendor sheet sidebar on PO ── */
+.po-vendor-sheet {
+  width: 320px;
+  flex-shrink: 0;
+}
+.po-vendor-sheet .card-head h3 { font-size: 14px; }
+
+/* ── Shop Floor (Kanban) ── */
+.floor-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  background: var(--line2);
+  border: 1px solid var(--line2);
+  overflow-x: auto;
+  min-height: calc(100vh - 200px);
+}
+.floor-column {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  min-width: 260px;
+}
+.floor-column-head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line2);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg2);
+  position: sticky; top: 0; z-index: 1;
+}
+.floor-column-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.floor-column-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--bg);
+  border: 1px solid var(--line2);
+  padding: 1px 6px;
+  font-variant-numeric: tabular-nums;
+}
+.floor-column-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+}
+.floor-card {
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-left: 3px solid var(--text3);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 80ms;
+}
+.floor-card:hover { background: var(--bg3); }
+.floor-card.is-overdue { border-left-color: var(--red-fg); }
+.floor-card.is-prio { border-left-color: var(--accent); }
+.floor-card-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+.floor-card-cust {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+  margin-top: 2px;
+}
+.floor-card-bike {
+  font-size: 11px;
+  color: var(--text2);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floor-card-foot {
+  display: flex; align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.floor-card-due {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+.floor-card-due.is-overdue { color: var(--red-fg); }
+.floor-card-mech { margin-left: auto; }
+.floor-card-hook {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--amber-fg);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-line);
+  padding: 1px 5px;
+  text-transform: uppercase;
+}
+
+/* ── Mechanic top filter on floor view ── */
+.floor-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.floor-mech-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--text2);
+  font-family: var(--ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+.floor-mech-pill .av-init { width: 18px; height: 18px; font-size: 9px; }
+.floor-mech-pill.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ── My Queue list ── */
+.queue-empty {
+  padding: 60px 16px;
+  text-align: center;
+  color: var(--text2);
+  border: 1px solid var(--line2);
+  background: var(--bg);
+}
+.queue-empty .glyph {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+}
+
+/* ── Hook column on WO list ── */
+.tbl .cell-hook {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--amber-fg);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tbl .cell-hook.empty { color: var(--text3); font-weight: 400; }
+
+/* ── Parked sales tray (Sales register) ── */
+.parked-tray {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.parked-tray .label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-right: 6px;
+}
+.parked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg);
+  border: 1px solid var(--line3);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+.parked-chip:hover { background: var(--bg3); border-color: var(--accent); }
+.parked-chip-wo { color: var(--amber-fg); border-color: var(--amber-line); }
+
+/* ── Internal note style: muted background to distinguish from receipt note ── */
+.note-internal textarea {
+  background: rgba(214,70,58,0.04);
+  border-color: rgba(214,70,58,0.2);
+}
+.note-internal .field-hint { color: var(--red-fg); opacity: 0.7; }
+
+/* ── RA! / Warranty workflow callout ── */
+.ra-callout {
+  padding: 12px 14px;
+  background: var(--accent-glow);
+  border: 1px solid var(--accent-dim);
+  margin: 10px 0;
+  font-size: 12px;
+  color: var(--text);
+}
+.ra-callout-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+/* ── Top tab variant for customer detail (replaces left-rail) ── */
+.detail-top-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line2);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.detail-top-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text2);
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 80ms;
+}
+.detail-top-tab:hover { color: var(--text); }
+.detail-top-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.detail-top-tab-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  background: var(--bg3);
+  padding: 1px 5px;
+}
+.detail-top-tab.active .detail-top-tab-count { color: var(--text); background: var(--bg2); }
+
+/* ── Show kbd hints next to action labels ── */
+.action-with-kbd {
+  display: inline-flex; align-items: baseline; gap: 6px;
+}
+.action-with-kbd .kbd {
+  font-size: 9px;
+  padding: 1px 4px;
+}
+
+/* ── Workorder header customer block — make STAFF chip read well ── */
+.wo-customer-header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 0;
+  flex-wrap: wrap;
+}
+.wo-customer-header .label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.wo-customer-header .name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+/* ── Public customer status page (wo-status.html) lives off this file too ── */

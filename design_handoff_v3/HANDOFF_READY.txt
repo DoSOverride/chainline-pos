@@ -1,0 +1,85 @@
+HANDOFF READY · ChainLine POS · Round 3 — FULL SCOPE
+======================================================
+
+Timestamp:   2026-05-20 (overnight build)
+From:        Claude (Lightspeed benchmark + all leap-ahead features)
+To:          Claude Code (implementation)
+Status:      ✅ Everything in scope is in this folder. Ship the lot.
+
+The user uploaded 50 Lightspeed screenshots and said "make it and beat it"
+then "do them all" then "do leap-ahead too go crazy". I went crazy.
+
+This package now contains EVERYTHING:
+  - The Lightspeed benchmark (LIGHTSPEED_BENCHMARK.md, 17 numbered items)
+  - 6 new drop-in JS modules (preset bar, shop floor, my queue, wo extras,
+    customer items, all standalone — no app edits needed to load them)
+  - 1 new public-facing HTML page (wo-status.html — customer self-status)
+  - 1 new CSS file (pos-styles-v3.css) with all new tokens + classes
+  - 1 master integration document (MEGA_PATCH.md) with every in-place edit
+    to pos-app.js, pos-payments.js, pos-print.js, pos-customers.js, etc.
+
+Read order
+──────────
+1. README.md
+2. LIGHTSPEED_BENCHMARK.md     ← read FIRST for context / priorities
+3. MEGA_PATCH.md               ← THE integration guide. Apply step by step.
+4. Modules drop in as-is; just add the <script> tags from MEGA_PATCH §1.
+
+What's been built
+─────────────────
+COPIES (from Lightspeed, done better):
+  §1  Service preset bar           → pos-workorder-presets.js
+  §2  Hook In / Hook Out fields    → MEGA_PATCH §4, §11
+  §3  Receipt vs Internal note     → MEGA_PATCH §5
+  §4  Customer Items + serials     → pos-customer-items.js + MEGA_PATCH §17,§18
+  §5  Expanded custom statuses     → MEGA_PATCH §13 + pos-styles-v3.css
+  §6  PO vendor sheet sidebar      → MEGA_PATCH §16
+  §7  Cash denomination buttons    → MEGA_PATCH §12
+  §8  Customer top tabs + counts   → MEGA_PATCH §17
+  §9  Print Tag / Req Payment      → MEGA_PATCH §10
+  §10 STAFF / customer type chip   → pos-wo-extras.js + MEGA_PATCH §14,§15
+  §11 Warranty + Save Parts        → MEGA_PATCH §6
+
+LEAP-AHEAD (not in Lightspeed at all):
+  §16a Live shop floor kanban      → pos-shopfloor.js
+  §16b Customer self-status link   → wo-status.html + MEGA_PATCH §10
+  §16c Photo attachment on WO      → pos-wo-extras.js (WoPhotos)
+  §16e Parked sale + WO link       → MEGA_PATCH §19
+  §16f Mechanic timer per WO       → pos-wo-extras.js (WoTimer)
+  §16g My Queue route              → pos-myqueue.js
+  §16h RA! workflow + RMA PDF      → pos-wo-extras.js (WoRaCallout)
+
+Worker endpoints to stub on the Cloudflare side (server work, not POS):
+  §16d Daily overdue digest SMS    → MEGA_PATCH §20
+  Plus payment/SMS/photo/time/wo-public endpoints (see §20)
+
+Time budget
+───────────
+~3 hours of focused integration work, all CSS/JS find-and-replace.
+None of it is risky; modules degrade gracefully if missing.
+
+Order to apply
+──────────────
+1. Drop in all new files + add <script>/<link> tags (MEGA_PATCH §1)        ~15min
+2. Sidebar nav + renderScreen routes (§2–3)                                ~15min
+3. WorkOrderDetail edits — hook fields, notes split, flags, preset bar,
+   timer, photos, RA callout, action buttons (§4–10)                        ~75min
+4. WO list Hook column (§11)                                                ~10min
+5. CashModal denoms (§12)                                                   ~10min
+6. Settings expansion (§13–14)                                              ~10min
+7. STAFF chip integration everywhere (§15)                                  ~15min
+8. PO vendor sheet (§16)                                                    ~15min
+9. Customer detail top tabs + Items tab (§17–18)                            ~20min
+10. Sales register parked tray (§19)                                        ~15min
+11. Stub Worker endpoints (§20) — or defer if time short                    ~30min
+
+When done
+─────────
+Push, deploy, append outcome to STATUS.md with deploy URL + screenshot
+links. Include a one-line summary of what works.
+
+If something can't ship tonight, document it in STATUS.md under
+"deferred to next round" with reason. Better to ship 18 of 20 working
+than 20 of 20 half-broken.
+
+— end of signal —
