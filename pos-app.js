@@ -3739,7 +3739,7 @@ function App() {
       case 'wo-calendar':    return h(WorkOrderCalendarScreen, { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
-      case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
+      case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'inventory':      return h(window.InventoryScreen      || InventoryScreen,       { staff, setScreen });
       case 'purchase-orders':return h(window.PurchaseOrdersScreen || PurchaseOrdersScreen);
       case 'reports':        return h(window.ReportsScreen        || ReportsScreen);

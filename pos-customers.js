@@ -247,6 +247,8 @@
       h('path',{d:'M2.5 2.5h9l2 2v9h-11v-11Z'}),h('path',{d:'M5.5 2.5v3.5h5V2.5M4.5 9.5h7'})),
     CreditCard:() => h('svg',{viewBox:'0 0 16 16',width:14,height:14,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round'},
       h('rect',{x:'1.5',y:'3.5',width:'13',height:'9'}),h('path',{d:'M1.5 7h13'})),
+    Mail:      () => h('svg',{viewBox:'0 0 16 16',width:14,height:14,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
+      h('rect',{x:'1.5',y:'3',width:'13',height:'10'}),h('path',{d:'m1.5 4 6.5 4.5L14.5 4'})),
   };
 
   /* ── Atoms ── */
@@ -621,7 +623,7 @@
   /* ═══════════════════════════════════════════
      CUSTOMER DETAIL VIEW — full-page LS layout
   ═══════════════════════════════════════════ */
-  function CustomerDetailView({ customer: initialCustomer, allCustomers, customerIndex, totalCustomers, onClose, onUpdate, onNewSale, onNewWo, onPrev, onNext }) {
+  function CustomerDetailView({ customer: initialCustomer, allCustomers, customerIndex, totalCustomers, onClose, onUpdate, onNewSale, onNewWo, onOpenWo, onPrev, onNext }) {
     const [customer, setCustomer] = useState(initialCustomer);
     const [leftNav, setLeftNav] = useState('details');
     const [form, setForm] = useState(null);  /* null = not editing; object = editing */
@@ -686,16 +688,18 @@
       }).catch(() => {});
 
       /* Fetch workorders for this customer */
-      const cname = initialCustomer.firstName + ' ' + initialCustomer.lastName;
-      apiFetch('/api/workorders?q=' + encodeURIComponent(cname)).then(result => {
+      const cname = (initialCustomer.firstName || '') + ' ' + (initialCustomer.lastName || '');
+      apiFetch('/api/workorders?q=' + encodeURIComponent(cname.trim())).then(result => {
         if (result && result.workorders) {
           const mapped = result.workorders.map(w => ({
             id: 'WO-' + w.workorderID,
+            workorderID: w.workorderID,
             bike: w.Serialized?.systemSku || w.description || 'Unknown bike',
             svc: w.note || w.description || '',
             due: w.timeIn ? fmtDate(w.timeIn) : '-',
             status: w.workorderStatusID === 1 ? 'open' : w.workorderStatusID === 2 ? 'inprogress' : w.workorderStatusID === 3 ? 'ready' : 'closed',
             total: parseFloat(w.total || 0),
+            raw: w,
           }));
           if (mapped.length > 0) setWorkOrders(mapped);
         }
@@ -993,10 +997,34 @@
                   h('input', { className: 'input', style: inp, type: 'url', value: form.website || '', placeholder: 'https://', onChange: e => setF('website', e.target.value) })
                 ),
                 h(FormField, { label: 'Email 1' },
-                  h('input', { className: 'input', style: inp, type: 'email', value: form.email || '', onChange: e => setF('email', e.target.value) })
+                  h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                    h('input', { className: 'input', style: { ...inp, flex: 1 }, type: 'email', value: form.email || '', onChange: e => setF('email', e.target.value) }),
+                    h('button', {
+                      className: 'btn ghost',
+                      style: { display: 'flex', alignItems: 'center', gap: 4, height: 30, padding: '0 10px', fontSize: 12, opacity: form.email ? 1 : 0.4 },
+                      disabled: !form.email,
+                      title: form.email ? 'Send email to ' + form.email : 'No email on file',
+                      onClick: () => {
+                        if (!form.email) return;
+                        window.location.href = 'mailto:' + encodeURIComponent(form.email);
+                      },
+                    }, h(I.Mail), 'Send')
+                  )
                 ),
                 h(FormField, { label: 'Email 2' },
-                  h('input', { className: 'input', style: inp, type: 'email', value: form.email2 || '', onChange: e => setF('email2', e.target.value) })
+                  h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                    h('input', { className: 'input', style: { ...inp, flex: 1 }, type: 'email', value: form.email2 || '', onChange: e => setF('email2', e.target.value) }),
+                    h('button', {
+                      className: 'btn ghost',
+                      style: { display: 'flex', alignItems: 'center', gap: 4, height: 30, padding: '0 10px', fontSize: 12, opacity: form.email2 ? 1 : 0.4 },
+                      disabled: !form.email2,
+                      title: form.email2 ? 'Send email to ' + form.email2 : 'No email on file',
+                      onClick: () => {
+                        if (!form.email2) return;
+                        window.location.href = 'mailto:' + encodeURIComponent(form.email2);
+                      },
+                    }, h(I.Mail), 'Send')
+                  )
                 ),
                 h(FormField, { label: 'Custom' },
                   h('input', { className: 'input', style: inp, value: form.custom || '', onChange: e => setF('custom', e.target.value) })
@@ -1052,7 +1080,28 @@
                       ),
                       h('tbody', null,
                         workOrders.map(wo =>
-                          h('tr', { key: wo.id },
+                          h('tr', {
+                            key: wo.id,
+                            style: { cursor: onOpenWo ? 'pointer' : 'default' },
+                            onClick: () => {
+                              if (!onOpenWo) return;
+                              /* Build WO object compatible with WorkOrderDetail */
+                              const woPayload = wo.raw ? {
+                                id: wo.id,
+                                workorderID: wo.workorderID,
+                                customerName: name,
+                                customer: customer,
+                                status: wo.status,
+                                bike: wo.bike,
+                                description: wo.svc,
+                                note: wo.svc,
+                                timeIn: wo.raw.timeIn,
+                                total: wo.total,
+                                ...wo.raw,
+                              } : wo;
+                              onOpenWo(woPayload);
+                            },
+                          },
                             h('td', { className: 'num', style: { fontWeight: 600, fontSize: 12 } }, wo.id),
                             h('td', null, h(WoBadge, { status: wo.status })),
                             h('td', { style: { fontSize: 13 } }, wo.svc),
@@ -1238,7 +1287,7 @@
   /* ═══════════════════════════════════════════
      CUSTOMERS SCREEN (main list + detail routing)
   ═══════════════════════════════════════════ */
-  function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
+  function CustomersScreen({ setScreen, onNewSale, onNewWo, onOpenWo }) {
     const [q, setQ] = useState('');
     const [customers, setCustomers] = useState(MOCK_CUSTOMERS_FULL);
     const [selectedIndex, setSelectedIndex] = useState(null);  /* index into customers array */
@@ -1316,6 +1365,7 @@
         onUpdate: handleUpdate,
         onNewSale: onNewSale,
         onNewWo: onNewWo,
+        onOpenWo: onOpenWo,
         onPrev: () => setSelectedIndex(i => Math.max(0, i - 1)),
         onNext: () => setSelectedIndex(i => Math.min(customers.length - 1, i + 1)),
       });
