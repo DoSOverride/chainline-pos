@@ -808,7 +808,7 @@
   }
 
   /* ── PO List View ── */
-  function POList({ pos, onSelect, onNew }) {
+  function POList({ pos, loading, onSelect, onNew }) {
     const [filter, setFilter] = useState('All');
     const [vendorFilter, setVendorFilter] = useState('All');
     const [search, setSearch] = useState('');
@@ -914,26 +914,34 @@
       ),
       /* table */
       h('div', { style: { flex: 1, overflowY: 'auto' } },
-        filtered.length === 0
-          ? h('div', { style: { textAlign: 'center', padding: '48px 0', color: 'var(--text-3)' } }, 'No purchase orders found.')
-          : h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
-              h('thead', { style: { position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 1 } },
-                h('tr', { style: { fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--line)' } },
-                  h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'PO#'),
-                  h(SortTh, { label: 'Vendor', sortKey: 'vendor', style: { textAlign: 'left', padding: '10px 12px' } }),
-                  h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Ref#'),
-                  h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Status'),
-                  h(SortTh, { label: 'Ordered', sortKey: 'date', style: { textAlign: 'left', padding: '10px 12px' } }),
-                  h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Expected'),
-                  h('th', { style: { textAlign: 'right', padding: '10px 12px', fontWeight: 600 } }, '# Items'),
-                  h('th', { style: { textAlign: 'right', padding: '10px 12px', fontWeight: 600 } }, '# Rcvd'),
-                  h(SortTh, { label: 'Total', sortKey: 'total', style: { textAlign: 'right', padding: '10px 12px' } })
-                )
-              ),
-              h('tbody', null,
-                filtered.map(po => h(PORow, { key: po.id, po, onSelect }))
-              )
+        h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
+          h('thead', { style: { position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 1 } },
+            h('tr', { style: { fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid var(--line)' } },
+              h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'PO#'),
+              h(SortTh, { label: 'Vendor', sortKey: 'vendor', style: { textAlign: 'left', padding: '10px 12px' } }),
+              h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Ref#'),
+              h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Status'),
+              h(SortTh, { label: 'Ordered', sortKey: 'date', style: { textAlign: 'left', padding: '10px 12px' } }),
+              h('th', { style: { textAlign: 'left', padding: '10px 12px', fontWeight: 600 } }, 'Expected'),
+              h('th', { style: { textAlign: 'right', padding: '10px 12px', fontWeight: 600 } }, '# Items'),
+              h('th', { style: { textAlign: 'right', padding: '10px 12px', fontWeight: 600 } }, '# Rcvd'),
+              h(SortTh, { label: 'Total', sortKey: 'total', style: { textAlign: 'right', padding: '10px 12px' } })
             )
+          ),
+          h('tbody', null,
+            loading
+              ? [1, 2, 3].map(i =>
+                  h('tr', { key: i },
+                    h('td', { colSpan: 9, style: { padding: 12 } },
+                      h('div', { style: { height: 14, background: 'var(--bg3)', animation: 'pulse 1.5s infinite', borderRadius: 4 } })
+                    )
+                  )
+                )
+              : filtered.length === 0
+                ? [h('tr', { key: 'empty' }, h('td', { colSpan: 9, style: { textAlign: 'center', padding: '48px 0', color: 'var(--text-3)' } }, 'No purchase orders found.'))]
+                : filtered.map(po => h(PORow, { key: po.id, po, onSelect }))
+          )
+        )
       )
     );
   }
@@ -942,9 +950,39 @@
   function PurchaseOrdersScreen() {
     const [tab, setTab] = useState('orders'); // 'orders' | 'vendors'
     const [pos, setPOs] = useState(MOCK_POS);
+    const [loadingPOs, setLoadingPOs] = useState(true);
     const [selectedPO, setSelectedPO] = useState(null);
     const [newPO, setNewPO] = useState(false);
     const [newPOVendor, setNewPOVendor] = useState(null);
+
+    useEffect(() => {
+      let cancelled = false;
+      setLoadingPOs(true);
+      fetch(WORKER + '/api/purchase-orders')
+        .then(r => r.json())
+        .then(data => {
+          if (cancelled) return;
+          const raw = data?.purchaseorders;
+          if (!Array.isArray(raw) || raw.length === 0) return;
+          const mapped = raw.map(po => ({
+            id: 'PO-' + po.orderID,
+            vendor: po.Vendor?.name || 'Unknown',
+            vendorId: '',
+            ref: po.vendorOrderNumber || '',
+            date: po.orderDate?.slice(0, 10) || '',
+            created: po.orderDate?.slice(0, 10) || '',
+            expected: po.expectedDate?.slice(0, 10) || '',
+            status: po.status === 'Open' ? 'Open' : po.status === 'Closed' ? 'Finished' : 'Open',
+            total: parseFloat(po.total?.amount || 0),
+            notes: po.notes || '',
+            lines: [],
+          }));
+          setPOs(mapped);
+        })
+        .catch(() => { /* keep mock data on error */ })
+        .finally(() => { if (!cancelled) setLoadingPOs(false); });
+      return () => { cancelled = true; };
+    }, []);
 
     function handleUpdate(updated) {
       setPOs(prev => prev.map(p => p.id === updated.id ? updated : p));
@@ -1019,7 +1057,7 @@
     return h(Fragment, null,
       pageHead,
       tab === 'orders'
-        ? h(POList, { pos, onSelect: setSelectedPO, onNew: () => openNewPO(null) })
+        ? h(POList, { pos, loading: loadingPOs, onSelect: setSelectedPO, onNew: () => openNewPO(null) })
         : h('div', { style: { padding: '20px 24px' } },
             h(VendorDirectory, { onNewPO: openNewPO })
           )
