@@ -1526,6 +1526,86 @@ function ReceiptModal({ receipt, onClose }) {
 }
 
 /* ─────────────────────────────────────────
+   LINE EDIT MODAL — edit price, discount, qty per cart line
+───────────────────────────────────────── */
+function LineEditModal({ line, onSave, onRemove, onClose }) {
+  const [price, setPrice]               = useState(String(line.price));
+  const [qty, setQty]                   = useState(String(line.qty));
+  const [discount, setDiscount]         = useState(String(line.discount || 0));
+  const [discountType, setDiscountType] = useState(line.discountType || 'pct');
+  const [note, setNote]                 = useState(line.note || '');
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose && onClose();
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) save();
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
+  function save() {
+    const p = parseFloat(price) || 0;
+    const q = Math.max(1, parseInt(qty, 10) || 1);
+    const d = Math.max(0, parseFloat(discount) || 0);
+    onSave({ price: p, qty: q, discount: d, discountType, note });
+  }
+
+  const base = (parseFloat(price)||0) * (parseInt(qty,10)||1);
+  const lineSubtotal = discountType === 'pct'
+    ? base * (1 - Math.min(100, Math.max(0, parseFloat(discount)||0)) / 100)
+    : Math.max(0, base - (parseFloat(discount)||0));
+
+  return h('div', {
+    style: { position:'fixed', inset:0, zIndex:900, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: e => { if (e.target === e.currentTarget) onClose(); },
+  },
+    h('div', { style: { background:'var(--bg2)', border:'1px solid var(--line3)', width:480, maxWidth:'92vw', maxHeight:'90vh', overflowY:'auto' } },
+      h('div', { style: { padding:'14px 18px', borderBottom:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center' } },
+        h('div', null,
+          h('div', { style: { fontFamily:'var(--mono)', fontSize:10, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text-3)', marginBottom:4 } }, 'Edit Line Item'),
+          h('div', { style: { fontSize:14, fontWeight:600 } }, line.name)
+        ),
+        h('button', { className:'btn ghost', onClick: onClose }, '×')
+      ),
+      h('div', { style: { padding:18, display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 } },
+        h('div', { style: { gridColumn:'1 / -1', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)', display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'4px 16px', padding:'10px 12px', background:'var(--bg3)' } },
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'SKU: '), line.sku),
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'UPC: '), line.upc || '—'),
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'STOCK: '), line.stock != null ? line.stock : '—'),
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'COST: '), line.cost ? '$'+line.cost.toFixed(2) : '—'),
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'DEPT: '), line.dept || '—'),
+          h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'BRAND: '), line.brand || '—')
+        ),
+        h(Field, { label:'Price' }, h('input', { className:'input mono', type:'number', step:'0.01', value: price, onChange: e => setPrice(e.target.value), autoFocus: true })),
+        h(Field, { label:'Quantity' }, h('input', { className:'input mono', type:'number', min:'1', step:'1', value: qty, onChange: e => setQty(e.target.value) })),
+        h(Field, { label:'Discount' },
+          h('div', { style: { display:'flex', gap:6 } },
+            h('input', { className:'input mono', type:'number', min:'0', step:'0.01', value: discount, onChange: e => setDiscount(e.target.value), style:{ flex:1 } }),
+            h('select', { className:'input', value: discountType, onChange: e => setDiscountType(e.target.value), style:{ width:60 } },
+              h('option', { value:'pct' }, '%'),
+              h('option', { value:'amt' }, '$')
+            )
+          )
+        ),
+        h(Field, { label:'Note (optional)' }, h('input', { className:'input', value: note, onChange: e => setNote(e.target.value), placeholder:'Custom message for this line...' })),
+        line.description && h('div', { style: { gridColumn:'1 / -1', fontSize:11, color:'var(--text-2)', padding:'8px 10px', background:'var(--bg)', lineHeight:1.5 } }, line.description)
+      ),
+      h('div', { style: { padding:'14px 18px', borderTop:'1px solid var(--line)', display:'flex', justifyContent:'space-between', alignItems:'center' } },
+        h('div', { style: { fontFamily:'var(--mono)', fontSize:13, color:'var(--text)' } },
+          h('span', { style:{ color:'var(--text-3)', marginRight:6, fontSize:10, letterSpacing:'.1em', textTransform:'uppercase' } }, 'Line Total:'),
+          fmt$(lineSubtotal)
+        ),
+        h('div', { style: { display:'flex', gap:8 } },
+          h('button', { className:'btn', onClick: onRemove, style:{ color:'var(--red)' } }, 'Remove'),
+          h('button', { className:'btn primary', onClick: save }, 'Save changes ', h('span',{className:'kbd'}, '⌘↵'))
+        )
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    SCREEN D — SALES REGISTER
 ───────────────────────────────────────── */
 function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount, onSaleComplete }) {
@@ -1594,15 +1674,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
 
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [expandedSkus, setExpandedSkus] = useState(new Set());
-  function toggleExpand(sku) {
-    setExpandedSkus(prev => {
-      const next = new Set(prev);
-      if (next.has(sku)) next.delete(sku);
-      else next.add(sku);
-      return next;
-    });
-  }
+  const [editingLine, setEditingLine] = useState(null);
 
   // Debounced API search
   useEffect(() => {
@@ -1672,10 +1744,19 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     if (!isNaN(n) && n >= 1) setItems(items.map(i => i.sku === sku ? { ...i, qty: n } : i));
   }
   function removeItem(sku) { setItems(items.filter(i => i.sku !== sku)); }
+  function updateLine(sku, patch) { setItems(items.map(i => i.sku === sku ? { ...i, ...patch } : i)); }
+
+  // Per-line total with discount
+  function lineTotal(i) {
+    const base = i.qty * i.price;
+    if (!i.discount) return round2(base);
+    if (i.discountType === 'pct') return round2(base * (1 - Math.min(100, Math.max(0, i.discount)) / 100));
+    return round2(Math.max(0, base - i.discount));
+  }
 
   // GST 5% applies to everything; PST 7% exempt for labour/services (BC PSTA s.37)
-  const subtotal    = items.reduce((a, i) => a + round2(i.qty * i.price), 0);
-  const pstSubtotal = items.reduce((a, i) => a + (i.taxablePst !== false ? round2(i.qty * i.price) : 0), 0);
+  const subtotal    = items.reduce((a, i) => a + lineTotal(i), 0);
+  const pstSubtotal = items.reduce((a, i) => a + (i.taxablePst !== false ? lineTotal(i) : 0), 0);
   const gst         = round2(subtotal * 0.05);
   const pst         = round2(pstSubtotal * 0.07);
   const total    = round2(subtotal + gst + pst);
@@ -1725,6 +1806,12 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   const totalUnits = items.reduce((a, i) => a + i.qty, 0);
 
   return h(Fragment, null,
+    editingLine && h(LineEditModal, {
+      line: editingLine,
+      onSave: (patch) => { updateLine(editingLine.sku, patch); setEditingLine(null); },
+      onRemove: () => { removeItem(editingLine.sku); setEditingLine(null); },
+      onClose: () => setEditingLine(null),
+    }),
     receipt && h(ReceiptModal, { receipt, onClose: handleNewSale }),
     showCashModal && window.CashModal && h(window.CashModal, {
       total,
@@ -1809,75 +1896,37 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           h('span')
         ),
 
-        items.map(i => {
-          const expanded = expandedSkus.has(i.sku);
-          const marginPct = (i.cost && i.price) ? Math.round(((i.price - i.cost) / i.price) * 100) : null;
-          return h(Fragment, { key: i.sku },
-            h('div', { className: 'line-row' },
-              h('div', {
-                onClick: () => toggleExpand(i.sku),
-                style: { cursor: 'pointer', transition: 'background 100ms' },
-                title: expanded ? 'Hide details' : 'Show details',
-              },
-                h('div', { className: 'name' },
-                  h('span', {
-                    style: {
-                      display: 'inline-block',
-                      width: 10,
-                      marginRight: 6,
-                      color: 'var(--text-3)',
-                      transition: 'transform 120ms',
-                      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                      transformOrigin: 'center',
-                    },
-                  }, '▸'),
-                  i.name,
-                  i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT')
-                ),
-                h('div', { className: 'sku' }, i.sku)
-              ),
-              h('div', null,
-                h('div', { className: 'qty-stepper' },
-                  h('button', { onClick: () => setQty(i.sku, -1) }, '−'),
-                  h('input', { value: i.qty, onChange: e => setQtyDirect(i.sku, e.target.value) }),
-                  h('button', { onClick: () => setQty(i.sku, +1) }, '+')
-                )
-              ),
-              h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
-              h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(i.qty * i.price)),
-              h(OptionsMenu, { items: [
-                { label: 'Apply discount', onClick: () => toast('Discount coming soon') },
-                { label: 'Edit price',     onClick: () => toast('Edit price coming soon') },
-                'divider',
-                { label: 'Remove',         onClick: () => removeItem(i.sku), danger: true },
-              ]})
-            ),
-            expanded && h('div', {
-              style: {
-                padding: '12px 14px',
-                background: 'var(--bg2)',
-                borderBottom: '1px solid var(--line)',
-                fontFamily: 'var(--mono)',
-                fontSize: 11,
-                color: 'var(--text-2)',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '6px 16px',
-              },
+        items.map(i =>
+          h('div', { key: i.sku, className: 'line-row' },
+            h('div', {
+              onClick: () => setEditingLine(i),
+              style: { cursor: 'pointer' },
+              title: 'Click to edit price, discount, qty',
             },
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'UPC: '), i.upc || '—'),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'SKU: '), i.sku),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'STOCK: '), i.stock != null ? i.stock : '—'),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'COST: '), (i.cost != null && i.cost > 0) ? '$' + i.cost.toFixed(2) : '—'),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'MARGIN: '), marginPct != null ? marginPct + '%' : '—'),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'DEPT: '), i.dept || '—'),
-              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'BRAND: '), i.brand || '—'),
-              i.description && h('div', { style: { gridColumn: '1 / -1', color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 } },
-                h('span', { style: { color: 'var(--text-3)' } }, 'DESC: '), i.description
+              h('div', { className: 'name' },
+                i.name,
+                i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT'),
+                i.discount > 0 && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: '#fff', background: 'var(--accent)', padding: '1px 5px' } }, '-' + (i.discountType === 'pct' ? i.discount + '%' : '$' + i.discount))
+              ),
+              h('div', { className: 'sku' }, i.sku, i.upc ? ' \xb7 ' + i.upc : '')
+            ),
+            h('div', null,
+              h('div', { className: 'qty-stepper', onClick: e => e.stopPropagation() },
+                h('button', { onClick: e => { e.stopPropagation(); setQty(i.sku, -1); } }, '−'),
+                h('input', { value: i.qty, onChange: e => setQtyDirect(i.sku, e.target.value), onClick: e => e.stopPropagation() }),
+                h('button', { onClick: e => { e.stopPropagation(); setQty(i.sku, +1); } }, '+')
               )
-            )
-          );
-        }),
+            ),
+            h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
+            h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(lineTotal(i))),
+            h(OptionsMenu, { items: [
+              { label: 'Edit price / discount', onClick: () => setEditingLine(i) },
+              { label: 'View details',          onClick: () => setEditingLine(i) },
+              'divider',
+              { label: 'Remove', onClick: () => removeItem(i.sku), danger: true },
+            ]})
+          )
+        ),
 
         items.length === 0 && h('div', {
           style: { padding: '40px 16px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' },
