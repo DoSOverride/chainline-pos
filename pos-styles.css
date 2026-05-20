@@ -1703,9 +1703,27 @@ input[type="date"], .mono-input {
   .nav-item-label-mobile { display: inline; }
   #main, .main { padding-bottom: 72px; }
   .page { padding: 16px 12px 80px; }
-  .page-head { flex-direction: column; gap: 8px; }
+  .page-head { flex-direction: column; gap: 8px; align-items: stretch; }
+  .page-head > .actions, .page-head > .row, .page-head > * { width: 100%; flex-wrap: wrap; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
+  /* New Work Order + Customer forms — collapse 2-col grid to 1-col on mobile */
+  .grid-form { grid-template-columns: 1fr !important; gap: 12px !important; }
+  .grid-form .span-2 { grid-column: auto; }
+  /* Inputs / selects / textareas — full-width touch targets */
+  .grid-form input, .grid-form select, .grid-form textarea,
+  .input, .select, textarea.input, .input-search {
+    width: 100% !important; box-sizing: border-box; min-height: 44px;
+    font-size: 16px; /* iOS Safari won't zoom on focus when font-size >= 16px */
+  }
+  .grid-form label { font-size: 12px; }
+  /* Action button rows on form pages — wrap + full-width on narrow screens */
+  .form-actions, .wo-actions, .action-row {
+    flex-direction: column; gap: 8px; align-items: stretch;
+  }
+  .form-actions .btn, .wo-actions .btn, .action-row .btn { width: 100%; justify-content: center; }
+  /* Customer suggestion dropdown — full width, contained */
+  .suggest-list { position: absolute; left: 0; right: 0; max-height: 280px; overflow-y: auto; }
   .panel { width: 100%; }
   .topbar .topbar-search { display: none; }
   .topbar .station { display: none; }
