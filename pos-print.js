@@ -4,11 +4,11 @@
 const SHOP_INFO = {
   name: "ChainLine Cycle",
   address: "1139 Ellis St",
-  city: "Kelowna, BC V1Y 1Z4",
+  city: "Kelowna, BC V1Y 1Z5",
   phone: "250-860-1968",
   website: "chainline.ca",
   email: "bikes@chainline.ca",
-  gst: "12345 6789 RT0001",
+  gst: "UPDATE-GST-NUMBER-RT0001",   // TODO: replace with actual GST registration number
 };
 
 // ─── printWorkOrder ───────────────────────────────────────────────────────────
