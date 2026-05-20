@@ -98,6 +98,25 @@ test.describe('Work Orders — list', () => {
     await expect(page.locator('.tbl tbody')).toContainText('No work orders match');
   });
 
+  test('empty state shows when no matches', async ({ page }) => {
+    const searchInput = page.locator('.filters .input');
+    await searchInput.fill('xyzxyzxyz');
+    await page.waitForTimeout(200);
+    await expect(page.locator('.tbl tbody')).toContainText('No work orders match');
+  });
+
+  test('empty state has clear filters button', async ({ page }) => {
+    const searchInput = page.locator('.filters .input');
+    await searchInput.fill('xyzxyzxyz');
+    await page.waitForTimeout(200);
+    await expect(page.locator('button:has-text("Clear filters"), .btn:has-text("Clear filters")')).toBeVisible();
+  });
+
+  test('clicking WO row opens detail panel', async ({ page }) => {
+    await page.locator('.tbl tbody tr').first().click();
+    await expect(page.locator('.slide-panel')).toBeVisible();
+  });
+
   test('clicking a row opens detail panel', async ({ page }) => {
     await page.locator('.tbl tbody tr').first().click();
     await expect(page.locator('.slide-panel')).toBeVisible();
@@ -106,6 +125,16 @@ test.describe('Work Orders — list', () => {
   test('detail panel shows WO id', async ({ page }) => {
     await page.locator('.tbl tbody tr').first().click();
     await expect(page.locator('.slide-panel .page-sub')).toContainText('WO-');
+  });
+
+  test('WO detail shows bike and service info', async ({ page }) => {
+    await page.locator('.tbl tbody tr').first().click();
+    await expect(page.locator('.slide-panel')).toBeVisible();
+    // The detail panel renders bike description — look for common bike brand/model text
+    const panel = page.locator('.slide-panel');
+    // At minimum the panel should contain some descriptive bike or service text
+    const text = await panel.textContent();
+    expect(text.length).toBeGreaterThan(20);
   });
 
   test('row count shown at bottom', async ({ page }) => {

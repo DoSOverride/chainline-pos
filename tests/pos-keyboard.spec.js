@@ -87,6 +87,29 @@ test.describe('Keyboard shortcuts — sales register', () => {
   });
 });
 
+test.describe('Keyboard shortcuts — G sequence navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, 'Jason');
+  });
+
+  test('G then D navigates to dashboard', async ({ page }) => {
+    // Start from work-orders so we know dashboard is not already active
+    await page.click('.nav-item:has-text("Work Orders")');
+    await expect(page.locator('.page-title')).toContainText('Work Orders');
+    // Press 'g' then 'd' — chord shortcut for "go to dashboard"
+    await page.locator('body').press('g');
+    await page.locator('body').press('d');
+    // Dashboard nav item should become active
+    await expect(page.locator('.nav-item.active')).toContainText('Dashboard', { timeout: 3000 });
+  });
+
+  test('N key from dashboard opens sales', async ({ page }) => {
+    // Login lands on dashboard by default
+    await page.locator('body').press('n');
+    await expect(page.locator('.nav-item.active')).toContainText('Sales', { timeout: 3000 });
+  });
+});
+
 test.describe('Keyboard shortcuts — escape closes panels', () => {
   test.beforeEach(async ({ page }) => {
     await login(page, 'Jason');

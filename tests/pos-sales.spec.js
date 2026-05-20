@@ -256,4 +256,47 @@ test.describe('Sales Register — customer field', () => {
     await custInput.fill('Walk-in');
     await expect(custInput).toHaveValue('Walk-in');
   });
+
+  test('Customer Lookup button is visible', async ({ page }) => {
+    await expect(page.locator('.page-title')).toContainText('Sales Register');
+    await expect(page.locator('.btn:has-text("Lookup"), .btn:has-text("Customer Lookup")')).toBeVisible();
+  });
+});
+
+test.describe('Sales Register — receipt modal', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page, 'Jason');
+    await page.click('.nav-item:has-text("Sales")');
+    await expect(page.locator('.page-title')).toContainText('Sales Register');
+  });
+
+  test('receipt modal appears after card payment', async ({ page }) => {
+    // Pre-loaded cart already has items — press F1 to pay by card
+    await page.keyboard.press('F1');
+    await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.modal')).toContainText('Sale Complete');
+  });
+
+  test('PST-EXEMPT badge shows on labour items', async ({ page }) => {
+    // Clear cart then add a LAB-* SKU via search
+    await page.click('.btn.ghost:has-text("Clear cart")');
+    const searchInput = page.locator('.card input.input.lg');
+    await searchInput.fill('LAB-INSTALL');
+    await page.waitForTimeout(300);
+    const firstResult = page.locator('.item-row').first();
+    await firstResult.click();
+    // The cart line for a LAB-* item should show the PST-EXEMPT badge
+    await expect(page.locator('.line-row:not(.head) .badge:has-text("PST-EXEMPT"), .line-row:not(.head) :has-text("PST-EXEMPT")')).toBeVisible();
+  });
+
+  test('new sale button in receipt clears cart', async ({ page }) => {
+    // Complete a card payment to get the receipt modal
+    await page.keyboard.press('F1');
+    await expect(page.locator('.modal')).toBeVisible({ timeout: 5000 });
+    // Click "New sale" in the modal
+    await page.locator('.modal .btn:has-text("New sale"), .modal button:has-text("New sale")').click();
+    // Modal should close and cart should be empty
+    await expect(page.locator('.modal')).not.toBeAttached({ timeout: 3000 });
+    await expect(page.locator('text=/Cart empty/i')).toBeVisible();
+  });
 });
