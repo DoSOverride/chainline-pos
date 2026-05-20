@@ -15,7 +15,8 @@ const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 const STAFF = [
   { id: 1, name: 'Jason',   initials: 'JA', pin: '1234', role: 'Mechanic', tone: 'jk' },
   { id: 2, name: 'Florian', initials: 'FL', pin: '5678', role: 'Mechanic', tone: 'sr' },
-  { id: 3, name: 'Darrin',  initials: 'DA', pin: '9999', role: 'Manager',  tone: 'am' },
+  { id: 3, name: 'Darrin',  initials: 'DA', pin: '7777', role: 'Manager',  tone: 'am' },
+  { id: 4, name: 'Tao',     initials: 'TC', pin: '7777', role: 'Owner',    tone: 'mb' },
 ];
 
 const MECHANICS = [
