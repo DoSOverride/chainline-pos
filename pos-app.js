@@ -1147,7 +1147,7 @@ function WorkOrdersScreen({ setScreen }) {
 /* ─────────────────────────────────────────
    SCREEN C — NEW WORK ORDER
 ───────────────────────────────────────── */
-function NewWorkOrderScreen({ setScreen }) {
+function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
   const [customer, setCustomer] = useState('Hannah Riise');
   const [showSuggest, setShowSuggest] = useState(false);
   const [mech, setMech] = useState('JK');
@@ -1159,6 +1159,13 @@ function NewWorkOrderScreen({ setScreen }) {
   const [notes, setNotes] = useState('Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.');
   const [submitting, setSubmitting] = useState(false);
   const suggestRef = useRef(null);
+
+  useEffect(() => {
+    if (pendingCustomer) {
+      setCustomer(pendingCustomer.name);
+      onClearPending && onClearPending();
+    }
+  }, []);
 
   useEffect(() => {
     function onDown(e) {
@@ -1324,18 +1331,145 @@ function NewWorkOrderScreen({ setScreen }) {
 }
 
 /* ─────────────────────────────────────────
+   RECEIPT MODAL
+───────────────────────────────────────── */
+function ReceiptModal({ receipt, onClose }) {
+  const { customer, saleItems = [], subtotal = 0, gst = 0, pst = 0, total = 0, method, customerObj } = receipt;
+  const displayName = customer || (customerObj && customerObj.name) || 'Walk-in';
+
+  return h('div', {
+    style: {
+      position: 'fixed', inset: 0, zIndex: 900,
+      background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+    onClick: onClose,
+  },
+    h('div', {
+      style: { background: 'var(--bg2)', border: '1px solid var(--line3)', width: 400, maxHeight: '90vh', overflowY: 'auto', padding: 24 },
+      onClick: e => e.stopPropagation(),
+    },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 } },
+        h('div', null,
+          h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 4 } }, 'Sale Complete'),
+          h('div', { style: { fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' } }, fmt$(total))
+        ),
+        h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, padding: '3px 8px', background: 'var(--green-bg, rgba(0,200,100,0.1))', color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase' } }, 'PAID \xb7 ' + (method || 'card').toUpperCase())
+      ),
+
+      displayName !== 'Walk-in' && h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg3)', marginBottom: 14 } },
+        h(AvInit, { initials: displayName.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(), tone: 'am' }),
+        h('span', { style: { fontSize: 13, fontWeight: 500 } }, displayName)
+      ),
+
+      h('div', { style: { borderTop: '1px dashed var(--line2)', paddingTop: 12, marginBottom: 12 } },
+        saleItems.map((i, idx) =>
+          h('div', { key: idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '4px 0', fontSize: 12 } },
+            h('div', null,
+              h('div', null, i.name,
+                i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text-3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT')
+              ),
+              h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' } }, 'x' + i.qty + ' @ ' + fmt$(i.price))
+            ),
+            h('span', { style: { fontFamily: 'var(--font-mono)', fontWeight: 500 } }, fmt$(i.qty * i.price))
+          )
+        )
+      ),
+
+      h('div', { style: { borderTop: '1px dashed var(--line2)', paddingTop: 10, fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', flexDirection: 'column', gap: 3 } },
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', color: 'var(--text-2)' } }, h('span', null, 'Subtotal'), h('span', null, fmt$(subtotal))),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', color: 'var(--text-2)' } }, h('span', null, 'GST 5%'), h('span', null, fmt$(gst))),
+        pst > 0 && h('div', { style: { display: 'flex', justifyContent: 'space-between', color: 'var(--text-2)' } }, h('span', null, 'PST 7%'), h('span', null, fmt$(pst))),
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 13, marginTop: 4 } }, h('span', null, 'Total'), h('span', null, fmt$(total)))
+      ),
+
+      h('div', { style: { display: 'flex', gap: 8, marginTop: 20 } },
+        h('button', { className: 'btn primary', style: { flex: 1 }, onClick: onClose },
+          h(Ico.Plus, { size: 13 }), ' New Sale'
+        ),
+        h('button', { className: 'btn', onClick: () => { if (window.printReceipt) window.printReceipt({ customerName: displayName, items: saleItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })), subtotal, gst, pst, total, paymentMethod: method }); } }, 'Print Receipt')
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   RECEIPT MODAL
+───────────────────────────────────────── */
+function ReceiptModal({ receipt, onClose }) {
+  const { customer, saleItems, subtotal, gst, pst, total, method } = receipt || {};
+  const methodLabel = { card: 'Card', cash: 'Cash', other: 'Other' }[method] || method;
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose?.(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  return h('div', { className: 'modal-overlay', onClick: e => { if (e.target === e.currentTarget) onClose?.(); } },
+    h('div', { className: 'modal', style: { maxWidth: 420, padding: 0 } },
+      h('div', { className: 'card-head', style: { borderBottom: '1px solid var(--line)' } },
+        h('h3', null, 'Sale Complete'),
+        h('div', { className: 'right' },
+          h('button', { className: 'btn-ghost icon-btn', onClick: onClose }, h(Ico.X, { size: 14 }))
+        )
+      ),
+      h('div', { style: { padding: 18 } },
+        customer && h('div', { style: { marginBottom: 14, fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text2)' } }, 'Customer: ', h('span', { style: { color: 'var(--text)' } }, customer)),
+        h('table', { className: 'tbl', style: { marginBottom: 14 } },
+          h('thead', null, h('tr', null,
+            h('th', null, 'Item'), h('th', { style: { textAlign: 'center', width: 40 } }, 'Qty'),
+            h('th', { style: { textAlign: 'right', width: 80 } }, 'Total')
+          )),
+          h('tbody', null,
+            (saleItems || []).map(i =>
+              h('tr', { key: i.sku },
+                h('td', null,
+                  i.name,
+                  i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 4px' } }, 'PST-EXEMPT')
+                ),
+                h('td', { className: 'num', style: { textAlign: 'center' } }, i.qty),
+                h('td', { className: 'num', style: { textAlign: 'right' } }, fmt$(i.qty * i.price))
+              )
+            )
+          )
+        ),
+        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'Subtotal'), h('span', { className: 'val' }, fmt$(subtotal))),
+        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'GST \xb7 5%'), h('span', { className: 'val' }, fmt$(gst))),
+        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'PST \xb7 7%'), h('span', { className: 'val' }, fmt$(pst))),
+        h('div', { className: 'totals-row grand' }, h('span', { className: 'label' }, 'Total'), h('span', { className: 'val' }, fmt$(total))),
+        h('div', { style: { marginTop: 14, fontFamily: 'var(--mono)', fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text2)' } }, 'Payment: ', methodLabel)
+      ),
+      h('div', { style: { padding: '14px 18px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+        h('button', { className: 'btn ghost', onClick: () => window.printReceipt?.(receipt) }, 'Print receipt'),
+        h('button', { className: 'btn primary', onClick: onClose }, 'New sale')
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    SCREEN D — SALES REGISTER
 ───────────────────────────────────────── */
-function SalesScreen({ onBarcodeScan }) {
+function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending }) {
   const [items, setItems] = useState([
     { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        qty: 1, price: 189.00 },
     { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip',  qty: 2, price: 84.00  },
-    { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                   qty: 1, price: 25.00  },
+    { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                   qty: 1, price: 25.00, taxablePst: false },
     { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                    qty: 1, price: 62.00  },
   ]);
   const [query, setQuery] = useState('');
   const [customerName, setCustomerName] = useState('Devon Tran');
+  const [saleCustomer, setSaleCustomer] = useState(null);
+  const [receipt, setReceipt] = useState(null);
   const searchRef = useRef(null);
+
+  useEffect(() => {
+    if (pendingCustomer) {
+      setCustomerName(pendingCustomer.name);
+      setSaleCustomer(pendingCustomer);
+      onClearPending && onClearPending();
+    }
+  }, []);
 
   useEffect(() => { if (searchRef.current) searchRef.current.focus(); }, []);
 
@@ -1394,19 +1528,31 @@ function SalesScreen({ onBarcodeScan }) {
 
   function handlePay(method) {
     if (!items.length) { toast('Cart is empty', 'error'); return; }
-    apiPost('/api/sale', {
+    const saleData = {
       customer: customerName,
-      lines: items.map(i => ({ sku: i.sku, name: i.name, qty: i.qty, unitPrice: i.price })),
+      customerObj: saleCustomer,
+      lines: items.map(i => ({ sku: i.sku, name: i.name, qty: i.qty, unitPrice: i.price, taxablePst: i.taxablePst })),
       subtotal, gst, pst, total, payment: { method },
-    }).then(res => {
-      toast(res ? 'Sale completed \xb7 ' + fmt$(total) : 'Sale recorded offline', res ? 'success' : '');
-      setItems([]);
-    }).catch(() => toast('Failed to record sale', 'error'));
+    };
+    apiPost('/api/sale', saleData)
+      .then(res => {
+        toast(res ? 'Sale completed \xb7 ' + fmt$(total) : 'Sale recorded offline', res ? 'success' : '');
+        setReceipt({ ...saleData, method, saleItems: items });
+      })
+      .catch(() => toast('Failed to record sale', 'error'));
+  }
+
+  function handleNewSale() {
+    setItems([]);
+    setReceipt(null);
+    setSaleCustomer(null);
+    setCustomerName('');
   }
 
   const totalUnits = items.reduce((a, i) => a + i.qty, 0);
 
   return h(Fragment, null,
+    receipt && h(ReceiptModal, { receipt, onClose: handleNewSale }),
     h(PageHead, {
       title: 'Sales Register',
       sub: 'Sale #S-1188 \xb7 Drawer open',
@@ -1508,6 +1654,17 @@ function SalesScreen({ onBarcodeScan }) {
 
       // RIGHT — checkout
       h('div', { className: 'col', style: { gap: 16 } },
+        saleCustomer && h('div', { className: 'card', style: { borderLeft: '3px solid var(--accent)' } },
+          h('div', { style: { padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 } },
+            h(AvInit, { initials: saleCustomer.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(), tone: 'am' }),
+            h('div', { style: { flex: 1 } },
+              h('div', { style: { fontWeight: 600, fontSize: 13 } }, saleCustomer.name),
+              h('div', { style: { fontSize: 11, color: 'var(--text-2)', fontFamily: 'var(--font-mono)' } }, saleCustomer.phone + ' \xb7 from Customers')
+            ),
+            h('button', { className: 'btn ghost', style: { height: 22, padding: '0 6px', fontSize: 11 }, onClick: () => { setSaleCustomer(null); setCustomerName(''); } }, '\xd7')
+          )
+        ),
+
         h('div', { className: 'card' },
           h('div', { className: 'card-head' }, h('h3', null, 'Customer'), h('span', { className: 'sub' }, 'Optional')),
           h('div', { style: { padding: 14 } },
@@ -2280,6 +2437,7 @@ function App() {
     try { return JSON.parse(sessionStorage.getItem('pos-staff') || 'null'); } catch { return null; }
   });
   const [screen, setScreen]           = useState('dashboard');
+  const [pendingCustomer, setPendingCustomer] = useState(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const topbarSearchRef = useRef(null);
 
@@ -2331,13 +2489,13 @@ function App() {
   }
 
   function handleNewSaleForCustomer(customer) {
+    setPendingCustomer(customer);
     setScreen('sales');
-    toast('Opening sale for ' + customer.name, 'success');
   }
 
   function handleNewWoForCustomer(customer) {
+    setPendingCustomer(customer);
     setScreen('new-wo');
-    toast('New WO for ' + customer.name, 'success');
   }
 
   if (!staff) {
@@ -2351,8 +2509,8 @@ function App() {
     switch (screen) {
       case 'dashboard':      return h(DashboardScreen,       { setScreen });
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen });
-      case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen });
-      case 'sales':          return h(SalesScreen);
+      case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
+      case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
       case 'inventory':      return h(window.InventoryScreen      || InventoryScreen,       { staff, setScreen });
       case 'purchase-orders':return h(window.PurchaseOrdersScreen || PurchaseOrdersScreen);
