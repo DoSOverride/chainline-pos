@@ -1608,9 +1608,12 @@ function App() {
       case 'new-wo':      return h(NewWorkOrderScreen, { setScreen });
       case 'sales':       return h(SalesScreen);
       case 'customers':   return h(window.CustomersScreen || PlaceholderScreen, window.CustomersScreen ? {} : { name: 'customers' });
-      case 'inventory':   return h(window.InventoryScreen || PlaceholderScreen, window.InventoryScreen ? { staff, setScreen } : { name: 'inventory' });
-      case 'reports':     return window.ReportsScreen ? h(window.ReportsScreen) : h(PlaceholderScreen, { name: 'reports' });
-      default:            return h(PlaceholderScreen,  { name: screen });
+      case 'inventory':        return h(window.InventoryScreen || PlaceholderScreen, window.InventoryScreen ? { staff, setScreen } : { name: 'inventory' });
+      case 'purchase-orders':  return window.PurchaseOrdersScreen
+                                 ? h(window.PurchaseOrdersScreen)
+                                 : h(PlaceholderScreen, { name: 'purchase-orders' });
+      case 'reports':          return window.ReportsScreen ? h(window.ReportsScreen) : h(PlaceholderScreen, { name: 'reports' });
+      default:                 return h(PlaceholderScreen,  { name: screen });
     }
   };
 
