@@ -34,9 +34,9 @@ const SERVICE_TYPES = [
 ];
 
 const MOCK_WO = [
-  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50, notes: 'Replace full drivetrain - cassette, chain, chainrings. Customer reports skipping under load.' },
-  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81, notes: 'Rear shock feels harsh on chunder. Clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.' },
-  { id: 'WO-2382', cust: 'Marc Lefebvre',      phone: '(250) 555-0119', bike: 'Trek Fuel EX 8 \xb7 Lithium Grey',             svc: 'Full tune + brake bleed',    due: 'May 18', dueState: 'overdue', overdueBy: '2d late', status: 'open',  mech: 'SR', tone: 'sr', prio: true,  total: 185.00 },
+  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50, hookIn: 'FLOR 27', notes: 'Replace full drivetrain - cassette, chain, chainrings. Customer reports skipping under load.' },
+  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81, hookIn: '', hookOut: 'WH', notes: 'Rear shock feels harsh on chunder. Clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.' },
+  { id: 'WO-2382', cust: 'Marc Lefebvre',      phone: '(250) 555-0119', bike: 'Trek Fuel EX 8 \xb7 Lithium Grey',             svc: 'Full tune + brake bleed',    due: 'May 18', dueState: 'overdue', overdueBy: '2d late', status: 'open',  mech: 'SR', tone: 'sr', prio: true,  total: 185.00, hookIn: 'DHS' },
   { id: 'WO-2402', cust: 'Priya Sharma',       phone: '(778) 555-0207', bike: 'Specialized Stumpjumper Comp',                 svc: 'Booking \xb7 pre-season tune',due: 'May 22', status: 'booked',    mech: 'MB', tone: 'mb', prio: false, total: 0 },
   { id: 'WO-2379', cust: 'Owen Bartholomew',   phone: '(250) 555-0166', bike: 'Kona Process 134 \xb7 2022',                   svc: 'Wheel build \xb7 rear',       due: 'May 17', dueState: 'overdue', overdueBy: '3d late', status: 'open',  mech: 'AM', tone: 'am', prio: false, total: 275.00 },
   { id: 'WO-2399', cust: 'Eli Constantine',    phone: '(604) 555-0152', bike: 'Yeti SB140 LR \xb7 Cobalt',                    svc: 'Shock service \xb7 Float X',  due: 'May 21', status: 'inprogress', mech: 'JK', tone: 'jk', prio: false, total: 145.00 },
@@ -155,6 +155,13 @@ const Ico = {
     h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
       h('rect',{x:'2',y:'2',width:'5',height:'6'}),h('rect',{x:'9',y:'2',width:'5',height:'3'}),
       h('rect',{x:'2',y:'10',width:'5',height:'4'}),h('rect',{x:'9',y:'7',width:'5',height:'7'})),
+  List: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.4',strokeLinecap:'round'},
+      h('path',{d:'M3 4h10M3 8h10M3 12h10'})),
+  Grid: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('rect',{x:'2',y:'2',width:'5',height:'5'}),h('rect',{x:'9',y:'2',width:'5',height:'5'}),
+      h('rect',{x:'2',y:'9',width:'5',height:'5'}),h('rect',{x:'9',y:'9',width:'5',height:'5'})),
   Wrench: ({ size=14 }) =>
     h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
       h('path',{d:'M10.5 2.5a3 3 0 0 0-3.7 3.7l-4.5 4.5 1.5 1.5 4.5-4.5a3 3 0 0 0 3.7-3.7l-1.7 1.7-1.5-1.5 1.7-1.7Z'})),
@@ -545,6 +552,8 @@ function LoginScreen({ onLogin }) {
 const WO_ACTIVE_COUNT = MOCK_WO.filter(wo => wo.status !== 'done' && wo.status !== 'ready' && wo.status !== 'booked').length;
 
 const NAV_MAIN = [
+  { id: 'my-queue',    label: 'My Queue',    mobileLabel: 'Queue',   Icon: 'List',      count: null },
+  { id: 'floor',       label: 'Floor',       mobileLabel: 'Floor',   Icon: 'Grid',      count: null },
   { id: 'dashboard',   label: 'Dashboard',   mobileLabel: 'Home',    Icon: 'Dashboard', count: null },
   { id: 'work-orders', label: 'Work Orders', mobileLabel: 'WOs',     Icon: 'Wrench',    count: null },
   { id: 'sales',       label: 'Sales',       mobileLabel: 'Sales',   Icon: 'Cart',      count: null },
@@ -639,8 +648,11 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
 function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
   const crumbs = {
     'dashboard': ['Shop', 'Dashboard'],
+    'floor': ['Service', 'Shop Floor'],
+    'my-queue': ['Service', 'My Queue'],
     'work-orders': ['Service', 'Work Orders'],
     'new-wo': ['Service', 'Work Orders', 'New'],
+    'wo-detail': ['Service', 'Work Orders', 'Detail'],
     'sales': ['Retail', 'Sales Register'],
     'customers': ['CRM', 'Customers'],
     'inventory': ['Stock', 'Inventory'],
@@ -931,7 +943,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [timeIn, setTimeIn]   = useState(wo.timeIn  || '08:30');
   const [dateDue, setDateDue] = useState(wo.dateDue || _todayISO);
   const [timeDue, setTimeDue] = useState(wo.timeDue || '17:00');
-  const [hookIn, setHookIn]   = useState(wo.hookIn  || '08:30');
+  const [hookIn, setHookIn]   = useState(wo.hookIn  || '');
   const [hookOut, setHookOut] = useState(wo.hookOut || '');
 
   const [receiptNote, setReceiptNote]   = useState(wo.receiptNote || '');
@@ -1007,16 +1019,24 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       dateIn, timeIn, dateDue, timeDue, hookIn, hookOut]);
 
   // ── Totals ──────────────────────────────────────────────
-  const labor = round2(lines.filter(l => /^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
+  // Warranty WOs bill the vendor — zero out labor.
+  const laborGross = round2(lines.filter(l => /^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
+  const labor = warranty ? 0 : laborGross;
   const parts = round2(lines.filter(l => !/^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
   const fees     = 0;
   const subtotal = round2(labor + parts + fees);
-  const pstSubtotal = lines.reduce((a, l) => a + (l.taxablePst !== false ? l.qty * l.price : 0), 0);
+  const pstSubtotal = lines.reduce((a, l) => {
+    if (l.taxablePst === false) return a;
+    if (warranty && /^lab|labor|labour|svc/i.test(l.sku || '')) return a;
+    return a + l.qty * l.price;
+  }, 0);
   const tax   = round2(subtotal * 0.05 + pstSubtotal * 0.07);
   const total = round2(subtotal + tax);
 
   // ── Action button handlers ──────────────────────────────
   function handlePrintTag() {
+    // §10 helper from pos-print.js (printBikeTag) - bike-shop sticker
+    if (window.printBikeTag) { window.printBikeTag(wo); toast('Printing tag...', 'success'); return; }
     if (window.printWorkOrderTag) { window.printWorkOrderTag(wo); toast('Printing tag...', 'success'); return; }
     window.printWorkOrder && window.printWorkOrder(wo);
     toast('Printing...', 'success');
@@ -1038,6 +1058,25 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   function handleRequestPayment() {
     if (window.RequestPaymentModal) setShowRequestPay(true);
     else toast('Payment module not loaded', 'error');
+  }
+  // §10 Customer self-status SMS link
+  async function handleSendStatusLink() {
+    const phone = wo.phone || (wo.customer && wo.customer.phone);
+    if (!phone) { toast('No phone on file', 'error'); return; }
+    if (!wo.id) { toast('Save the work order first', 'error'); return; }
+    try {
+      // Public token (worker creates if needed)
+      const tokenRes = await apiPost('/api/wo-public-token/' + wo.id, {});
+      const token = (tokenRes && tokenRes.token) || wo.id;
+      const url = location.origin + '/wo-status.html?t=' + encodeURIComponent(token);
+      const firstName = (wo.cust || '').split(' ')[0] || 'there';
+      const body = 'Hi ' + firstName + " - check your bike status here: " + url;
+      const smsRes = await apiPost('/api/sms', { to: phone, body: body });
+      if (smsRes) toast('Status link sent', 'success');
+      else toast('SMS queued (worker offline)', '');
+    } catch (e) {
+      toast('Send failed: ' + (e && e.message ? e.message : 'error'), 'error');
+    }
   }
   function handleCheckout() {
     if (window.posAddToCart) lines.forEach(l => window.posAddToCart(l));
@@ -1157,6 +1196,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
           h('button', { className: 'btn', onClick: handlePrintTag }, 'Print Tag'),
           h('button', { className: 'btn', onClick: handlePrintQuote }, 'Print Quote'),
           h('button', { className: 'btn', onClick: handleEmail }, 'Send As Email'),
+          h('button', { className: 'btn', onClick: handleSendStatusLink, title: 'SMS the customer a public status URL' }, 'Send status link'),
           h('button', { className: 'btn', style: S.btnBlue, onClick: handleRequestPayment }, 'Request payment'),
           h('button', { className: 'btn', style: S.btnSuccess, onClick: handleCheckout }, 'Checkout')
         ),
@@ -1233,15 +1273,15 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
               ),
               h('button', { className: 'btn', type: 'button' }, 'Edit')
             ),
-            h('div', { style: S.rowCheck },
-              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-                h('input', { type: 'checkbox', checked: warranty, onChange: e => setWarranty(e.target.checked) }),
-                'Warranty'
-              ),
-              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-                h('input', { type: 'checkbox', checked: saveParts, onChange: e => setSaveParts(e.target.checked) }),
-                'Save Parts'
-              )
+            h('div', { className: 'wo-flags' + (warranty ? ' wo-flag-warranty is-on' : ''), style: S.rowCheck },
+              h(Toggle, {
+                on: warranty, onChange: setWarranty,
+                label: 'Warranty', sub: 'Bills vendor, not customer',
+              }),
+              h(Toggle, {
+                on: saveParts, onChange: setSaveParts,
+                label: 'Save parts', sub: 'Bag removed parts for customer',
+              })
             )
           ),
 
@@ -1307,11 +1347,25 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
               ),
               h('div', null,
                 h('label', { style: S.fieldLabel }, 'Hook In'),
-                h('input', { className: 'input mono', type: 'time', value: hookIn, onChange: e => setHookIn(e.target.value), style: { width: '100%' } })
+                h('input', {
+                  className: 'input mono hook-input',
+                  value: hookIn,
+                  placeholder: 'e.g. FLOR 27',
+                  onChange: e => setHookIn(e.target.value.toUpperCase().slice(0, 12)),
+                  style: { width: '100%' },
+                  title: 'Rack / pile / location',
+                })
               ),
               h('div', null,
                 h('label', { style: S.fieldLabel }, 'Hook Out'),
-                h('input', { className: 'input mono', type: 'time', value: hookOut, onChange: e => setHookOut(e.target.value), style: { width: '100%' } })
+                h('input', {
+                  className: 'input mono hook-input',
+                  value: hookOut,
+                  placeholder: 'e.g. WH',
+                  onChange: e => setHookOut(e.target.value.toUpperCase().slice(0, 12)),
+                  style: { width: '100%' },
+                  title: 'Where the bike is now if moved',
+                })
               )
             )
           ),
@@ -1537,7 +1591,9 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       || r.id.toLowerCase().includes(q)
       || r.cust.toLowerCase().includes(q)
       || r.bike.toLowerCase().includes(q)
-      || r.phone.includes(q);
+      || r.phone.includes(q)
+      || (r.hookIn || '').toLowerCase().includes(q)
+      || (r.hookOut || '').toLowerCase().includes(q);
     return matchTab && matchSearch;
   });
 
@@ -1592,6 +1648,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
             h('th', null, 'Bike / Item'),
             h('th', null, 'Service'),
             h('th', { style: { width: 130 } }, 'Status'),
+            h('th', { style: { width: 80 } }, 'Hook'),
             h('th', { style: { width: 120 } }, 'Due'),
             h('th', { style: { width: 70 } }, 'Mech'),
             h('th', { style: { width: 32 } })
@@ -1600,20 +1657,20 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
         h('tbody', null,
           loading
             ? [
-                h('tr', { key: 'sk1' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                h('tr', { key: 'sk1' }, h('td', { colSpan: 9, style: { padding: 12 } },
                   h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
                 )),
-                h('tr', { key: 'sk2' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                h('tr', { key: 'sk2' }, h('td', { colSpan: 9, style: { padding: 12 } },
                   h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
                 )),
-                h('tr', { key: 'sk3' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                h('tr', { key: 'sk3' }, h('td', { colSpan: 9, style: { padding: 12 } },
                   h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
                 )),
               ]
             : filtered.length === 0
             ? h('tr', null,
                 h('td', {
-                  colSpan: 8,
+                  colSpan: 9,
                   style: { textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)' },
                 },
                   h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 } },
@@ -1649,6 +1706,11 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                     r.status === 'open'       ? h(Badge, { kind: 'open' }, 'Open') :
                     r.status === 'inprogress' ? h(Badge, { kind: 'inprogress' }, 'In Progress') :
                     r.status === 'booked'     ? h(Badge, { kind: 'booked' }, 'Booked') : null
+                  ),
+                  h('td', null,
+                    (r.hookIn || r.hookOut)
+                      ? h('span', { className: 'cell-hook mono' }, r.hookOut || r.hookIn)
+                      : h('span', { className: 'cell-hook empty mono', style: { color: 'var(--text3)' } }, '-')
                   ),
                   h('td', null,
                     r.dueState === 'overdue'
@@ -1701,11 +1763,24 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
   const [due, setDue] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0,10); });
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [custItems, setCustItems] = useState([]);
   const suggestRef = useRef(null);
+
+  // ── Customer items lookup (§7) ──
+  useEffect(() => {
+    if (selectedCustomerId && window.CustomerItems && typeof window.CustomerItems.get === 'function') {
+      try { setCustItems(window.CustomerItems.get(selectedCustomerId) || []); }
+      catch { setCustItems([]); }
+    } else {
+      setCustItems([]);
+    }
+  }, [selectedCustomerId]);
 
   useEffect(() => {
     if (pendingCustomer) {
       setCustomer(pendingCustomer.name);
+      if (pendingCustomer.id) setSelectedCustomerId(pendingCustomer.id);
       onClearPending && onClearPending();
     }
   }, []);
@@ -2093,6 +2168,59 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   const [searching, setSearching] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
 
+  // ── Parked sales (§19) ────────────────────────────────────
+  const [parkedSales, setParkedSales] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('pos-parked-sales') || '[]'); }
+    catch { return []; }
+  });
+
+  function parkCurrent(woId) {
+    if (!items.length) { toast('Cart is empty', 'error'); return; }
+    const parked = {
+      id: 'PRK-' + Date.now(),
+      items: items,
+      customer: saleCustomer
+        ? { id: saleCustomer.id, name: saleCustomer.name, phone: saleCustomer.phone }
+        : (customerName ? { name: customerName } : null),
+      woId: woId || null,
+      parkedAt: new Date().toISOString(),
+    };
+    const next = parkedSales.concat([parked]);
+    setParkedSales(next);
+    try { localStorage.setItem('pos-parked-sales', JSON.stringify(next)); } catch {}
+    setItems([]);
+    setSaleCustomer(null);
+    setCustomerName('');
+    toast('Sale parked' + (woId ? ' for ' + woId : ''), 'success');
+  }
+
+  function resumeParked(p) {
+    setItems(p.items || []);
+    if (p.customer) {
+      setCustomerName(p.customer.name || '');
+      if (p.customer.id) setSaleCustomer(p.customer);
+    }
+    const next = parkedSales.filter(x => x.id !== p.id);
+    setParkedSales(next);
+    try { localStorage.setItem('pos-parked-sales', JSON.stringify(next)); } catch {}
+    toast('Resumed ' + (p.woId || p.id), 'success');
+  }
+
+  function discardParked(p, e) {
+    if (e) e.stopPropagation();
+    if (!confirm('Discard parked sale ' + (p.woId || p.id) + '?')) return;
+    const next = parkedSales.filter(x => x.id !== p.id);
+    setParkedSales(next);
+    try { localStorage.setItem('pos-parked-sales', JSON.stringify(next)); } catch {}
+  }
+
+  function handleParkClick() {
+    if (!items.length) { toast('Cart is empty', 'error'); return; }
+    const woId = window.prompt('Link to Work Order? (e.g. WO-1234 or leave blank)', '');
+    if (woId === null) return; // cancelled
+    parkCurrent((woId || '').trim() || null);
+  }
+
   // Debounced API search
   useEffect(() => {
     if (query.trim().length < 2) { setSearchResults([]); return; }
@@ -2251,11 +2379,37 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
       title: 'Sales Register',
       sub: 'Sale #S-' + (1188 + (saleCount || 0)) + ' \xb7 Drawer open',
       actions: [
-        h('button', { key: 'park', className: 'btn' }, 'Park sale'),
+        h('button', { key: 'park', className: 'btn', onClick: handleParkClick }, 'Park sale'),
         h('button', { key: 'disc', className: 'btn' }, 'Discount'),
         h('button', { key: 'ret', className: 'btn' }, 'Returns'),
       ],
     }),
+
+    // ── Parked sales tray (§19) ──
+    parkedSales.length > 0 && h('div', { className: 'parked-tray' },
+      h('span', { className: 'label' }, 'Parked'),
+      parkedSales.map(p =>
+        h('button', {
+          key: p.id,
+          className: 'parked-chip' + (p.woId ? ' parked-chip-wo' : ''),
+          onClick: () => resumeParked(p),
+          title: 'Resume this parked sale',
+        },
+          p.woId ? p.woId : p.id,
+          p.customer && h('span', { style: { color: 'var(--text2)' } },
+            ' \xb7 ' + (p.customer.name || p.customer)
+          ),
+          h('span', { style: { color: 'var(--text3)' } },
+            ' \xb7 $' + (p.items || []).reduce((a, i) => a + i.qty * i.price, 0).toFixed(2)
+          ),
+          h('span', {
+            onClick: (e) => discardParked(p, e),
+            style: { marginLeft: 8, color: 'var(--text3)', cursor: 'pointer', padding: '0 4px' },
+            title: 'Discard',
+          }, '\xd7')
+        )
+      )
+    ),
 
     h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, alignItems: 'flex-start' } },
       // LEFT — cart
@@ -3245,6 +3399,14 @@ function App() {
   function renderScreen() {
     switch (screen) {
       case 'dashboard':      return h(DashboardScreen,       { setScreen });
+      case 'floor':          return h(window.ShopFloorScreen || PlaceholderScreen, {
+                               setScreen,
+                               onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); },
+                             });
+      case 'my-queue':       return h(window.MyQueueScreen || PlaceholderScreen, {
+                               setScreen, staff,
+                               onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); },
+                             });
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'wo-detail':      return h(WorkOrderDetail,       { wo: activeWo || {}, onClose: () => setScreen('work-orders'), fullPage: true, setScreen: setScreen });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
@@ -3273,6 +3435,23 @@ function App() {
     h(Toast)
   );
 }
+
+/* ── Expose globals for sibling modules (shopfloor, myqueue, presets, etc.) ── */
+window.MOCK_WO        = MOCK_WO;
+window.MOCK_CATALOG   = MOCK_CATALOG;
+window.MOCK_CUSTOMERS = MOCK_CUSTOMERS;
+window.WO_STATUSES    = WO_STATUSES;
+window.apiGet         = apiGet;
+window.apiPost        = apiPost;
+window.apiPut         = apiPut;
+window.apiDelete      = apiDelete;
+window.PageHead       = PageHead;
+window.Badge          = Badge;
+window.AvInit         = AvInit;
+window.Field          = Field;
+window.Toggle         = Toggle;
+window.Ico            = Ico;
+window.toast          = toast;
 
 /* ── Mount ── */
 createRoot(document.getElementById('root')).render(h(App));

@@ -739,13 +739,18 @@
       setNoteInput('');
     }
 
-    const LEFT_TABS = [
-      { id: 'details',       label: 'Details',        icon: I.User },
-      { id: 'items',         label: 'Items',          icon: I.List },
-      { id: 'sales',         label: 'Sales',          icon: I.Cart },
-      { id: 'workorders',    label: 'Workorders',     icon: I.Wrench },
-      { id: 'account',       label: 'Account',        icon: I.Dollar },
-      { id: 'merge',         label: 'Merge',          icon: I.Merge },
+    /* Counts for top tab badges */
+    const itemsCount = (window.CustomerItems && window.CustomerItems.get(customer.id) || []).length;
+    const salesCount = (customer.salesCount != null ? customer.salesCount : history.length);
+    const woCount    = (customer.woCount != null ? customer.woCount : workOrders.length);
+
+    const TOP_TABS = [
+      { id: 'details',       label: 'Details',    icon: I.User },
+      { id: 'items',         label: 'Items',      icon: I.List,   count: itemsCount },
+      { id: 'sales',         label: 'Sales',      icon: I.Cart,   count: salesCount },
+      { id: 'workorders',    label: 'Workorders', icon: I.Wrench, count: woCount },
+      { id: 'account',       label: 'Account',    icon: I.Dollar },
+      { id: 'merge',         label: 'Merge',      icon: I.Merge },
     ];
 
     const PROVINCES = ['AB','BC','MB','NB','NL','NS','NT','NU','ON','PE','QC','SK','YT'];
@@ -835,7 +840,7 @@
         /* ── BODY (left sidebar + main content + right sidebar) ── */
         h('div', { style: { display: 'flex', flex: 1, minHeight: 0 } },
 
-          /* LEFT SIDEBAR — vertical tabs */
+          /* LEFT SIDEBAR — avatar + quick actions only (tabs moved up top) */
           h('div', {
             style: {
               width: 160, flexShrink: 0, borderRight: '1px solid var(--line)',
@@ -852,27 +857,9 @@
               h('div', { style: { fontSize: 11, color: 'var(--text-3)', marginTop: 2, fontFamily: 'var(--font-mono)' } },
                 customer.customerType || 'Customer')
             ),
-            LEFT_TABS.map(tab =>
-              h('button', {
-                key: tab.id,
-                onClick: () => setLeftNav(tab.id),
-                style: {
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  width: '100%', padding: '9px 16px', fontSize: 13,
-                  background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-                  borderLeft: leftNav === tab.id ? '3px solid var(--accent)' : '3px solid transparent',
-                  color: leftNav === tab.id ? 'var(--text)' : 'var(--text-2)',
-                  fontWeight: leftNav === tab.id ? 600 : 400,
-                  background: leftNav === tab.id ? 'rgba(200,57,44,0.06)' : 'transparent',
-                }
-              },
-                h(tab.icon),
-                tab.label
-              )
-            ),
 
-            /* Extra quick-action buttons at bottom */
-            h('div', { style: { marginTop: 'auto', padding: '12px 10px', borderTop: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 6 } },
+            /* Quick-action buttons */
+            h('div', { style: { padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 6 } },
               h('button', {
                 className: 'btn ghost',
                 style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, padding: '0 8px', height: 28, width: '100%', justifyContent: 'flex-start' },
@@ -891,8 +878,25 @@
             )
           ),
 
-          /* MAIN CONTENT AREA */
-          h('div', { style: { flex: 1, overflowY: 'auto', minWidth: 0 } },
+          /* MAIN CONTENT AREA — with top tabs */
+          h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 } },
+
+            /* ── TOP TABS ── */
+            h('div', { className: 'detail-top-tabs' },
+              TOP_TABS.map(t =>
+                h('button', {
+                  key: t.id,
+                  className: 'detail-top-tab' + (leftNav === t.id ? ' active' : ''),
+                  onClick: () => setLeftNav(t.id),
+                },
+                  t.label,
+                  t.count != null && h('span', { className: 'detail-top-tab-count' }, t.count)
+                )
+              )
+            ),
+
+            /* ── TAB CONTENT (scrollable) ── */
+            h('div', { style: { flex: 1, overflowY: 'auto', minWidth: 0 } },
 
             /* ── DETAILS TAB ── */
             leftNav === 'details' && form && h('div', {
@@ -1103,24 +1107,12 @@
                   )
             ),
 
-            /* ── ITEMS TAB ── */
+            /* ── ITEMS TAB — serialized items on file (CustomerItemsTab) ── */
             leftNav === 'items' && h('div', { style: { padding: '20px 24px' } },
-              h('div', { style: { fontSize: 14, fontWeight: 600, marginBottom: 14 } }, 'Items Purchased'),
-              history.length === 0
-                ? h('div', { style: { padding: '40px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 } }, 'No items on record')
-                : h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-                    history.flatMap(sale =>
-                      (sale.items || '').split(',').map((item, i) =>
-                        h('div', {
-                          key: sale.id + '-' + i,
-                          style: { padding: '10px 12px', background: 'var(--bg-2)', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }
-                        },
-                          h('div', { style: { fontSize: 13 } }, item.trim()),
-                          h('div', { style: { fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' } }, fmtDate(sale.date))
-                        )
-                      )
-                    )
-                  )
+              window.CustomerItemsTab
+                ? h(window.CustomerItemsTab, { customerId: customer.id })
+                : h('div', { style: { padding: '40px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 } },
+                    'Items module not loaded')
             ),
 
             /* ── ACCOUNT TAB ── */
@@ -1186,6 +1178,7 @@
                 onClick: () => setShowMerge(true),
               }, h(I.Merge), 'Select Customer to Merge Into')
             )
+            ) /* end scrollable tab content */
           ),
 
           /* RIGHT SIDEBAR — Contact Preferences */
