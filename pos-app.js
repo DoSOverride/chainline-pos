@@ -730,7 +730,7 @@ function DashboardScreen({ setScreen }) {
               h('span', { className: 'qa-title' }, 'New Sale'),
               h('span', { className: 'qa-sub' }, 'Open register')
             ),
-            h('button', { className: 'qa' },
+            h('button', { className: 'qa', onClick: () => setScreen('customers') },
               h('span', { className: 'qa-ico' }, h(Ico.Users, { size: 18 })),
               h('span', { className: 'qa-title' }, 'Customer Lookup'),
               h('span', { className: 'qa-sub' }, 'Search profiles')
@@ -974,6 +974,9 @@ function WorkOrderDetail({ wo, onClose }) {
   );
 }
 
+// Alias per spec §3 — same component, canonical name
+const WorkOrderDetailPanel = WorkOrderDetail;
+
 /* ─────────────────────────────────────────
    SCREEN B — WORK ORDERS LIST
 ───────────────────────────────────────── */
@@ -1065,8 +1068,17 @@ function WorkOrdersScreen({ setScreen }) {
             ? h('tr', null,
                 h('td', {
                   colSpan: 8,
-                  style: { textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' },
-                }, 'No work orders match these filters')
+                  style: { textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)' },
+                },
+                  h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 } },
+                    'No work orders match these filters'
+                  ),
+                  h('button', {
+                    className: 'btn',
+                    style: { fontSize: 11 },
+                    onClick: () => { setTab('all'); setSearch(''); },
+                  }, 'Clear filters')
+                )
               )
             : filtered.map(r =>
                 h('tr', { key: r.id, style: { cursor: 'pointer' }, onClick: () => setSelectedWo(r) },
@@ -1126,7 +1138,7 @@ function WorkOrdersScreen({ setScreen }) {
       h('span', null, 'Page 1 / 1')
     ),
     selectedWo && h('div', { className: 'panel-overlay', onClick: e => { if (e.target === e.currentTarget) setSelectedWo(null); } },
-      h(WorkOrderDetail, { wo: selectedWo, onClose: () => setSelectedWo(null) })
+      h(WorkOrderDetailPanel, { wo: selectedWo, onClose: () => setSelectedWo(null) })
     )
   );
 }
@@ -2267,10 +2279,16 @@ function App() {
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const topbarSearchRef = useRef(null);
 
+  // G→D sequence state
+  const gSeqRef = useRef(null);
+
   // Keyboard shortcuts
   useEffect(function() {
     function onKey(e) {
       if (!staff) return;
+      const tag = document.activeElement && document.activeElement.tagName;
+      const inInput = ['INPUT','TEXTAREA','SELECT'].includes(tag);
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (topbarSearchRef.current) topbarSearchRef.current.focus();
@@ -2282,8 +2300,22 @@ function App() {
         setScreen('new-wo');
         return;
       }
-      if (e.key === 'n' && screen === 'dashboard' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement && document.activeElement.tagName)) {
+      if (e.key === 'n' && screen === 'dashboard' && !inInput) {
         setScreen('sales');
+        return;
+      }
+      // G→D sequence: press G then D within 1500ms
+      if (e.key === 'g' && !inInput && !e.metaKey && !e.ctrlKey) {
+        if (gSeqRef.current) clearTimeout(gSeqRef.current);
+        gSeqRef.current = setTimeout(function() { gSeqRef.current = null; }, 1500);
+        return;
+      }
+      if (e.key === 'd' && !inInput && !e.metaKey && !e.ctrlKey && gSeqRef.current) {
+        clearTimeout(gSeqRef.current);
+        gSeqRef.current = null;
+        e.preventDefault();
+        setScreen('dashboard');
+        return;
       }
     }
     document.addEventListener('keydown', onKey);
