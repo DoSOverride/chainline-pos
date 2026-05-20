@@ -2,10 +2,9 @@
 // Intercepts all Worker requests and returns 503/network failure.
 // App should still load from mock data and indicate offline state.
 
-const { test, expect } = require('./helpers');
+const { test, expect } = require('@playwright/test');
 const helpers = require('./helpers');
 const { BASE_URL } = require('./helpers');
-const { test: pwTest, expect: pwExpect } = require('@playwright/test');
 
 const WORKER_URL = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
@@ -18,38 +17,38 @@ async function loginOffline(page, staffName = 'Jason') {
   await helpers.login(page, staffName);
 }
 
-pwTest.describe('Offline mode — app still loads', () => {
-  pwTest('app loads and shows mock data when worker returns 503', async ({ page }) => {
+test.describe('Offline mode — app still loads', () => {
+  test('app loads and shows mock data when worker returns 503', async ({ page }) => {
     await loginOffline(page);
-    await pwExpect(page.locator('.app')).toBeVisible();
+    await expect(page.locator('.app')).toBeVisible();
   });
 
-  pwTest('connection status indicator shows Offline', async ({ page }) => {
+  test('connection status indicator shows Offline', async ({ page }) => {
     await loginOffline(page);
-    await pwExpect(page.locator('.conn-status')).toContainText('Offline', { timeout: 5000 });
+    await expect(page.locator('.conn-status')).toContainText('Offline', { timeout: 5000 });
   });
 
-  pwTest('conn-dot has red class when offline', async ({ page }) => {
+  test('conn-dot has red class when offline', async ({ page }) => {
     await loginOffline(page);
-    await pwExpect(page.locator('.conn-dot.conn-red')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.conn-dot.conn-red')).toBeVisible({ timeout: 5000 });
   });
 
-  pwTest('dashboard still renders stat cards offline', async ({ page }) => {
+  test('dashboard still renders stat cards offline', async ({ page }) => {
     await loginOffline(page);
-    await pwExpect(page.locator('.stat')).toHaveCount(4);
+    await expect(page.locator('.stat')).toHaveCount(4);
   });
 });
 
-pwTest.describe('Offline mode — Work Orders', () => {
-  pwTest('work orders table still shows mock rows when worker returns 503', async ({ page }) => {
+test.describe('Offline mode — Work Orders', () => {
+  test('work orders table still shows mock rows when worker returns 503', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Work Orders")');
     const rows = page.locator('.tbl tbody tr');
-    await pwExpect(rows.first()).toBeVisible({ timeout: 5000 });
-    await pwExpect(rows).toHaveCount(10);
+    await expect(rows.first()).toBeVisible({ timeout: 5000 });
+    await expect(rows).toHaveCount(10);
   });
 
-  pwTest('WO status filter tabs still work offline', async ({ page }) => {
+  test('WO status filter tabs still work offline', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Work Orders")');
     await page.click('.sub-tab:has-text("Open")');
@@ -58,19 +57,19 @@ pwTest.describe('Offline mode — Work Orders', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  pwTest('WO search still filters offline', async ({ page }) => {
+  test('WO search still filters offline', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Work Orders")');
     await page.locator('.filters .input').fill('Devon');
     await page.waitForTimeout(200);
-    await pwExpect(page.locator('.tbl tbody tr').first()).toContainText('Devon');
+    await expect(page.locator('.tbl tbody tr').first()).toContainText('Devon');
   });
 
-  pwTest('creating WO offline shows toast with offline message', async ({ page }) => {
+  test('creating WO offline shows toast with offline message', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Work Orders")');
     await page.click('.btn.primary:has-text("New Work Order")');
-    await pwExpect(page.locator('.page-title')).toContainText('New Work Order');
+    await expect(page.locator('.page-title')).toContainText('New Work Order');
 
     // Fill required bike field (customer has default, bike field is pre-filled)
     const bikeInput = page.locator('.input[placeholder*="Santa Cruz"]');
@@ -78,20 +77,20 @@ pwTest.describe('Offline mode — Work Orders', () => {
 
     await page.click('.btn.primary:has-text("Create work order")');
     // Worker is offline so should show "offline" toast
-    await pwExpect(page.locator('.toast, [class*="toast"]').first()).toContainText('offline', { timeout: 6000 });
+    await expect(page.locator('.toast, [class*="toast"]').first()).toContainText('offline', { timeout: 6000 });
   });
 });
 
-pwTest.describe('Offline mode — Sales Register', () => {
-  pwTest('sales register loads and shows pre-loaded cart items offline', async ({ page }) => {
+test.describe('Offline mode — Sales Register', () => {
+  test('sales register loads and shows pre-loaded cart items offline', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Sales")');
-    await pwExpect(page.locator('.page-title')).toContainText('Sales Register');
+    await expect(page.locator('.page-title')).toContainText('Sales Register');
     // Pre-loaded 4 items exist from component state (not from API)
-    await pwExpect(page.locator('.line-row:not(.head)')).not.toHaveCount(0);
+    await expect(page.locator('.line-row:not(.head)')).not.toHaveCount(0);
   });
 
-  pwTest('adding to cart works offline', async ({ page }) => {
+  test('adding to cart works offline', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Sales")');
     const beforeCount = await page.locator('.line-row:not(.head)').count();
@@ -103,24 +102,24 @@ pwTest.describe('Offline mode — Sales Register', () => {
     expect(afterCount).toBeGreaterThanOrEqual(beforeCount);
   });
 
-  pwTest('tax calculation still works offline', async ({ page }) => {
+  test('tax calculation still works offline', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Sales")');
-    await pwExpect(page.locator('.totals-row:has-text("GST")')).toBeVisible();
-    await pwExpect(page.locator('.totals-row:has-text("PST")')).toBeVisible();
-    await pwExpect(page.locator('.totals-row.grand')).toBeVisible();
+    await expect(page.locator('.totals-row:has-text("GST")')).toBeVisible();
+    await expect(page.locator('.totals-row:has-text("PST")')).toBeVisible();
+    await expect(page.locator('.totals-row.grand')).toBeVisible();
   });
 
-  pwTest('sale payment offline shows toast', async ({ page }) => {
+  test('sale payment offline shows toast', async ({ page }) => {
     await loginOffline(page);
     await page.click('.nav-item:has-text("Sales")');
     await page.keyboard.press('F1');
-    await pwExpect(page.locator('.toast, [class*="toast"]').first()).toBeVisible({ timeout: 6000 });
+    await expect(page.locator('.toast, [class*="toast"]').first()).toBeVisible({ timeout: 6000 });
   });
 });
 
-pwTest.describe('Offline mode — navigation unaffected', () => {
-  pwTest('all nav items still work offline', async ({ page }) => {
+test.describe('Offline mode — navigation unaffected', () => {
+  test('all nav items still work offline', async ({ page }) => {
     await loginOffline(page);
     const navScreens = [
       { label: 'Work Orders', title: 'Work Orders' },
@@ -131,7 +130,7 @@ pwTest.describe('Offline mode — navigation unaffected', () => {
     ];
     for (const { label, title } of navScreens) {
       await page.click(`.nav-item:has-text("${label}")`);
-      await pwExpect(page.locator('.page-title')).toContainText(title);
+      await expect(page.locator('.page-title')).toContainText(title);
     }
   });
 });
