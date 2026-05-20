@@ -357,16 +357,79 @@
     );
   }
 
-  /* ── Item Detail Panel ── */
-  function ItemDetailPanel({ item, onClose, isManager, onEdit, onAdjust, onNewSale, onAddToPO }) {
+  /* ── Item Detail View — full-screen inline replacement ── */
+  function ItemDetailView({ item, onBack, isManager, onEdit, onAdjust, onNewSale, onAddToPO }) {
+    const [fullData, setFullData] = useState(null);
+    const [loadingFull, setLoadingFull] = useState(true);
+    const [fetchErr, setFetchErr] = useState(false);
     const [editing, setEditing] = useState(false);
     const [editPrice, setEditPrice] = useState(String(item.price));
     const [editCost, setEditCost] = useState(String(item.cost));
     const [editReorder, setEditReorder] = useState(String(item.reorderPt));
 
-    // Resolve image
+    // Resolve image from index or fullData
     const idx = window.POS_IMG_INDEX || {};
-    const imgSrc = idx[item.sku] || idx[item.customSku] || item.image || null;
+    const imgSrc = idx[item.sku] || idx[item.customSku] || fullData?.image || item.image || null;
+
+    // Merge: base item fields + any extra fields from LS API
+    const d = fullData ? { ...item, ...fullData } : item;
+
+    useEffect(() => {
+      setLoadingFull(true);
+      setFetchErr(false);
+      const sku = item.sku || item.systemSku || '';
+      fetch(WORKER + '/api/items-search?q=' + encodeURIComponent(sku))
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(data => {
+          // LS items-search returns { items: [...] } or an array
+          const list = Array.isArray(data) ? data : (data.items || data.data || []);
+          // Find exact SKU match
+          const match = list.find(it =>
+            (it.systemSku || '').toLowerCase() === sku.toLowerCase() ||
+            (it.customSku || '').toLowerCase() === sku.toLowerCase() ||
+            (it.sku || '').toLowerCase() === sku.toLowerCase()
+          ) || list[0] || null;
+
+          if (match) {
+            // Map LS API fields to our normalized shape
+            const prices = match.Prices && match.Prices.ItemPrice;
+            const priceArr = Array.isArray(prices) ? prices : (prices ? [prices] : []);
+            const sellPrice = priceArr.find(p => p.useType === 'Default' || p.useType === 'MSRP' || !p.useType);
+            const salePrice = priceArr.find(p => p.useType === 'Online' || p.useType === 'Sale');
+            const catName = match.Category && (match.Category.name || match.Category.pathName);
+            const deptName = match.Department && match.Department.name;
+            const supplierName = match.ItemVendors
+              ? (Array.isArray(match.ItemVendors.ItemVendor)
+                  ? match.ItemVendors.ItemVendor[0]?.vendorName
+                  : match.ItemVendors.ItemVendor?.vendorName)
+              : null;
+            // Per-shop stock
+            const shopStock = match.ItemShops && match.ItemShops.ItemShop;
+            const shopArr = Array.isArray(shopStock) ? shopStock : (shopStock ? [shopStock] : []);
+
+            setFullData({
+              description: match.description || match.longDescription || item.description,
+              upc: match.upc || match.ean || item.upc,
+              customSku: match.customSku || item.customSku,
+              systemSku: match.systemSku || item.sku,
+              price: sellPrice ? parseFloat(sellPrice.amount) : item.price,
+              salePrice: salePrice ? parseFloat(salePrice.amount) : null,
+              cost: parseFloat(match.defaultCost) || item.cost,
+              qoh: match.qoh != null ? Number(match.qoh) : item.qty,
+              reorderPoint: match.reorderPoint != null ? Number(match.reorderPoint) : item.reorderPt,
+              category: catName || item.dept,
+              department: deptName || item.dept,
+              supplier: supplierName,
+              manufacturer: match.manufacturerSku || match.manufacturer || item.brand,
+              image: match.itemImageUrl || null,
+              shopStock: shopArr,
+              lsItemId: match.itemID,
+            });
+          }
+          setLoadingFull(false);
+        })
+        .catch(() => { setFetchErr(true); setLoadingFull(false); });
+    }, [item.sku]);
 
     function saveInline() {
       onEdit({
@@ -378,134 +441,307 @@
       setEditing(false);
     }
 
-    const marg = margin(item.price, item.cost);
+    const displayPrice = d.price || item.price;
+    const displayCost = d.cost || item.cost;
+    const displayQty = d.qoh != null ? d.qoh : (d.qty != null ? d.qty : item.qty);
+    const displayReorderPt = d.reorderPoint != null ? d.reorderPoint : (d.reorderPt != null ? d.reorderPt : item.reorderPt);
+    const marg = margin(displayPrice, displayCost);
+
+    const sectionLabel = txt => h('div', {
+      style: {
+        fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase',
+        letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 12,
+        paddingBottom: 6, borderBottom: '1px solid var(--line)',
+      },
+    }, txt);
 
     return h('div', {
-      style: {
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: 480, zIndex: 300,
-        background: 'var(--bg-1)', borderLeft: '1px solid var(--line-2)',
-        display: 'flex', flexDirection: 'column', overflowY: 'auto',
-      },
+      style: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' },
     },
-      // Header
+      // Top bar
       h('div', {
-        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--line)', flexShrink: 0 },
+        style: {
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 20px', borderBottom: '1px solid var(--line)',
+          flexShrink: 0, background: 'var(--bg-1)',
+        },
       },
-        h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)' } }, 'Item Detail'),
         h('button', {
-          style: { background: 'none', border: 'none', color: 'var(--text-3)', fontSize: 20, cursor: 'pointer', padding: '2px 4px' },
-          onClick: onClose,
-        }, '\xd7')
-      ),
-
-      // Image
-      h('div', {
-        style: { height: 200, flexShrink: 0, background: 'var(--bg-2)', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-      },
-        imgSrc
-          ? h('img', { src: imgSrc, alt: item.name, style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' } })
-          : h('span', { style: { fontSize: 64 } }, deptEmoji(item.dept))
-      ),
-
-      // Core info
-      h('div', { style: { padding: '16px 18px', borderBottom: '1px solid var(--line)' } },
-        h('div', { style: { fontSize: 15, fontWeight: 600, marginBottom: 6 } }, item.name),
-        h('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 } },
-          infoField('SKU', item.sku, true),
-          item.customSku && infoField('Custom SKU', item.customSku, true),
-          item.upc && infoField('UPC', item.upc, true),
+          className: 'btn ghost',
+          style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 },
+          onClick: onBack,
+        },
+          h('svg', { viewBox: '0 0 16 16', width: 12, height: 12, fill: 'none', stroke: 'currentColor', strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round' },
+            h('path', { d: 'M10 3L5 8l5 5' })
+          ),
+          'Back to Inventory'
         ),
-        h('div', { style: { display: 'flex', gap: 16, flexWrap: 'wrap' } },
-          infoField('Brand', item.brand),
-          infoField('Department', item.dept),
-        )
-      ),
-
-      // Stock + pricing
-      h('div', { style: { padding: '14px 18px', borderBottom: '1px solid var(--line)' } },
-        h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 10 } }, 'Stock + Pricing'),
-        editing
-          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
-              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } },
-                h('div', null,
-                  h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Price'),
-                  h('input', { className: 'input mono', type: 'number', step: '0.01', value: editPrice, onChange: e => setEditPrice(e.target.value) })
-                ),
-                isManager && h('div', null,
-                  h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Cost'),
-                  h('input', { className: 'input mono', type: 'number', step: '0.01', value: editCost, onChange: e => setEditCost(e.target.value) })
-                ),
-                h('div', null,
-                  h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Reorder Point'),
-                  h('input', { className: 'input mono', type: 'number', value: editReorder, onChange: e => setEditReorder(e.target.value) })
-                ),
-              ),
-              h('div', { style: { display: 'flex', gap: 8 } },
-                h('button', { className: 'btn primary', style: { flex: 1 }, onClick: saveInline }, 'Save'),
-                h('button', { className: 'btn ghost', onClick: () => setEditing(false) }, 'Cancel'),
-              )
-            )
-          : h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 } },
-              detailStat('Qty on Hand', h('span', { style: { color: qtyColor(item.qty), fontFamily: 'var(--font-mono)', fontWeight: 600 } }, item.qty)),
-              detailStat('Reorder Point', h('span', { style: { fontFamily: 'var(--font-mono)' } }, item.reorderPt)),
-              detailStat('Reorder Qty', h('span', { style: { fontFamily: 'var(--font-mono)' } }, item.reorderQty)),
-              detailStat('Price', h('span', { style: { fontFamily: 'var(--font-mono)' } }, fmt$(item.price))),
-              isManager && detailStat('Cost', h('span', { style: { fontFamily: 'var(--font-mono)' } }, fmt$(item.cost))),
-              isManager && detailStat('Margin', h('span', { style: { fontFamily: 'var(--font-mono)', color: 'var(--green)' } }, marg)),
-              isManager && item.lastReceived && detailStat('Last Rcv Price', h('span', { style: { fontFamily: 'var(--font-mono)' } }, fmt$(item.lastReceived))),
-            )
-      ),
-
-      // Description + tags
-      (item.description || (item.tags && item.tags.length > 0)) && h('div', { style: { padding: '14px 18px', borderBottom: '1px solid var(--line)' } },
-        item.description && h('p', { style: { fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: item.tags?.length ? 10 : 0 } }, item.description),
-        item.tags && item.tags.length > 0 && h('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap' } },
-          ...item.tags.map(tag => h('span', {
-            key: tag,
-            style: {
-              fontFamily: 'var(--font-mono)', fontSize: 10, padding: '2px 7px',
-              background: 'var(--bg-3)', border: '1px solid var(--line-2)', color: 'var(--text-2)',
+        h('span', { style: { color: 'var(--line-2)', fontSize: 14 } }, '/'),
+        h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)' } }, item.sku),
+        loadingFull && h('span', {
+          style: { marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.1em' },
+        }, 'Fetching LS data…'),
+        fetchErr && h('span', {
+          style: { marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--amber)', letterSpacing: '0.1em' },
+        }, 'LS fetch failed - showing cached data'),
+        // Action buttons in header
+        h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
+          h('button', {
+            className: 'btn ghost',
+            style: { fontSize: 12 },
+            onClick: () => onAdjust(d),
+          }, 'Adjust Qty'),
+          h('button', {
+            className: 'btn ghost',
+            style: { fontSize: 12 },
+            onClick: () => printLabel(d),
+          }, 'Print Label'),
+          h('button', {
+            className: 'btn',
+            style: { fontSize: 12 },
+            onClick: () => { onAddToPO(d); },
+          }, 'Add to PO'),
+          h('button', {
+            className: 'btn primary',
+            style: { fontSize: 12 },
+            onClick: () => {
+              if (window.posAddToCart) window.posAddToCart(d);
+              else onNewSale(d);
             },
-          }, tag))
+          }, 'Add to Cart'),
         )
       ),
 
-      // Recent sales
-      h('div', { style: { padding: '14px 18px', borderBottom: '1px solid var(--line)' } },
-        h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 } }, 'Recent Sales'),
-        MOCK_SALES.length === 0
-          ? h('div', { style: { fontSize: 12, color: 'var(--text-3)' } }, 'No recent sales.')
-          : h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
-              h('thead', null,
-                h('tr', null,
-                  ...['Date', 'Qty', 'Customer', 'Price'].map(col =>
-                    h('th', { key: col, style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', padding: '3px 0', textAlign: 'left', borderBottom: '1px solid var(--line)' } }, col)
-                  )
-                )
+      // Scrollable content
+      h('div', { style: { flex: 1, overflowY: 'auto', padding: '24px 28px' } },
+        // Two-column layout
+        h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 360px', gap: 28, alignItems: 'start' } },
+
+          // LEFT: Item info
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 24 } },
+
+            // Hero: image + name
+            h('div', { style: { display: 'flex', gap: 20, alignItems: 'flex-start' } },
+              h('div', {
+                style: {
+                  width: 180, height: 180, flexShrink: 0,
+                  background: 'var(--bg-2)', border: '1px solid var(--line)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  overflow: 'hidden',
+                },
+              },
+                imgSrc
+                  ? h('img', {
+                      src: imgSrc, alt: d.name,
+                      style: { width: '100%', height: '100%', objectFit: 'contain' },
+                    })
+                  : h('span', { style: { fontSize: 72 } }, deptEmoji(d.dept || item.dept))
               ),
-              h('tbody', null,
-                ...MOCK_SALES.slice(0, 10).map((s, i) =>
-                  h('tr', { key: i },
-                    h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)', padding: '5px 0', borderBottom: '1px solid var(--line)' } }, s.date),
-                    h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', padding: '5px 0', borderBottom: '1px solid var(--line)' } }, s.qty),
-                    h('td', { style: { fontSize: 11, color: 'var(--text-1)', padding: '5px 8px', borderBottom: '1px solid var(--line)' } }, s.customer),
-                    h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', padding: '5px 0', borderBottom: '1px solid var(--line)', textAlign: 'right' } }, fmt$(s.price)),
+              h('div', { style: { flex: 1, paddingTop: 4 } },
+                h('div', { style: { fontSize: 20, fontWeight: 600, lineHeight: 1.3, marginBottom: 10 } }, d.name || item.name),
+                h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                  (d.brand || item.brand) && h('span', {
+                    style: {
+                      fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px',
+                      background: 'var(--bg-3)', border: '1px solid var(--line-2)', color: 'var(--text-2)',
+                    },
+                  }, d.brand || item.brand),
+                  (d.department || d.dept || item.dept) && h('span', {
+                    style: {
+                      fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px',
+                      background: 'var(--bg-3)', border: '1px solid var(--line-2)', color: 'var(--text-2)',
+                    },
+                  }, d.department || d.dept || item.dept),
+                  (d.category && d.category !== d.department) && h('span', {
+                    style: {
+                      fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px',
+                      background: 'var(--bg-3)', border: '1px solid var(--line-2)', color: 'var(--text-2)',
+                    },
+                  }, d.category),
+                )
+              )
+            ),
+
+            // Identifiers
+            h('div', null,
+              sectionLabel('Identifiers'),
+              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 } },
+                infoField('System SKU', d.systemSku || item.sku, true),
+                (d.customSku || item.customSku) && infoField('Custom SKU', d.customSku || item.customSku, true),
+                (d.upc || item.upc) && infoField('UPC / Barcode', d.upc || item.upc, true),
+                d.lsItemId && infoField('LS Item ID', String(d.lsItemId), true),
+                d.manufacturer && infoField('Manufacturer SKU', d.manufacturer, true),
+              )
+            ),
+
+            // Description
+            (d.description || item.description) && h('div', null,
+              sectionLabel('Description'),
+              h('p', {
+                style: { fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, margin: 0 },
+              }, d.description || item.description)
+            ),
+
+            // Supplier
+            d.supplier && h('div', null,
+              sectionLabel('Supplier'),
+              h('div', { style: { fontSize: 13, color: 'var(--text-1)', fontWeight: 500 } }, d.supplier)
+            ),
+
+            // Tags
+            item.tags && item.tags.length > 0 && h('div', null,
+              sectionLabel('Tags'),
+              h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+                ...item.tags.map(tag => h('span', {
+                  key: tag,
+                  style: {
+                    fontFamily: 'var(--font-mono)', fontSize: 10, padding: '3px 8px',
+                    background: 'var(--bg-3)', border: '1px solid var(--line-2)', color: 'var(--text-2)',
+                  },
+                }, tag))
+              )
+            ),
+
+            // Recent Sales
+            h('div', null,
+              sectionLabel('Recent Sales'),
+              MOCK_SALES.length === 0
+                ? h('div', { style: { fontSize: 12, color: 'var(--text-3)' } }, 'No recent sales.')
+                : h('table', { style: { width: '100%', borderCollapse: 'collapse' } },
+                    h('thead', null,
+                      h('tr', null,
+                        ...['Date', 'Qty', 'Customer', 'Price'].map(col =>
+                          h('th', {
+                            key: col,
+                            style: {
+                              fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase',
+                              letterSpacing: '0.1em', color: 'var(--text-3)', padding: '4px 0',
+                              textAlign: 'left', borderBottom: '1px solid var(--line)',
+                            },
+                          }, col)
+                        )
+                      )
+                    ),
+                    h('tbody', null,
+                      ...MOCK_SALES.slice(0, 10).map((s, i) =>
+                        h('tr', { key: i },
+                          h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)', padding: '6px 0', borderBottom: '1px solid var(--line)' } }, s.date),
+                          h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', padding: '6px 0', borderBottom: '1px solid var(--line)' } }, s.qty),
+                          h('td', { style: { fontSize: 11, color: 'var(--text-1)', padding: '6px 8px', borderBottom: '1px solid var(--line)' } }, s.customer),
+                          h('td', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text)', padding: '6px 0', borderBottom: '1px solid var(--line)', textAlign: 'right' } }, fmt$(s.price)),
+                        )
+                      )
+                    )
+                  )
+            ),
+          ),
+
+          // RIGHT: Stock + Pricing card
+          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 0 } },
+
+            // Stock card
+            h('div', {
+              style: {
+                background: 'var(--bg-2)', border: '1px solid var(--line-2)',
+                padding: '18px 20px',
+              },
+            },
+              sectionLabel('Stock'),
+              h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 } },
+                h('div', null,
+                  h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 4 } }, 'On Hand'),
+                  h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: qtyColor(displayQty) } }, displayQty)
+                ),
+                h('div', null,
+                  h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 4 } }, 'Reorder Point'),
+                  h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-2)' } }, displayReorderPt)
+                ),
+              ),
+              item.reorderQty && h('div', { style: { fontSize: 12, color: 'var(--text-3)', marginBottom: 8 } },
+                'Reorder qty: ', h('span', { style: { fontFamily: 'var(--font-mono)', color: 'var(--text-2)' } }, item.reorderQty)
+              ),
+              // Per-shop stock
+              d.shopStock && d.shopStock.length > 0 && h('div', { style: { marginTop: 10 } },
+                h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6 } }, 'By Location'),
+                d.shopStock.map((s, i) =>
+                  h('div', {
+                    key: i,
+                    style: { display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0', borderBottom: '1px solid var(--line)' },
+                  },
+                    h('span', { style: { color: 'var(--text-2)' } }, s.shopName || ('Shop ' + (s.shopID || i + 1))),
+                    h('span', { style: { fontFamily: 'var(--font-mono)', fontWeight: 600, color: qtyColor(Number(s.qoh || 0)) } }, s.qoh || 0)
                   )
                 )
               )
-            )
-      ),
+            ),
 
-      // Actions
-      h('div', { style: { padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 } },
-        h('div', { style: { display: 'flex', gap: 8 } },
-          h('button', { className: 'btn primary', style: { flex: 1 }, onClick: () => { onNewSale(item); onClose(); } }, 'New Sale'),
-          h('button', { className: 'btn', style: { flex: 1 }, onClick: () => { onAddToPO(item); onClose(); } }, 'Add to PO'),
-        ),
-        h('div', { style: { display: 'flex', gap: 8 } },
-          h('button', { className: 'btn ghost', style: { flex: 1 }, onClick: () => { onAdjust(item); } }, 'Adjust Qty'),
-          h('button', { className: 'btn ghost', style: { flex: 1 }, onClick: () => setEditing(true) }, 'Edit'),
-        ),
+            // Pricing card
+            h('div', {
+              style: {
+                background: 'var(--bg-2)', border: '1px solid var(--line-2)',
+                padding: '18px 20px',
+              },
+            },
+              sectionLabel('Pricing'),
+              editing
+                ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+                    h('div', null,
+                      h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Sell Price'),
+                      h('input', { className: 'input mono', type: 'number', step: '0.01', value: editPrice, onChange: e => setEditPrice(e.target.value), autoFocus: true })
+                    ),
+                    isManager && h('div', null,
+                      h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Cost'),
+                      h('input', { className: 'input mono', type: 'number', step: '0.01', value: editCost, onChange: e => setEditCost(e.target.value) })
+                    ),
+                    h('div', null,
+                      h('label', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-2)', display: 'block', marginBottom: 4 } }, 'Reorder Point'),
+                      h('input', { className: 'input mono', type: 'number', value: editReorder, onChange: e => setEditReorder(e.target.value) })
+                    ),
+                    h('div', { style: { display: 'flex', gap: 8, marginTop: 4 } },
+                      h('button', { className: 'btn primary', style: { flex: 1 }, onClick: saveInline }, 'Save'),
+                      h('button', { className: 'btn ghost', onClick: () => setEditing(false) }, 'Cancel'),
+                    )
+                  )
+                : h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+                    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' } }, 'Sell Price'),
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700 } }, fmt$(displayPrice))
+                    ),
+                    d.salePrice && h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' } }, 'Sale Price'),
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--red)' } }, fmt$(d.salePrice))
+                    ),
+                    isManager && h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' } }, 'Cost'),
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text-2)' } }, fmt$(displayCost))
+                    ),
+                    isManager && h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' } }, 'Margin'),
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--green)', fontWeight: 600 } }, marg)
+                    ),
+                    item.lastReceived && isManager && h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)' } }, 'Last Rcv'),
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)' } }, fmt$(item.lastReceived))
+                    ),
+                    h('button', {
+                      className: 'btn ghost',
+                      style: { width: '100%', marginTop: 6, fontSize: 12 },
+                      onClick: () => setEditing(true),
+                    }, 'Edit Price / Cost'),
+                  )
+            ),
+
+            // Add to Cart prominent button
+            h('button', {
+              className: 'btn primary',
+              style: { width: '100%', padding: '12px 0', fontSize: 14, fontWeight: 600 },
+              onClick: () => {
+                if (window.posAddToCart) window.posAddToCart(d);
+                else onNewSale(d);
+              },
+            }, 'Add to Cart'),
+          )
+        )
       )
     );
   }
@@ -749,8 +985,33 @@
       setSelected(new Set());
     }
 
+    // If an item is selected, render full-screen detail view inline
+    if (detailItem) {
+      return h(Fragment, null,
+        h(ItemDetailView, {
+          item: detailItem,
+          onBack: () => setDetailItem(null),
+          isManager,
+          onEdit: data => { handleEditSave(data); setDetailItem(it => it ? { ...it, ...data } : null); },
+          onAdjust: item => setAdjustItem(item),
+          onNewSale: handleNewSale,
+          onAddToPO: handleAddToPO,
+        }),
+        adjustItem && h(AdjustQtyModal, {
+          item: adjustItem,
+          onClose: () => setAdjustItem(null),
+          onSave: handleAdjustSave,
+        }),
+        editPriceItem && h(EditPriceModal, {
+          item: editPriceItem,
+          onClose: () => setEditPriceItem(null),
+          onSave: handleEditSave,
+        }),
+      );
+    }
+
     // Overlay (panel or modal open) dims background
-    const anyOverlay = !!detailItem || !!adjustItem || !!editPriceItem || bulkPriceOpen;
+    const anyOverlay = !!adjustItem || !!editPriceItem || bulkPriceOpen;
 
     return h(Fragment, null,
       // Page
@@ -1027,17 +1288,6 @@
           })
         ),
       ),
-
-      // Detail panel
-      detailItem && h(ItemDetailPanel, {
-        item: detailItem,
-        onClose: () => setDetailItem(null),
-        isManager,
-        onEdit: data => { handleEditSave(data); setDetailItem(it => it ? { ...it, ...data } : null); },
-        onAdjust: item => { setAdjustItem(item); },
-        onNewSale: handleNewSale,
-        onAddToPO: handleAddToPO,
-      }),
 
       // Adjust qty modal
       adjustItem && h(AdjustQtyModal, {
