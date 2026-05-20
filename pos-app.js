@@ -87,7 +87,7 @@ async function apiPost(path, body) {
   try {
     const r = await fetch(WORKER + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': '1139' },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
