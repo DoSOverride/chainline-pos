@@ -2,7 +2,7 @@
   X-Frame-Options: SAMEORIGIN
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: default-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://still-term-f1ec.taocaruso77.workers.dev; img-src 'self' data: blob: https:; connect-src 'self' https://still-term-f1ec.taocaruso77.workers.dev https://js.stripe.com; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://js.stripe.com
+  Content-Security-Policy: default-src 'self' https://unpkg.com https://still-term-f1ec.taocaruso77.workers.dev; img-src 'self' data: blob: https:; connect-src 'self' https://still-term-f1ec.taocaruso77.workers.dev https://js.stripe.com https://api.stripe.com; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; script-src 'self' 'unsafe-inline' https://unpkg.com https://js.stripe.com; frame-src 'self' https://js.stripe.com; object-src 'none'; base-uri 'self'
   Cache-Control: no-store
 
 /*.js

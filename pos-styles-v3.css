@@ -365,9 +365,13 @@
   border: 1px solid var(--line2);
   border-left: 3px solid var(--text3);
   padding: 10px 12px;
-  cursor: pointer;
+  cursor: grab;
   transition: background 80ms;
+  /* Allow native drag gestures on touch devices (HTML5 drag-and-drop) */
+  touch-action: none;
+  user-select: none;
 }
+.floor-card:active { cursor: grabbing; }
 .floor-card:hover { background: var(--bg3); }
 .floor-card.is-overdue { border-left-color: var(--red-fg); }
 .floor-card.is-prio { border-left-color: var(--accent); }

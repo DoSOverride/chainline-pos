@@ -2350,12 +2350,19 @@ function ReceiptModal({ receipt, onClose }) {
       style: { background: 'var(--bg2)', border: '1px solid var(--line3)', width: 400, maxHeight: '90vh', overflowY: 'auto', padding: 24 },
       onClick: e => e.stopPropagation(),
     },
-      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, gap: 12 } },
         h('div', null,
           h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 4 } }, 'Sale Complete'),
           h('div', { style: { fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' } }, fmt$(total))
         ),
-        h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, padding: '3px 8px', background: 'var(--green-bg, rgba(0,200,100,0.1))', color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase' } }, 'PAID \xb7 ' + (method || 'card').toUpperCase())
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+          h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 11, padding: '3px 8px', background: 'var(--green-bg, rgba(0,200,100,0.1))', color: 'var(--green)', letterSpacing: '0.08em', textTransform: 'uppercase' } }, 'PAID \xb7 ' + (method || 'card').toUpperCase()),
+          h('button', {
+            'aria-label': 'Close receipt',
+            onClick: onClose,
+            style: { width: 32, height: 32, lineHeight: '1', fontSize: 20, color: 'var(--text2)', background: 'transparent', border: '1px solid var(--line2)', cursor: 'pointer' }
+          }, '×')
+        )
       ),
 
       displayName !== 'Walk-in' && h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: 'var(--bg3)', marginBottom: 14 } },

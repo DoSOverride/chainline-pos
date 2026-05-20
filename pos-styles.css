@@ -21,10 +21,10 @@
   --line2: rgba(255,255,255,0.10);
   --line3: rgba(255,255,255,0.16);
 
-  /* Text */
+  /* Text — --text3 bumped to #7a7570 for WCAG AA contrast (~4.5:1 on --bg) */
   --text:  #f0ede8;
-  --text2: #8a8784;
-  --text3: #5a5856;
+  --text2: #9a9794;
+  --text3: #7a7570;
 
   /* Brand */
   --accent:      #c8392c;
@@ -69,8 +69,8 @@
   --line2: rgba(0,0,0,0.10);
   --line3: rgba(0,0,0,0.16);
   --text:  #1a1916;
-  --text2: #5a5856;
-  --text3: #8a8784;
+  --text2: #4a4844;
+  --text3: #6a6864;
 }
 
 /* ════════════════════════════════════════════
@@ -90,7 +90,12 @@ body {
 }
 a { color: inherit; text-decoration: none; cursor: pointer; }
 button { cursor: pointer; font-family: var(--ui); font-size: inherit; background: none; border: none; }
-input, select, textarea { font-family: var(--ui); font-size: 13px; }
+/* Inputs: 16px on touch devices to prevent iOS Safari zoom-on-focus.
+   Desktop keeps the tighter 13px UI density via @media(hover:hover). */
+input, select, textarea { font-family: var(--ui); font-size: 16px; }
+@media (hover: hover) and (pointer: fine) {
+  input, select, textarea { font-size: 13px; }
+}
 table { border-collapse: collapse; width: 100%; }
 ul, ol { list-style: none; }
 
@@ -1701,12 +1706,15 @@ input[type="date"], .mono-input {
   .nav-count { display: none; }
   .nav-item-label { display: none; }
   .nav-item-label-mobile { display: inline; }
-  #main, .main { padding-bottom: 72px; }
+  /* Reserve bottom-nav height + iPhone home-indicator safe-area */
+  #main, .main { padding-bottom: max(72px, calc(env(safe-area-inset-bottom) + 72px)); }
+  #sidebar, .sidebar { padding-bottom: env(safe-area-inset-bottom); }
   .page { padding: 16px 12px 80px; }
   .page-head { flex-direction: column; gap: 8px; align-items: stretch; }
   .page-head > .actions, .page-head > .row, .page-head > * { width: 100%; flex-wrap: wrap; }
   .stat-grid { grid-template-columns: 1fr 1fr; }
-  .grid-2 { grid-template-columns: 1fr; }
+  .grid-2,
+  .grid-2.split { grid-template-columns: 1fr !important; }
   /* New Work Order + Customer forms — collapse 2-col grid to 1-col on mobile */
   .grid-form { grid-template-columns: 1fr !important; gap: 12px !important; }
   .grid-form .span-2 { grid-column: auto; }
