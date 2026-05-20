@@ -55,16 +55,17 @@ const MOCK_CUSTOMERS = [
 ];
 
 const MOCK_CATALOG = [
-  { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',       price: 189.00, stock: 3,  low: false },
+  // taxablePst: false = PST-exempt (BC: labour/services not subject to PST per PSTA s.37)
+  { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        price: 189.00, stock: 3,  low: false },
   { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip', price: 84.00,  stock: 8,  low: false },
-  { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                  price: 25.00,  stock: 99, low: false },
-  { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                   price: 62.00,  stock: 5,  low: false },
-  { sku: 'BRAKE-PAD-CODE',  name: 'SRAM Code Brake Pads \xb7 Metallic',           price: 38.00,  stock: 14, low: false },
-  { sku: 'GREASE-SLICK',    name: 'SlickHoney Suspension Grease \xb7 32g',        price: 18.00,  stock: 6,  low: true  },
-  { sku: 'GRIP-ODI-ELITE',  name: 'ODI Elite Pro Lock-On Grips',                  price: 32.00,  stock: 9,  low: false },
-  { sku: 'TUBE-29-PRES',    name: '29" Tube \xb7 Presta Valve',                   price: 11.00,  stock: 38, low: false },
-  { sku: 'SVC-TUNE-B',      name: 'Marin Tune-Up Basic',                          price: 75.00,  stock: 99, low: false },
-  { sku: 'SVC-TUNE-S',      name: 'Marin Tune-Up Standard',                       price: 120.00, stock: 99, low: false },
+  { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                  price: 25.00,  stock: 99, low: false, taxablePst: false },
+  { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                    price: 62.00,  stock: 5,  low: false },
+  { sku: 'BRAKE-PAD-CODE',  name: 'SRAM Code Brake Pads \xb7 Metallic',            price: 38.00,  stock: 14, low: false },
+  { sku: 'GREASE-SLICK',    name: 'SlickHoney Suspension Grease \xb7 32g',         price: 18.00,  stock: 6,  low: true  },
+  { sku: 'GRIP-ODI-ELITE',  name: 'ODI Elite Pro Lock-On Grips',                   price: 32.00,  stock: 9,  low: false },
+  { sku: 'TUBE-29-PRES',    name: '29" Tube \xb7 Presta Valve',                    price: 11.00,  stock: 38, low: false },
+  { sku: 'SVC-TUNE-B',      name: 'Marin Tune-Up Basic',                           price: 75.00,  stock: 99, low: false, taxablePst: false },
+  { sku: 'SVC-TUNE-S',      name: 'Marin Tune-Up Standard',                        price: 120.00, stock: 99, low: false, taxablePst: false },
 ];
 
 /* ── Utilities ── */
@@ -1371,7 +1372,7 @@ function SalesScreen({ onBarcodeScan }) {
     if (existing) {
       setItems(items.map(i => i.sku === it.sku ? { ...i, qty: i.qty + 1 } : i));
     } else {
-      setItems([...items, { sku: it.sku, name: it.name, qty: 1, price: it.price }]);
+      setItems([...items, { sku: it.sku, name: it.name, qty: 1, price: it.price, taxablePst: it.taxablePst !== false }]);
     }
     setQuery('');
     if (searchRef.current) searchRef.current.focus();
@@ -1384,10 +1385,11 @@ function SalesScreen({ onBarcodeScan }) {
   }
   function removeItem(sku) { setItems(items.filter(i => i.sku !== sku)); }
 
-  // GST 5% + PST 7% independently from subtotal (BC)
-  const subtotal = items.reduce((a, i) => a + round2(i.qty * i.price), 0);
-  const gst      = round2(subtotal * 0.05);
-  const pst      = round2(subtotal * 0.07);
+  // GST 5% applies to everything; PST 7% exempt for labour/services (BC PSTA s.37)
+  const subtotal    = items.reduce((a, i) => a + round2(i.qty * i.price), 0);
+  const pstSubtotal = items.reduce((a, i) => a + (i.taxablePst !== false ? round2(i.qty * i.price) : 0), 0);
+  const gst         = round2(subtotal * 0.05);
+  const pst         = round2(pstSubtotal * 0.07);
   const total    = round2(subtotal + gst + pst);
 
   function handlePay(method) {
@@ -1468,7 +1470,9 @@ function SalesScreen({ onBarcodeScan }) {
         items.map(i =>
           h('div', { key: i.sku, className: 'line-row' },
             h('div', null,
-              h('div', { className: 'name' }, i.name),
+              h('div', { className: 'name' }, i.name,
+                i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT')
+              ),
               h('div', { className: 'sku' }, i.sku)
             ),
             h('div', null,
