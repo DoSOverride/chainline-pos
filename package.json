@@ -1,0 +1,12 @@
+{
+  "name": "chainline-pos",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "playwright test",
+    "test:local": "npx serve . -p 3001 & sleep 2 && BASE_URL=http://localhost:3001 playwright test",
+    "serve": "npx serve . -p 3001"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}
