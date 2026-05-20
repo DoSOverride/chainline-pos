@@ -2,30 +2,15 @@
 // PIN-based staff auth with sessionStorage persistence
 
 const STAFF = [
-  {
-    name: "Jason",
-    role: "mechanic",
-    pin: "1234",
-    initials: "JA",
-    color: "#c8392c",
-    emoji: "🔧",
-  },
-  {
-    name: "Florian",
-    role: "mechanic",
-    pin: "5678",
-    initials: "FL",
-    color: "#2c6ec8",
-    emoji: "🛠",
-  },
-  {
-    name: "Darrin",
-    role: "manager",
-    pin: "9999",
-    initials: "DA",
-    color: "#2ca87a",
-    emoji: "📋",
-  },
+  { name: "Jason",   role: "warranty", pin: "1139", initials: "JA", color: "#c8392c", emoji: "🔧" },
+  { name: "Phil",    role: "mechanic", pin: "1139", initials: "PH", color: "#e07b39", emoji: "🔧" },
+  { name: "Steve",   role: "mechanic", pin: "1139", initials: "ST", color: "#d4a017", emoji: "🔧" },
+  { name: "Matt",    role: "manager",  pin: "1139", initials: "MA", color: "#2c6ec8", emoji: "📋" },
+  { name: "Darrin",  role: "owner",    pin: "1139", initials: "DA", color: "#2ca87a", emoji: "⭐" },
+  { name: "Tao",     role: "manager",  pin: "1139", initials: "TC", color: "#7c3aed", emoji: "📋" },
+  { name: "Beckett", role: "mechanic", pin: "1139", initials: "BE", color: "#c8392c", emoji: "🔧" },
+  { name: "Curren",  role: "mechanic", pin: "1139", initials: "CU", color: "#2c6ec8", emoji: "🔧" },
+  { name: "Danny",   role: "mechanic", pin: "1139", initials: "DN", color: "#2ca87a", emoji: "🔧" },
 ];
 
 const AUTH_KEY = "cl_pos_staff";

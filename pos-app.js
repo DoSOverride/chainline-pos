@@ -1167,7 +1167,8 @@ function NewWorkOrderScreen({ setScreen }) {
         setSubmitting(false);
         toast(res ? 'Work order created' : 'Saved offline (worker unavailable)', res ? 'success' : '');
         setScreen('work-orders');
-      });
+      })
+      .catch(() => { setSubmitting(false); toast('Failed to create work order', 'error'); });
   }
 
   useEffect(() => {
@@ -1385,7 +1386,7 @@ function SalesScreen({ onBarcodeScan }) {
     }).then(res => {
       toast(res ? 'Sale completed \xb7 ' + fmt$(total) : 'Sale recorded offline', res ? 'success' : '');
       setItems([]);
-    });
+    }).catch(() => toast('Failed to record sale', 'error'));
   }
 
   const totalUnits = items.reduce((a, i) => a + i.qty, 0);
@@ -2314,10 +2315,10 @@ function App() {
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen });
       case 'sales':          return h(SalesScreen);
-      case 'customers':      return h(CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
-      case 'inventory':      return h(InventoryScreen);
-      case 'purchase-orders':return h(PurchaseOrdersScreen);
-      case 'reports':        return h(ReportsScreen);
+      case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
+      case 'inventory':      return h(window.InventoryScreen      || InventoryScreen,       { staff, setScreen });
+      case 'purchase-orders':return h(window.PurchaseOrdersScreen || PurchaseOrdersScreen);
+      case 'reports':        return h(window.ReportsScreen        || ReportsScreen);
       case 'settings':       return h(SettingsScreen);
       default:               return h(PlaceholderScreen, { name: screen });
     }
