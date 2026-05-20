@@ -2186,42 +2186,51 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
         )
       ),
 
-      // Right — aside
+      // Right — aside (Recent customers + Required fields hint)
       h('div', { className: 'col', style: { gap: 16 } },
+        h(RecentCustomersAside, { onPick: (c) => { setCustomer(c.firstName + ' ' + c.lastName); setSelectedCustomerId(c.id); } }),
         h('div', { className: 'aside-card' },
-          h('div', { className: 'card-head' }, h('h3', null, 'Customer'), h('span', { className: 'sub' }, 'On file')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Name'),         h('span', { className: 'v' }, 'Hannah Riise')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Phone'),        h('span', { className: 'v mono' }, '(250) 555-0142')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Email'),        h('span', { className: 'v mono', style: { fontSize: 11 } }, 'h.riise@protonmail.com')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Member since'), h('span', { className: 'v mono' }, '2021-03-14')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bikes on file'), h('span', { className: 'v mono' }, '3')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Open balance'), h('span', { className: 'v mono' }, '$0.00'))
-        ),
-
-        h('div', { className: 'aside-card' },
-          h('div', { className: 'card-head' }, h('h3', null, 'Estimate'), h('span', { className: 'sub' }, 'Service + parts')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Labour \xb7 1.5h'),     h('span', { className: 'v mono' }, '$142.50')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Shock seal kit'),     h('span', { className: 'v mono' }, '$48.00')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Float fluid \xb7 15ml'), h('span', { className: 'v mono' }, '$12.00')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'GST 5%'),             h('span', { className: 'v mono' }, '$10.13')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'PST 7%'),             h('span', { className: 'v mono' }, '$14.18')),
-          h('div', { className: 'aside-row', style: { background: 'var(--bg-2)' } },
-            h('span', { className: 'k strong', style: { color: 'var(--text)' } }, 'Estimate total'),
-            h('span', { className: 'v mono', style: { fontSize: 16, fontWeight: 600 } }, '$226.81')
-          ),
-          h('div', { style: { padding: 12, borderTop: '1px solid var(--line)' } },
-            h('button', { className: 'btn', style: { width: '100%', justifyContent: 'center' } }, 'Send estimate')
-          )
-        ),
-
-        h('div', { className: 'aside-card' },
-          h('div', { className: 'card-head' }, h('h3', null, 'Last 3 services'), h('span', { className: 'sub' }, 'History')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2025-11-04'), h('span', { className: 'v' }, 'Full tune')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2025-06-18'), h('span', { className: 'v' }, 'Brake bleed')),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2024-09-30'), h('span', { className: 'v' }, 'Wheel true \xb7 rear'))
+          h('div', { className: 'card-head' }, h('h3', null, 'Required'), h('span', { className: 'sub' }, 'To create WO')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Customer'), h('span', { className: 'v mono', style: { color: customer.trim() ? 'var(--green)' : 'var(--text3)' } }, customer.trim() ? '✓ ' + customer : 'Required')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Mechanic'), h('span', { className: 'v mono', style: { color: mech ? 'var(--green)' : 'var(--text3)' } }, mech ? '✓ ' + mech : 'Required')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bike'),     h('span', { className: 'v mono', style: { color: bike.trim() ? 'var(--green)' : 'var(--text3)' } }, bike.trim() ? '✓ set' : 'Required'))
         )
       )
     )
+  );
+}
+
+/* ─────────────────────────────────────────
+   RECENT CUSTOMERS ASIDE (used in New WO)
+───────────────────────────────────────── */
+function RecentCustomersAside({ onPick }) {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let mounted = true;
+    apiGet('/api/customers?q=a').then(d => {
+      if (!mounted) return;
+      const arr = (d && Array.isArray(d.customers)) ? d.customers.slice(0, 8) : [];
+      setList(arr);
+    }).finally(() => mounted && setLoading(false));
+    return () => { mounted = false; };
+  }, []);
+  return h('div', { className: 'aside-card' },
+    h('div', { className: 'card-head' },
+      h('h3', null, 'Recent customers'),
+      h('span', { className: 'sub' }, loading ? 'Loading...' : (list.length + ' shown'))
+    ),
+    list.length === 0 && !loading && h('div', { style: { padding: 14, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text3)', textAlign: 'center' } }, 'No customers yet'),
+    list.map(c => h('div', {
+      key: c.id,
+      className: 'aside-row',
+      style: { cursor: 'pointer' },
+      onClick: () => onPick && onPick(c),
+      title: 'Click to use this customer',
+    },
+      h('span', { className: 'k' }, c.firstName + ' ' + c.lastName),
+      h('span', { className: 'v mono', style: { fontSize: 11 } }, c.mobile || c.email || '')
+    ))
   );
 }
 
