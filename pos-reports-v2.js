@@ -290,17 +290,49 @@
 
     useEffect(() => { handleRangeChange('this-month', null, null); }, []);
 
-    const totalRevenue = MOCK_DAILY.reduce((s, d) => s + d.value, 0);
+    // Filter MOCK_DAILY to the selected date range
+    const filteredDaily = (() => {
+      if (!from || !to) return MOCK_DAILY;
+      return MOCK_DAILY.filter(d => {
+        // MOCK_DAILY labels are MM-DD; reconstruct full date using current year
+        const year = new Date().getFullYear();
+        const fullDate = year + '-' + d.label;
+        return fullDate >= from && fullDate <= to;
+      });
+    })();
+
+    const totalRevenue = filteredDaily.reduce((s, d) => s + d.value, 0);
     const totalTax = totalRevenue * 0.05;
-    const totalTx = 247;
+    // Approximate transactions proportional to filtered vs full range
+    const totalTx = Math.max(1, Math.round(247 * filteredDaily.length / Math.max(1, MOCK_DAILY.length)));
     const avgSale = totalRevenue / totalTx;
     const payTotal = MOCK_PAYMENT_METHODS.reduce((s, m) => s + m.amount, 0);
+
+    function exportSalesCSV() {
+      const header = 'Date,Revenue\n';
+      const rows = filteredDaily.map(d => d.label + ',' + d.value.toFixed(2)).join('\n');
+      const blob = new Blob([header + rows], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url;
+      a.download = 'chainline-sales-' + (from || todayISO()) + '-to-' + (to || todayISO()) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
 
     return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 24 } },
       offline && h(OfflineBanner),
 
-      /* Date picker */
-      h(DateRangePicker, { preset, from, to, onChange: handleRangeChange }),
+      /* Date picker + Export */
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } },
+        h(DateRangePicker, { preset, from, to, onChange: handleRangeChange }),
+        h('button', {
+          onClick: exportSalesCSV,
+          style: {
+            padding: '6px 14px', borderRadius: 6, border: '1px solid #333',
+            background: '#1a1a1a', color: '#aaa', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+          },
+        }, '↓ Export CSV')
+      ),
 
       /* Stat row */
       h('div', { style: { display: 'flex', gap: 12, flexWrap: 'wrap' } },
@@ -312,8 +344,15 @@
 
       /* Bar chart */
       h('div', { style: { background: '#111', border: '1px solid #222', borderRadius: 10, padding: '18px 20px' } },
-        h('div', { style: { fontSize: 12, color: '#666', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.08em' } }, 'Revenue by Day'),
-        h(BarChart, { data: MOCK_DAILY, height: 130 }),
+        h('div', { style: { fontSize: 12, color: '#666', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.08em' } },
+          'Revenue by Day',
+          filteredDaily.length < MOCK_DAILY.length && h('span', { style: { marginLeft: 8, color: '#444', fontSize: 10 } },
+            '(' + filteredDaily.length + ' days)'
+          )
+        ),
+        filteredDaily.length === 0
+          ? h('div', { style: { padding: '24px 0', textAlign: 'center', color: '#555', fontSize: 12 } }, 'No data for selected range')
+          : h(BarChart, { data: filteredDaily, height: 130 }),
       ),
 
       /* Payment method breakdown */

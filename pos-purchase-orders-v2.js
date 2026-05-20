@@ -481,7 +481,7 @@
       };
       const allReceived = updated.lines.every(l => l.qtyReceived >= l.qtyOrdered);
       const anyReceived = updated.lines.some(l => l.qtyReceived > 0);
-      updated.status = allReceived ? 'Receiving' : (anyReceived ? 'Receiving' : po.status);
+      updated.status = allReceived ? 'Finished' : (anyReceived ? 'Receiving' : po.status);
       onSave(updated);
     }
 
@@ -810,13 +810,22 @@
   /* ── PO List View ── */
   function POList({ pos, onSelect, onNew }) {
     const [filter, setFilter] = useState('All');
+    const [vendorFilter, setVendorFilter] = useState('All');
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState({ key: 'created', dir: 'desc' });
 
     const filters = ['All', 'Open', 'Receiving', 'Finished', 'Cancelled'];
 
+    // Derive vendor list from active POs (only vendors that appear in the list)
+    const activeVendors = ['All', ...Array.from(new Set(pos.map(p => p.vendorId || p.vendor))).sort()];
+    const vendorLabel = (vid) => {
+      const v = VENDORS.find(x => x.id === vid);
+      return v ? v.short : vid;
+    };
+
     let filtered = pos.filter(po => {
       if (filter !== 'All' && po.status !== filter) return false;
+      if (vendorFilter !== 'All' && (po.vendorId || po.vendor) !== vendorFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         return po.id.toLowerCase().includes(q) || po.vendor.toLowerCase().includes(q) || po.ref.toLowerCase().includes(q);
@@ -879,6 +888,29 @@
           style: { width: 240 },
         }),
         h('button', { className: 'btn primary', onClick: onNew }, '+ New Purchase Order')
+      ),
+      /* Vendor filter pills */
+      activeVendors.length > 2 && h('div', {
+        style: {
+          padding: '8px 24px', borderBottom: '1px solid var(--line)',
+          display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center',
+        }
+      },
+        h('span', { style: { fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginRight: 4, textTransform: 'uppercase', letterSpacing: '0.08em' } }, 'Vendor:'),
+        activeVendors.map(vid =>
+          h('button', {
+            key: vid,
+            onClick: () => setVendorFilter(vid),
+            style: {
+              height: 24, padding: '0 10px', fontSize: 11, borderRadius: 12,
+              border: '1px solid ' + (vendorFilter === vid ? 'var(--accent-dim, rgba(200,57,44,0.5))' : 'var(--line)'),
+              background: vendorFilter === vid ? 'rgba(200,57,44,0.12)' : 'var(--bg-2)',
+              color: vendorFilter === vid ? 'var(--accent, #c8392c)' : 'var(--text-2)',
+              cursor: 'pointer', fontFamily: 'var(--font-mono)',
+              transition: 'all 0.1s',
+            },
+          }, vid === 'All' ? 'All' : vendorLabel(vid))
+        )
       ),
       /* table */
       h('div', { style: { flex: 1, overflowY: 'auto' } },

@@ -678,7 +678,7 @@
   /* ═══════════════════════════════════════════
      CUSTOMER DETAIL PANEL
   ═══════════════════════════════════════════ */
-  function CustomerDetailPanel({ customer: initialCustomer, allCustomers, onClose, onUpdate }) {
+  function CustomerDetailPanel({ customer: initialCustomer, allCustomers, onClose, onUpdate, onNewSale, onNewWo, setScreen }) {
     const [customer, setCustomer] = useState(initialCustomer);
     const [tab, setTab] = useState('bikes');
     const [editing, setEditing] = useState(false);
@@ -797,6 +797,16 @@
                     }, saving ? 'Saving...' : 'Save'),
                   )
                 : h(Fragment, null,
+                    onNewWo && h('button', {
+                      className: 'btn',
+                      style: { height: 28, padding: '0 8px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 },
+                      onClick: () => { onNewWo(customer); onClose(); },
+                    }, h(I.Wrench), ' New WO'),
+                    onNewSale && h('button', {
+                      className: 'btn',
+                      style: { height: 28, padding: '0 8px', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 },
+                      onClick: () => { onNewSale(customer); onClose(); },
+                    }, h(I.Receipt), ' New Sale'),
                     h('button', {
                       className: 'btn ghost',
                       style: { height: 28, padding: '0 8px', display: 'flex', alignItems: 'center', gap: 5 },
@@ -1071,7 +1081,7 @@
   /* ═══════════════════════════════════════════
      CUSTOMERS SCREEN (main list)
   ═══════════════════════════════════════════ */
-  function CustomersScreen() {
+  function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
     const [q, setQ] = useState('');
     const [customers, setCustomers] = useState(MOCK_CUSTOMERS_FULL);
     const [selected, setSelected] = useState(null);
@@ -1142,6 +1152,9 @@
         allCustomers: customers,
         onClose: () => setSelected(null),
         onUpdate: handleUpdate,
+        onNewSale: onNewSale,
+        onNewWo: onNewWo,
+        setScreen: setScreen,
       }),
 
       /* Page header */

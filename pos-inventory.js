@@ -525,6 +525,55 @@
     );
   }
 
+  /* ── Barcode scan button: focuses the search field ── */
+  function ScanButton({ onScan }) {
+    const inputRef = useRef(null);
+    const [scanning, setScanning] = useState(false);
+
+    function startScan() {
+      setScanning(true);
+      // focus a hidden input that captures the scanner burst
+      setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 50);
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter') {
+        const code = e.target.value.trim();
+        if (code.length >= 3) { onScan(code); }
+        e.target.value = '';
+        setScanning(false);
+      }
+      if (e.key === 'Escape') { e.target.value = ''; setScanning(false); }
+    }
+
+    return h('div', { style: { position: 'relative', display: 'inline-flex', alignItems: 'center' } },
+      h('button', {
+        className: 'btn ghost',
+        onClick: startScan,
+        title: 'Focus for barcode scan (or just scan — scanner auto-detected)',
+        style: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 },
+      },
+        h('svg', { viewBox: '0 0 16 16', width: 13, height: 13, fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', strokeLinecap: 'round' },
+          h('rect', { x: '1', y: '3', width: '2', height: '10' }),
+          h('rect', { x: '4.5', y: '3', width: '1', height: '10' }),
+          h('rect', { x: '7', y: '3', width: '2', height: '10' }),
+          h('rect', { x: '10.5', y: '3', width: '1', height: '10' }),
+          h('rect', { x: '13', y: '3', width: '2', height: '10' })
+        ),
+        scanning ? 'Scanning…' : 'Scan'
+      ),
+      h('input', {
+        ref: inputRef,
+        onKeyDown: handleKey,
+        onBlur: () => setScanning(false),
+        style: {
+          position: 'absolute', opacity: 0, pointerEvents: scanning ? 'auto' : 'none',
+          width: 1, height: 1, padding: 0, border: 'none', outline: 'none',
+        },
+      })
+    );
+  }
+
   /* ── Main InventoryScreen ── */
   function InventoryScreen({ staff, setScreen }) {
     const isManager = staff && (staff.role === 'Manager' || staff.role === 'Owner');
@@ -730,6 +779,22 @@
                 onClick: () => setBulkPriceOpen(true),
               }, 'Adjust Prices'),
             ),
+            h(ScanButton, {
+              onScan: code => {
+                const found = items.find(it =>
+                  it.sku.toLowerCase() === code.toLowerCase() ||
+                  (it.upc || '') === code ||
+                  (it.customSku || '').toLowerCase() === code.toLowerCase()
+                );
+                if (found) {
+                  setDetailItem(found);
+                  if (window._posToast) window._posToast('Scanned: ' + found.name, 'success');
+                } else {
+                  setQuery(code);
+                  if (window._posToast) window._posToast('SKU not found: ' + code, 'error');
+                }
+              },
+            }),
             h('button', {
               className: 'btn ghost',
               onClick: () => exportCSV(displayed),
@@ -882,7 +947,17 @@
                       ),
                       // qty
                       h('td', { style: { ...tdStyle(), textAlign: 'right' } },
-                        h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: qtyColor(item.qty) } }, item.qty)
+                        h('span', { style: { position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4 } },
+                          item.qty <= item.reorderPt && h('span', {
+                            title: 'Low stock - at or below reorder point (' + item.reorderPt + ')',
+                            style: {
+                              width: 7, height: 7, borderRadius: '50%',
+                              background: item.qty === 0 ? 'var(--red, #c8392c)' : '#f59e0b',
+                              flexShrink: 0, display: 'inline-block',
+                            },
+                          }),
+                          h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: qtyColor(item.qty) } }, item.qty)
+                        )
                       ),
                       // price
                       h('td', { style: { ...tdStyle(), textAlign: 'right' } },
