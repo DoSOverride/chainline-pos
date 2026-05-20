@@ -2288,6 +2288,14 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
           h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bike'),     h('span', { className: 'v mono', style: { color: bike.trim() ? 'var(--green)' : 'var(--text3)' } }, bike.trim() ? '✓ set' : 'Required'))
         )
       )
+    ),
+
+    // Mobile-only sticky bottom action bar (hidden on desktop via CSS)
+    h('div', { className: 'new-wo-mobile-foot' },
+      h('button', { className: 'btn', onClick: () => setScreen('work-orders') }, 'Cancel'),
+      h('button', { className: 'btn primary', onClick: handleCreate, disabled: submitting },
+        h(Ico.Check, { size: 13 }), ' ', submitting ? 'Creating...' : 'Create work order'
+      )
     )
   );
 }

@@ -626,3 +626,199 @@ body.floor-dragging .floor-column:not(.drop-target) {
 }
 
 /* ── Public customer status page (wo-status.html) lives off this file too ── */
+
+
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE — Round 3 module overrides (workorder presets, shop floor,
+   sales register, customer detail tabs, parked tray)
+   ════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Workorder preset bar — wrap categories, stack search ── */
+  .wo-preset-top {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .wo-preset-search {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+    order: -1;
+  }
+  .wo-preset-search .input { height: 40px !important; font-size: 16px !important; }
+  .wo-preset-cat {
+    height: 40px;
+    padding: 0 12px;
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+  /* Preset grid — 2-up on narrow screens (cards stay tappable) */
+  .wo-preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .preset-btn { min-height: 64px; }
+
+  /* ── Cash denomination buttons — at least 56px tall ── */
+  .cash-denom-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .cash-denom-btn {
+    min-height: 56px;
+    font-size: 15px;
+    padding: 10px 4px;
+  }
+  /* Form input inside cash modal — tall and touch-friendly */
+  .form-input {
+    min-height: 48px !important;
+    font-size: 18px !important;
+  }
+
+  /* ── Customer detail top tabs — horizontal scroll (already overflow-x:auto, reinforce) ── */
+  .detail-top-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .detail-top-tabs::-webkit-scrollbar { display: none; }
+  .detail-top-tab {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  /* ── Parked sales tray — wrap chips, larger tap targets ── */
+  .parked-tray {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+  }
+  .parked-chip {
+    min-height: 36px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* ── Sales register — collapse 2-col cart/checkout on mobile ──
+     The SalesScreen renders an inline grid: 1.5fr | 1fr. React serialises
+     this as style="grid-template-columns:1.5fr 1fr". Stack to 1 col so
+     the cart panel and totals/pay stack vertically (page scrolls). */
+  div[style*="1.5fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Also catch NewWO right-aside layout (gridTemplateColumns: 1fr 360px) */
+  div[style*="1fr 360px"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Pay buttons (Cash / Card / Other) — full-width grid, tall */
+  .pay-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .pay-btn {
+    min-height: 64px !important;
+    font-size: 14px;
+  }
+
+  /* Cart line rows — at least 44px tappable; wrap qty stepper if needed */
+  .line-row {
+    padding: 10px 12px;
+    min-height: 56px;
+    gap: 8px;
+  }
+  .qty-stepper button {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 16px;
+  }
+  .qty-stepper input {
+    min-width: 44px;
+    min-height: 36px;
+    font-size: 15px;
+    text-align: center;
+  }
+
+  /* Item search results — bigger rows */
+  .item-row {
+    min-height: 56px;
+    padding: 12px 14px;
+  }
+
+  /* ── Shop floor — single-column horizontal scroll (1 column visible at a time) ── */
+  .floor-board {
+    grid-template-columns: repeat(6, 84vw) !important;
+    grid-auto-flow: column;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    gap: 8px;
+    background: transparent;
+    border: 0;
+    min-height: calc(100vh - 240px);
+  }
+  .floor-column {
+    scroll-snap-align: start;
+    min-width: 84vw;
+    border: 1px solid var(--line2);
+  }
+  .floor-column-head { padding: 12px; }
+  .floor-card {
+    /* On touch devices, let users tap-to-move via long-press menu;
+       keep drag enabled but make tap-target generous */
+    padding: 12px 14px;
+    min-height: 64px;
+    touch-action: manipulation; /* override touch-action:none on touch — long-press still works for drag start */
+  }
+  .floor-filter-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .floor-filter-bar::-webkit-scrollbar { display: none; }
+  .floor-mech-pill {
+    flex-shrink: 0;
+    min-height: 38px;
+  }
+
+  /* ── WO action bar buttons — wrap, full-height ── */
+  .wo-action-bar .btn {
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* ── New Work Order — sticky bottom action bar on mobile ──
+     The .new-wo-mobile-foot is appended in pos-app.js NewWorkOrderScreen
+     and contains the Create button. Hidden on desktop via the
+     :not(@media max-width:768px) display:none above. */
+  .new-wo-mobile-foot {
+    display: flex;
+    gap: 8px;
+    position: sticky;
+    bottom: 72px; /* sit above bottom nav (56px nav + safe-area buffer) */
+    bottom: max(72px, calc(env(safe-area-inset-bottom) + 72px));
+    left: 0; right: 0;
+    background: var(--bg-1, var(--bg));
+    border-top: 1px solid var(--line2);
+    padding: 10px 12px;
+    margin: 16px -12px 0; /* extend to page edges */
+    z-index: 50;
+  }
+  .new-wo-mobile-foot .btn {
+    flex: 1;
+    min-height: 48px;
+    justify-content: center;
+  }
+}
+
+/* Hide the mobile-only sticky create bar on desktop */
+.new-wo-mobile-foot { display: none; }
+
+/* Narrower phones — go single column for preset grid + denoms */
+@media (max-width: 420px) {
+  .wo-preset-grid { grid-template-columns: 1fr !important; }
+  .cash-denom-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

@@ -1724,17 +1724,128 @@ input[type="date"], .mono-input {
     width: 100% !important; box-sizing: border-box; min-height: 44px;
     font-size: 16px; /* iOS Safari won't zoom on focus when font-size >= 16px */
   }
+  /* Date / time / number inputs — force 44px even when browser overrides */
+  input[type="date"], input[type="time"], input[type="datetime-local"],
+  input[type="number"], input[type="tel"], input[type="email"], input[type="search"] {
+    min-height: 44px;
+    font-size: 16px;
+    box-sizing: border-box;
+  }
   .grid-form label { font-size: 12px; }
   /* Action button rows on form pages — wrap + full-width on narrow screens */
   .form-actions, .wo-actions, .action-row {
     flex-direction: column; gap: 8px; align-items: stretch;
   }
   .form-actions .btn, .wo-actions .btn, .action-row .btn { width: 100%; justify-content: center; }
-  /* Customer suggestion dropdown — full width, contained */
-  .suggest-list { position: absolute; left: 0; right: 0; max-height: 280px; overflow-y: auto; }
+  /* Customer suggestion dropdown — full width, escape sticky bars */
+  .suggest-list {
+    position: absolute; left: 0; right: 0;
+    max-height: 280px; overflow-y: auto;
+    z-index: 700;  /* above sticky page-head, parked-tray, sub-tabs */
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  }
+  .combobox-wrap { position: relative; }
   .panel { width: 100%; }
   .topbar .topbar-search { display: none; }
   .topbar .station { display: none; }
+
+  /* ── Sub-tabs (WO list status tabs) — horizontal scroll, no wrap ── */
+  .sub-tabs {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .sub-tabs::-webkit-scrollbar { display: none; }
+  .sub-tab {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  /* ── Tables — touch-friendly rows ── */
+  .data-table td, .tbl td {
+    padding: 12px 10px;
+    min-height: 44px;
+  }
+  .data-table tr, .tbl tbody tr { min-height: 44px; }
+  /* Cells with embedded buttons (options menu, chevrons) — bigger tap target */
+  .tbl tbody tr td:last-child { padding-right: 14px; }
+  .tbl tbody tr td:last-child .options-menu-wrap button,
+  .tbl tbody tr td:last-child button {
+    min-width: 36px; min-height: 36px;
+  }
+
+  /* ── Filters — wrap chips, search full width ── */
+  .filters { flex-wrap: wrap; gap: 8px; }
+  .filters .search-field { flex: 1 1 100% !important; max-width: 100% !important; }
+  .filters .pill { flex: 0 0 auto; min-height: 38px; }
+
+  /* ── Modals — full-screen with sticky header + footer ──
+     Targets:
+       1. .modal-overlay → .modal-box (declared modals from this file)
+       2. .pos-modal-backdrop → .pos-modal (pos-design.js DOM modals)
+       3. Inline-styled overlays (ReceiptModal, LineEditModal) — match by
+          attribute selector since they use style="...position:fixed...".
+  */
+  .modal-overlay {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+  }
+  .modal-box,
+  .pos-modal,
+  .modal-overlay > div,
+  div[style*="position:fixed"][style*="inset:0"] > div,
+  div[style*="position: fixed"][style*="inset: 0"] > div {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+  /* The body becomes scrollable, header+footer stay fixed via natural flex layout */
+  .modal-head, .pos-modal-header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg-1, var(--bg));
+    flex-shrink: 0;
+    padding-top: max(14px, env(safe-area-inset-top));
+  }
+  .modal-body, .pos-modal-body {
+    flex: 1; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-foot, .pos-modal-footer {
+    position: sticky; bottom: 0; z-index: 5;
+    background: var(--bg-1, var(--bg));
+    border-top: 1px solid var(--line);
+    flex-shrink: 0;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  /* Close button — top right, big tap target */
+  .modal-head .btn.ghost,
+  .pos-modal-x {
+    min-width: 44px; min-height: 44px;
+    font-size: 22px;
+  }
+
+  /* ── Slide panel (Customer / Item detail) — full screen on mobile ── */
+  .slide-panel {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    border-left: 0 !important;
+  }
+  .panel-head {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg-1, var(--bg));
+    padding-top: max(18px, env(safe-area-inset-top));
+  }
 }
 
 @media (max-width: 480px) {
