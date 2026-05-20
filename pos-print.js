@@ -8,7 +8,7 @@ const SHOP_INFO = {
   phone: "250-860-1968",
   website: "chainline.ca",
   email: "bikes@chainline.ca",
-  gst: "UPDATE-GST-NUMBER-RT0001",   // TODO: replace with actual GST registration number
+  gst: "843590266 RT0001",
 };
 
 // ─── printWorkOrder ───────────────────────────────────────────────────────────
