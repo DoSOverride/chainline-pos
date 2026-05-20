@@ -1851,7 +1851,7 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
               ),
               showSuggest && h('div', { className: 'suggest-list' },
                 suggestions.map(c =>
-                  h('div', { key: c.id, className: 'suggest-item', onClick: () => { setCustomer(c.name); setShowSuggest(false); } },
+                  h('div', { key: c.id, className: 'suggest-item', onClick: () => { setCustomer(c.name); setSelectedCustomerId(c.id); setShowSuggest(false); } },
                     h(AvInit, { initials: c.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(), tone: 'mb' }),
                     h('span', { className: 'name' }, c.name),
                     h('span', { className: 'phone' }, c.phone),
@@ -1869,6 +1869,25 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
           h('div', { style: { height: 16 } }),
 
           h('div', { className: 'grid-form' },
+            custItems.length > 0 && h('div', { className: 'span-2' },
+              h(Field, { label: 'Bike on file', hint: "Pick a bike from this customer's items" },
+                h('select', {
+                  className: 'select',
+                  defaultValue: '',
+                  onChange: e => {
+                    const item = custItems.find(it => String(it.id) === e.target.value);
+                    if (item) { setBike(item.description || ''); }
+                  },
+                },
+                  h('option', { value: '' }, '- Select customer\'s bike -'),
+                  custItems.map(it =>
+                    h('option', { key: it.id, value: it.id },
+                      (it.description || 'Unnamed') + (it.color ? ' \xb7 ' + it.color : '') + (it.serial ? ' \xb7 ' + it.serial : '')
+                    )
+                  )
+                )
+              )
+            ),
             h('div', { className: 'span-2' },
               h(Field, { label: 'Bike / Item', required: true, hint: 'Make \xb7 model \xb7 year \xb7 color \xb7 serial (optional)' },
                 h('input', { className: 'input', value: bike, onChange: e => setBike(e.target.value), placeholder: 'Santa Cruz Bronson \xb7 CC X01 \xb7 2023' })
@@ -3146,11 +3165,24 @@ const DEFAULT_SETTINGS = {
     { id: 2, name: 'PST', rate: 7, active: true },
   ],
   customStatuses: [
-    { id: 1, label: 'Open',        color: '#4d8fd6' },
-    { id: 2, label: 'In Progress', color: '#ededed' },
-    { id: 3, label: 'Ready',       color: '#2f9e5b' },
-    { id: 4, label: 'Done',        color: '#7a7a7a' },
-    { id: 5, label: 'Booked',      color: '#d29a3a' },
+    { id: 1,  label: 'Booked',           color: '#d29a3a' },
+    { id: 2,  label: 'Estimate',         color: '#a78bfa' },
+    { id: 3,  label: 'Waiting',          color: '#a78bfa' },
+    { id: 4,  label: 'Open',             color: '#4d8fd6' },
+    { id: 5,  label: 'In Progress',      color: '#ededed' },
+    { id: 6,  label: 'Parts Ordered',    color: '#d29a3a' },
+    { id: 7,  label: 'SO Parts Arrived', color: '#2f9e5b' },
+    { id: 8,  label: 'RA!',              color: '#c8392c' },
+    { id: 9,  label: 'Ready',            color: '#2f9e5b' },
+    { id: 10, label: 'Done & Paid',      color: '#7a7a7a' },
+    { id: 11, label: 'Consignment',      color: '#a78bfa' },
+  ],
+  customerTypes: [
+    { id: 'retail',    label: 'Retail',           discountPct: 0,  chipClass: '' },
+    { id: 'staff',     label: 'Staff',            discountPct: 40, chipClass: 'staff' },
+    { id: 'wholesale', label: 'Wholesale',        discountPct: 30, chipClass: 'wholesale' },
+    { id: 'friends',   label: 'Friends & Family', discountPct: 15, chipClass: 'friends' },
+    { id: 'vip',       label: 'VIP',              discountPct: 10, chipClass: 'vip' },
   ],
 };
 
@@ -3185,7 +3217,8 @@ function SettingsScreen() {
   const STABS = [
     { id: 'general', label: 'General' }, { id: 'staff', label: 'Staff' },
     { id: 'payment', label: 'Payment Types' }, { id: 'tax', label: 'Tax Classes' },
-    { id: 'receipt', label: 'Receipt' }, { id: 'services', label: 'Services' }, { id: 'barcode', label: 'Barcode' },
+    { id: 'receipt', label: 'Receipt' }, { id: 'services', label: 'Services' },
+    { id: 'customers', label: 'Customer Types' }, { id: 'barcode', label: 'Barcode' },
   ];
 
   return h(Fragment, null,
@@ -3261,6 +3294,34 @@ function SettingsScreen() {
             setNewStatus('');
           }}, h(Ico.Plus, { size: 12 }))
         )
+      ),
+      tab === 'customers' && h('div', { style: { padding: 18 } },
+        h('div', { className: 'panel-section-head', style: { marginBottom: 8 } }, 'Customer Types & Discounts'),
+        h('div', { style: { fontSize: 11, color: 'var(--text3, var(--text-3))', marginBottom: 14 } },
+          'Each type can carry a default discount. Chip appears next to the customer name everywhere.'
+        ),
+        (settings.customerTypes || []).map(function(ct, i) {
+          return h('div', { key: ct.id, className: 'aside-row', style: { display: 'flex', alignItems: 'center', gap: 8 } },
+            h('span', { className: 'customer-chip' + (ct.chipClass ? ' customer-chip-' + ct.chipClass : ''), style: { width: 90, justifyContent: 'center' } }, (ct.label || ct.id || '').toUpperCase()),
+            h('input', {
+              className: 'input', value: ct.label, style: { flex: 1, height: 28, padding: '2px 8px' },
+              onChange: function(e) { save({ customerTypes: settings.customerTypes.map(function(x, ii) { return ii === i ? Object.assign({}, x, { label: e.target.value }) : x; }) }); }
+            }),
+            h('span', { style: { fontSize: 11, color: 'var(--text2, var(--text-2))' } }, 'Discount %'),
+            h('input', {
+              className: 'input mono', type: 'number', min: 0, max: 100, value: ct.discountPct,
+              style: { width: 64, height: 28, padding: '2px 6px', textAlign: 'right' },
+              onChange: function(e) {
+                const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                save({ customerTypes: settings.customerTypes.map(function(x, ii) { return ii === i ? Object.assign({}, x, { discountPct: v }) : x; }) });
+              }
+            }),
+            ct.id !== 'retail' && h('button', {
+              className: 'icon-btn',
+              onClick: function() { save({ customerTypes: settings.customerTypes.filter(function(_, ii) { return ii !== i; }) }); },
+            }, h(Ico.Trash, { size: 12 }))
+          );
+        })
       ),
       tab === 'barcode' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
         h(Field, { label: 'Scanner Input Delay (ms)', hint: 'Max time between keystrokes qualifying as a scan. Default: 50ms.' },
