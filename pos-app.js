@@ -296,11 +296,13 @@ function useTheme() {
 function Sidebar({ page, setPage, staff, onLock, overdueCount }) {
   const [theme, toggleTheme] = useTheme();
   const navItems = [
-    { key: 'dashboard',   label: 'Dashboard',    icon: Icon.dashboard  },
-    { key: 'workorders',  label: 'Work Orders',  icon: Icon.workorders, badge: overdueCount > 0 ? overdueCount : null, badgeCls: 'orange' },
-    { key: 'sales',       label: 'Sales',        icon: Icon.sales      },
-    { key: 'customers',   label: 'Customers',    icon: Icon.customers  },
-    { key: 'inventory',   label: 'Inventory',    icon: Icon.inventory  },
+    { key: 'dashboard',       label: 'Dashboard',       icon: Icon.dashboard  },
+    { key: 'workorders',      label: 'Work Orders',     icon: Icon.workorders, badge: overdueCount > 0 ? overdueCount : null, badgeCls: 'orange' },
+    { key: 'sales',           label: 'Sales',           icon: Icon.sales      },
+    { key: 'customers',       label: 'Customers',       icon: Icon.customers  },
+    { key: 'inventory',       label: 'Inventory',       icon: Icon.inventory  },
+    { key: 'purchase-orders', label: 'Purchase Orders', icon: Icon.inventory  },
+    { key: 'reports',         label: 'Reports',         icon: Icon.dashboard  },
   ];
 
   return h('aside', { id: 'sidebar' },
@@ -583,10 +585,12 @@ function WODetail({ wo, onClose, onUpdate, staff }) {
 
   async function updateStatus(status) {
     setLoading(true);
-    const result = await apiPost('/api/workorder/' + wo.id, { status });
+    try {
+      const result = await apiPost('/api/workorder/' + wo.id, { status });
+      if (result && result.error) { toast('Update failed: ' + result.error, 'error'); }
+      else { toast('Status updated to ' + status, 'success'); onUpdate({ ...wo, status }); }
+    } catch(e) { toast('Update failed — check connection', 'error'); }
     setLoading(false);
-    toast('Status updated to ' + status, 'success');
-    onUpdate({ ...wo, status });
   }
 
   function addNote() {
@@ -938,13 +942,12 @@ function Sales({ staff }) {
 
   async function handlePayment(method) {
     if (cart.length === 0) { toast('Cart is empty', 'error'); return; }
-    const result = await apiPost('/api/sale', { items: cart, customer, total, method, staff: staff.name });
-    toast('Sale complete - ' + fmt$(total) + ' via ' + method, 'success');
-    setCart([]);
-    setCustomer('');
-    setDiscount('');
-    setQuery('');
-    setResults([]);
+    try {
+      const result = await apiPost('/api/sale', { items: cart, customer, total, method, staff: staff.name });
+      if (result && result.error) { toast('Sale failed: ' + result.error, 'error'); return; }
+      toast('Sale complete - ' + fmt$(total) + ' via ' + method, 'success');
+      setCart([]); setCustomer(''); setDiscount(''); setQuery(''); setResults([]);
+    } catch(e) { toast('Sale failed — check connection', 'error'); }
   }
 
   async function handleQuote() {
@@ -1444,6 +1447,17 @@ function App() {
 
   const overdueCount = workOrders.filter(w => w.daysOverdue > 0).length;
 
+  // Wire POS_ACTIONS so CommandPalette navTo() works
+  React.useEffect(() => {
+    window.POS_ACTIONS = { navTo: setPage };
+    return () => { window.POS_ACTIONS = null; };
+  }, [setPage]);
+
+  // Initialize offline queue
+  React.useEffect(() => {
+    if (window.OfflineQueue) window.OfflineQueue.init(WORKER_URL);
+  }, []);
+
   if (!staff) {
     return h('div', null,
       h(LoginScreen, { onLogin: handleLogin }),
@@ -1453,12 +1467,14 @@ function App() {
 
   function renderPage() {
     switch (page) {
-      case 'dashboard':  return h(Dashboard, { setPage, workOrders });
-      case 'workorders': return h(WorkOrders, { staff });
-      case 'sales':      return h(Sales, { staff });
-      case 'customers':  return h(Customers);
-      case 'inventory':  return h(Inventory);
-      default:           return h(Dashboard, { setPage, workOrders });
+      case 'dashboard':       return h(Dashboard, { setPage, workOrders });
+      case 'workorders':      return h(WorkOrders, { staff });
+      case 'sales':           return h(Sales, { staff });
+      case 'customers':       return h(Customers);
+      case 'inventory':       return h(Inventory);
+      case 'reports':         return h(ReportsPageWrapper);
+      case 'purchase-orders': return h(PurchaseOrdersWrapper);
+      default:                return h(Dashboard, { setPage, workOrders });
     }
   }
 
@@ -1466,6 +1482,35 @@ function App() {
     h(Sidebar, { page, setPage, staff, onLock: handleLock, overdueCount }),
     h('main', { id: 'main' }, renderPage()),
     h(Toast)
+  );
+}
+
+/* ── Wrapper components for vanilla JS modules ── */
+function ReportsPageWrapper() {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current && window.ReportsPage) {
+      ref.current.innerHTML = '';
+      const el = window.ReportsPage();
+      if (el) ref.current.appendChild(typeof el === 'string' ? (() => { const d = document.createElement('div'); d.innerHTML = el; return d; })() : el);
+    }
+  }, []);
+  return h('div', { ref, style: { padding: 28, overflowY: 'auto', height: '100%' } },
+    !window.ReportsPage && h('p', { style: { color: 'var(--text-dim)', fontFamily: 'monospace' } }, 'Reports module loading...')
+  );
+}
+
+function PurchaseOrdersWrapper() {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current && window.PurchaseOrdersPage) {
+      ref.current.innerHTML = '';
+      const el = window.PurchaseOrdersPage();
+      if (el) ref.current.appendChild(typeof el === 'string' ? (() => { const d = document.createElement('div'); d.innerHTML = el; return d; })() : el);
+    }
+  }, []);
+  return h('div', { ref, style: { padding: 28, overflowY: 'auto', height: '100%' } },
+    !window.PurchaseOrdersPage && h('p', { style: { color: 'var(--text-dim)', fontFamily: 'monospace' } }, 'Purchase Orders module loading...')
   );
 }
 
