@@ -55,7 +55,7 @@ Darrin=Owner | Tao/Matt=Manager | Phil/Steve/Beckett/Curren/Danny=Mechanic | Jas
 ## Actions Needed
 1. **LS token** — regenerate at lightspeedhq.com → Settings → API, then:
    `npx wrangler secret put LS_REFRESH_TOKEN --name still-term-f1ec`
-2. **GST number** — replace placeholder in pos-print.js with real GST registration number
+
 3. **Stripe** (optional): `npx wrangler secret put STRIPE_SECRET_KEY --name still-term-f1ec`
 4. **Custom domain**: CF Pages → chainline-pos → Custom domains → `pos.chainline.ca`
 
