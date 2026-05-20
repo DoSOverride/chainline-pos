@@ -1256,6 +1256,7 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
   ).slice(0, 6);
 
   function handleCreate() {
+    if (!customer.trim()) { toast('Enter customer name', 'error'); return; }
     if (!mech) { toast('Select a mechanic', 'error'); return; }
     if (!bike.trim()) { toast('Enter bike description', 'error'); return; }
     setSubmitting(true);
