@@ -957,6 +957,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
 
   const [lineQ, setLineQ] = useState('');
   const [lines, setLines] = useState(wo.lines || []);
+  const [presetCat, setPresetCat] = useState(null); // 'services' | 'mountain' | 'road' | null
 
   const [confirm, setConfirm] = useState(null);
   const [showSms, setShowSms] = useState(false);
@@ -1464,10 +1465,101 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
           h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'NEW-' + Date.now(), name: 'New Item', price: 0 }) }, '+ New'),
           h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'MISC', name: 'Miscellaneous', price: 0 }) }, 'Misc.'),
           h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'LAB-GEN', name: 'Labor', price: 95, taxablePst: false }) }, 'Labor'),
-          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickPurple), onClick: () => addLine({ sku: 'SVC-GEN', name: 'Service', price: 75, taxablePst: false }) }, 'Services'),
-          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickRed) }, 'Mountain Bike'),
-          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickKhaki) }, 'Road Bike')
+          h('button', {
+            className: 'btn' + (presetCat === 'services' ? ' is-active' : ''),
+            style: Object.assign({ height: 30 }, S.quickPurple, presetCat === 'services' ? { outline: '2px solid var(--accent)' } : {}),
+            onClick: () => setPresetCat(presetCat === 'services' ? null : 'services')
+          }, 'Services'),
+          h('button', {
+            className: 'btn' + (presetCat === 'mountain' ? ' is-active' : ''),
+            style: Object.assign({ height: 30 }, S.quickRed, presetCat === 'mountain' ? { outline: '2px solid var(--accent)' } : {}),
+            onClick: () => setPresetCat(presetCat === 'mountain' ? null : 'mountain')
+          }, 'Mountain Bike'),
+          h('button', {
+            className: 'btn' + (presetCat === 'road' ? ' is-active' : ''),
+            style: Object.assign({ height: 30 }, S.quickKhaki, presetCat === 'road' ? { outline: '2px solid var(--accent)' } : {}),
+            onClick: () => setPresetCat(presetCat === 'road' ? null : 'road')
+          }, 'Road Bike')
         ),
+
+        // Service preset row — LS-style: click category above → row of services here
+        presetCat && (function() {
+          const lib = (window.loadWoPresets && window.loadWoPresets()) || window.WO_DEFAULT_PRESETS || {};
+          const items = lib[presetCat] || [];
+          const KIND_BG = {
+            amber:  '#a8731f', red:    '#b54a3e', green:  '#3f7a4e',
+            blue:   '#3a5e96', teal:   '#2f7472', violet: '#6a4795',
+            gray:   '#3d3d3d', orange: '#b56831',
+          };
+          const catLabel = presetCat === 'services' ? 'General Services' : presetCat === 'mountain' ? 'Mountain Bike' : 'Road Bike';
+          return h('div', {
+            style: {
+              padding: '10px 12px 12px', background: 'var(--bg3)',
+              borderTop: '1px solid var(--line)', borderBottom: '1px solid var(--line)'
+            }
+          },
+            h('div', {
+              style: {
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                marginBottom: 8, fontFamily: 'var(--mono)', fontSize: 10,
+                letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)'
+              }
+            },
+              h('span', null, catLabel),
+              h('button', {
+                onClick: () => setPresetCat(null),
+                style: {
+                  background: 'transparent', border: '1px solid var(--line)', color: 'var(--text2)',
+                  padding: '3px 8px', cursor: 'pointer', fontFamily: 'var(--mono)', fontSize: 10
+                }
+              }, '× close')
+            ),
+            h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6 } },
+              items.map(p => h('button', {
+                key: p.id,
+                onClick: () => {
+                  addLine({
+                    sku: 'LAB-' + p.id.toUpperCase(),
+                    name: p.label,
+                    qty: 1,
+                    price: p.price,
+                    taxablePst: false,
+                    isLabor: true,
+                    presetId: p.id,
+                  });
+                  // Add bundled parts if any
+                  if (p.parts && p.parts.length) {
+                    const catalog = window.MOCK_CATALOG || [];
+                    p.parts.forEach(part => {
+                      const it = catalog.find(c => c.sku === part.sku);
+                      addLine({
+                        sku: part.sku,
+                        name: it ? it.name : part.sku,
+                        qty: part.qty || 1,
+                        price: it ? it.price : 0,
+                        taxablePst: it ? (it.taxablePst !== false) : true,
+                      });
+                    });
+                  }
+                  if (window.toast) window.toast('Added: ' + p.label, 'success');
+                },
+                style: {
+                  background: KIND_BG[p.kind] || '#3d3d3d',
+                  color: '#fff', border: '1px solid rgba(255,255,255,0.08)',
+                  padding: '8px 12px', cursor: 'pointer',
+                  fontFamily: 'inherit', fontSize: 12, fontWeight: 500,
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start',
+                  minWidth: 130, lineHeight: 1.15,
+                }
+              },
+                h('span', null, p.label),
+                h('span', {
+                  style: { fontFamily: 'var(--mono)', fontSize: 10, opacity: 0.85, marginTop: 2 }
+                }, '$' + p.price.toFixed(2))
+              ))
+            )
+          );
+        })(),
         lineQ && lineResults.length > 0 && h('div', { style: { padding: '4px 12px 8px', background: 'var(--bg3)' } },
           lineResults.map(c =>
             h('div', {
