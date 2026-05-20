@@ -1442,6 +1442,8 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   const [customerName, setCustomerName] = useState('Devon Tran');
   const [saleCustomer, setSaleCustomer] = useState(null);
   const [receipt, setReceipt] = useState(null);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [showCardModal, setShowCardModal] = useState(false);
   const searchRef = useRef(null);
 
   useEffect(() => {
@@ -1467,8 +1469,8 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
         e.preventDefault();
         if (searchRef.current) searchRef.current.focus();
       }
-      if (e.key === 'F1') { e.preventDefault(); handlePay('card'); }
-      if (e.key === 'F2') { e.preventDefault(); handlePay('cash'); }
+      if (e.key === 'F1') { e.preventDefault(); handlePayCard(); }
+      if (e.key === 'F2') { e.preventDefault(); handlePayCash(); }
       if (e.key === 'F3') { e.preventDefault(); handlePay('other'); }
     }
     document.addEventListener('keydown', onKey);
@@ -1507,13 +1509,31 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   const pst         = round2(pstSubtotal * 0.07);
   const total    = round2(subtotal + gst + pst);
 
-  function handlePay(method) {
+  function handlePayCash() {
+    if (!items.length) { toast('Cart is empty', 'error'); return; }
+    if (window.CashModal) {
+      setShowCashModal(true);
+    } else {
+      handlePay('cash');
+    }
+  }
+
+  function handlePayCard() {
+    if (!items.length) { toast('Cart is empty', 'error'); return; }
+    if (window.RequestPaymentModal) {
+      setShowCardModal(true);
+    } else {
+      handlePay('card');
+    }
+  }
+
+  function handlePay(method, extra) {
     if (!items.length) { toast('Cart is empty', 'error'); return; }
     const saleData = {
       customer: customerName,
       customerObj: saleCustomer,
       lines: items.map(i => ({ sku: i.sku, name: i.name, qty: i.qty, unitPrice: i.price, taxablePst: i.taxablePst })),
-      subtotal, gst, pst, total, payment: { method },
+      subtotal, gst, pst, total, payment: { method, ...(extra || {}) },
     };
     apiPost('/api/sale', saleData)
       .then(res => {
@@ -1535,6 +1555,23 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
 
   return h(Fragment, null,
     receipt && h(ReceiptModal, { receipt, onClose: handleNewSale }),
+    showCashModal && window.CashModal && h(window.CashModal, {
+      total,
+      onSuccess: function(result) {
+        setShowCashModal(false);
+        handlePay('cash', { tendered: result.tendered, change: result.change });
+      },
+      onClose: function() { setShowCashModal(false); },
+    }),
+    showCardModal && window.RequestPaymentModal && h(window.RequestPaymentModal, {
+      sale: { total, id: 'pos-' + Date.now() },
+      customer: saleCustomer || customerName || null,
+      onSuccess: function(ref) {
+        setShowCardModal(false);
+        handlePay('card', { stripeRef: ref });
+      },
+      onClose: function() { setShowCardModal(false); },
+    }),
     h(PageHead, {
       title: 'Sales Register',
       sub: 'Sale #S-' + (1188 + (saleCount || 0)) + ' \xb7 Drawer open',
@@ -1680,10 +1717,10 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
               h('span', { className: 'val' }, fmt$(total))
             ),
             h('div', { className: 'pay-grid' },
-              h('button', { className: 'pay-btn', onClick: () => handlePay('cash') },
+              h('button', { className: 'pay-btn', onClick: handlePayCash },
                 h(Ico.Cash, { size: 14 }), h('span', null, 'Cash'), h('span', { className: 'kbd' }, 'F2')
               ),
-              h('button', { className: 'pay-btn primary', onClick: () => handlePay('card') },
+              h('button', { className: 'pay-btn primary', onClick: handlePayCard },
                 h(Ico.Card, { size: 14 }), h('span', null, 'Card'), h('span', { className: 'kbd' }, 'F1')
               ),
               h('button', { className: 'pay-btn', onClick: () => handlePay('other') },
