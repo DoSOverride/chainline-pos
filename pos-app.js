@@ -1487,7 +1487,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                    qty: 1, price: 62.00  },
   ]);
   const [query, setQuery] = useState('');
-  const [customerName, setCustomerName] = useState('Devon Tran');
+  const [customerName, setCustomerName] = useState('');
   const [saleCustomer, setSaleCustomer] = useState(null);
   const [receipt, setReceipt] = useState(null);
   const [showCashModal, setShowCashModal] = useState(false);
