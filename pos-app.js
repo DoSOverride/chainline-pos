@@ -624,7 +624,11 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
     h('div', { className: 'sidebar-foot' },
       h(AvInit, { initials: staff ? staff.initials : 'CL', tone: staff ? staff.tone : 'am' }),
       h('div', { className: 'user-meta' },
-        h('span', { className: 'user-name' }, staff ? staff.name : 'ChainLine'),
+        h('span', { className: 'user-name' },
+          staff ? staff.name : 'ChainLine',
+          // §15 STAFF chip - every signed-in user is staff
+          staff && window.CustomerTypeChip && h(window.CustomerTypeChip, { type: 'staff' })
+        ),
         h('span', { className: 'user-role' }, staff ? staff.role : '')
       ),
       h(ConnectionStatus),
@@ -1227,7 +1231,11 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       h('div', { style: S.custBlock },
         h('div', { style: S.custLeft },
           h('span', { style: S.custLabel }, 'Customer'),
-          h('span', { style: S.custName }, wo.cust || 'Walk-in'),
+          h('span', { style: S.custName },
+            wo.cust || 'Walk-in',
+            // §15 STAFF / WHOLESALE / VIP chip inline with the name
+            window.CustomerTypeChip && h(window.CustomerTypeChip, { type: wo.customerType || (wo.staffCustomer ? 'staff' : 'retail') })
+          ),
           h('div', { style: S.custMeta },
             h('span', { style: S.pillBadge }, wo.staffCustomer ? 'Staff' : 'Customer'),
             wo.phone && h('span', { className: 'mono', style: { fontSize: 12, color: 'var(--text2)' } }, 'Mobile: ' + wo.phone),

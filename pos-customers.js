@@ -853,7 +853,11 @@
               style: { padding: '12px 16px 14px', borderBottom: '1px solid var(--line)', marginBottom: 6 }
             },
               h(Avatar, { name, size: 40 }),
-              h('div', { style: { marginTop: 8, fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: '1.3' } }, name),
+              h('div', { style: { marginTop: 8, fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: '1.3' } },
+                name,
+                // §15 chip inline with customer name
+                window.CustomerTypeChip && h(window.CustomerTypeChip, { type: customer.customerType || ((customer.tags || []).find(function(t) { return /staff|vip|wholesale|friends/i.test(t); })) || 'retail' })
+              ),
               h('div', { style: { fontSize: 11, color: 'var(--text-3)', marginTop: 2, fontFamily: 'var(--font-mono)' } },
                 customer.customerType || 'Customer')
             ),
@@ -1387,7 +1391,13 @@
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
                     h(Avatar, { name, size: 32 }),
                     h('div', null,
-                      h('div', { style: { fontWeight: 600, fontSize: 13 } }, name),
+                      h('div', { style: { fontWeight: 600, fontSize: 13 } },
+                        name,
+                        // §15 STAFF/WHOLESALE/VIP chip from customerType (falls back to first tag if VIP/Staff/etc)
+                        window.CustomerTypeChip && h(window.CustomerTypeChip, {
+                          type: c.customerType && c.customerType !== 'Customer' ? c.customerType : ((c.tags || []).find(function(t) { return /staff|vip|wholesale|friends/i.test(t); }) || 'retail')
+                        })
+                      ),
                       (c.tags || []).length > 0 && h('div', { style: { display: 'flex', gap: 4, marginTop: 3 } },
                         (c.tags || []).map(t => h(Tag, { key: t, label: t }))
                       )
