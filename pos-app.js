@@ -1226,15 +1226,15 @@ function WorkOrdersScreen({ setScreen }) {
    SCREEN C — NEW WORK ORDER
 ───────────────────────────────────────── */
 function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
-  const [customer, setCustomer] = useState('Hannah Riise');
+  const [customer, setCustomer] = useState('');
   const [showSuggest, setShowSuggest] = useState(false);
-  const [mech, setMech] = useState('JK');
-  const [prio, setPrio] = useState(true);
+  const [mech, setMech] = useState('');
+  const [prio, setPrio] = useState(false);
   const [notify, setNotify] = useState(true);
-  const [service, setService] = useState('Suspension service');
-  const [bike, setBike] = useState('Santa Cruz Bronson \xb7 CC X01 \xb7 2023 \xb7 Charcoal');
-  const [due, setDue] = useState('2026-05-22');
-  const [notes, setNotes] = useState('Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.');
+  const [service, setService] = useState('');
+  const [bike, setBike] = useState('');
+  const [due, setDue] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 3); return d.toISOString().slice(0,10); });
+  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const suggestRef = useRef(null);
 
