@@ -24,14 +24,15 @@
     const { createElement: h, useState, useEffect, useMemo, Fragment } = React;
 
     // Columns: status → label + bg accent
+    // Flow: Booked → Open → Assess & Order → Ready → In Progress → Finished
+    // Drag to In Progress prompts mechanic assignment.
     const COLUMNS = [
-      { id: 'booked',        label: 'Booked',        kind: 'amber'  },
-      { id: 'open',          label: 'Open',          kind: 'blue'   },
-      { id: 'inprogress',    label: 'In Progress',   kind: 'neutral'},
-      { id: 'parts-ordered', label: 'Parts Ordered', kind: 'amber'  },
-      { id: 'so-arrived',    label: 'SO Arrived',    kind: 'green'  },
-      { id: 'ra',            label: 'RA!',           kind: 'red'    },
-      { id: 'ready',         label: 'Ready',         kind: 'green'  },
+      { id: 'booked',        label: 'Booked',          kind: 'amber'   },
+      { id: 'open',          label: 'Open',            kind: 'blue'    },
+      { id: 'parts-ordered', label: 'Assess & Order',  kind: 'amber'   },
+      { id: 'ready',         label: 'Ready',           kind: 'green'   },
+      { id: 'inprogress',    label: 'In Progress',     kind: 'neutral' },
+      { id: 'finished',      label: 'Finished',        kind: 'green'   },
     ];
 
     function FloorCard(props) {
@@ -128,6 +129,71 @@
       );
     }
 
+    function MechanicPicker(props) {
+      const AvInit = window.AvInit;
+      const list = (window.MECHANICS && window.MECHANICS.length)
+        ? window.MECHANICS
+        : [{ initials: 'PH', name: 'Phil', tone: 'ph' },
+           { initials: 'ST', name: 'Steve', tone: 'st' },
+           { initials: 'MA', name: 'Matt', tone: 'ma' },
+           { initials: 'BE', name: 'Beckett', tone: 'be' },
+           { initials: 'CU', name: 'Curren', tone: 'cu' },
+           { initials: 'DN', name: 'Danny', tone: 'dn' }];
+      return h('div', {
+        className: 'floor-picker-backdrop',
+        onClick: function(e) { if (e.target === e.currentTarget) props.onCancel(); },
+        style: {
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000
+        }
+      },
+        h('div', {
+          className: 'floor-picker',
+          style: {
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            padding: 24, minWidth: 340, maxWidth: 480
+          }
+        },
+          h('div', {
+            style: {
+              fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em',
+              textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6
+            }
+          }, 'Assign mechanic'),
+          h('div', {
+            style: { fontSize: 18, fontWeight: 600, marginBottom: 16 }
+          }, 'Who is starting ' + props.woId + '?'),
+          h('div', {
+            style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px,1fr))', gap: 8 }
+          },
+            list.map(function(m) {
+              return h('button', {
+                key: m.initials,
+                className: 'floor-picker-btn',
+                onClick: function() { props.onPick(m); },
+                style: {
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '10px 12px', background: 'var(--surface-2)',
+                  border: '1px solid var(--border)', cursor: 'pointer',
+                  fontFamily: 'inherit', color: 'var(--text)'
+                }
+              },
+                AvInit ? h(AvInit, { initials: m.initials, tone: m.tone }) : m.initials,
+                h('span', { style: { fontWeight: 500 } }, m.name || m.initials)
+              );
+            })
+          ),
+          h('div', { style: { marginTop: 16, textAlign: 'right' } },
+            h('button', {
+              className: 'btn',
+              onClick: props.onCancel,
+              style: { background: 'transparent', border: '1px solid var(--border)', color: 'var(--text2)', padding: '8px 14px', cursor: 'pointer' }
+            }, 'Cancel')
+          )
+        )
+      );
+    }
+
     function ShopFloorScreen(props) {
       const setScreen = props.setScreen;
       const onOpenWo = props.onOpenWo;
@@ -135,6 +201,7 @@
       const [wos, setWos] = useState(window.MOCK_WO || []);
       const [mechFilter, setMechFilter] = useState('all');
       const [tick, setTick] = useState(0);
+      const [pendingAssign, setPendingAssign] = useState(null); // { woId, newStatus }
 
       // Auto-refresh every 30 seconds
       useEffect(function() {
@@ -183,13 +250,19 @@
         const map = {};
         COLUMNS.forEach(function(c) { map[c.id] = []; });
         filteredWos.forEach(function(w) {
-          // Normalise some legacy status names
+          // Normalise legacy status names → current 6-column model
           let s = (w.status || 'open').toLowerCase().replace(/[\s_]/g, '');
           if (s === 'partsordered') s = 'parts-ordered';
-          if (s === 'soarrived' || s === 'soparts' || s === 'soparts-arrived') s = 'so-arrived';
+          // Legacy SO Arrived → parts are in, ready to work
+          if (s === 'soarrived' || s === 'soparts' || s === 'sopartsarrived') s = 'ready';
+          // RA! folded into Assess & Order (warranty needs assessment)
+          if (s === 'ra') s = 'parts-ordered';
+          // Done states all collapse into Finished
+          if (s === 'done' || s === 'donepaid' || s === 'closed') s = 'finished';
+          // Cancelled stays hidden
+          if (s === 'cancelled') return;
           if (map[s]) map[s].push(w);
           else if (s === 'overdue' || w.dueState === 'overdue') (map.open = map.open || []).push(w);
-          // Skip 'done', 'donepaid', 'closed', 'cancelled' — those don't show on the floor
         });
         return map;
       }, [filteredWos]);
@@ -277,24 +350,49 @@
               onDropWo: handleDropWo
             });
           })
-        )
+        ),
+
+        // Mechanic picker modal — shown when dragging a card into In Progress
+        pendingAssign && h(MechanicPicker, {
+          woId: pendingAssign.woId,
+          onCancel: function() { setPendingAssign(null); },
+          onPick: function(mech) {
+            const { woId, newStatus } = pendingAssign;
+            setPendingAssign(null);
+            applyMove(woId, newStatus, mech);
+          }
+        })
       );
 
       function handleDropWo(woId, newStatus) {
+        // Drag into In Progress → require mechanic assignment first
+        if (newStatus === 'inprogress') {
+          setPendingAssign({ woId: woId, newStatus: newStatus });
+          return;
+        }
+        applyMove(woId, newStatus, null);
+      }
+
+      function applyMove(woId, newStatus, mech) {
         // Optimistic local update
         setWos(function(prev) {
           return prev.map(function(w) {
-            return w.id === woId ? Object.assign({}, w, { status: newStatus }) : w;
+            if (w.id !== woId) return w;
+            const patch = { status: newStatus };
+            if (mech) { patch.mech = mech.initials; patch.tone = mech.tone || ''; }
+            return Object.assign({}, w, patch);
           });
         });
         if (window.apiPost) {
-          window.apiPost('/api/workorder/' + woId + '/status', { status: newStatus })
+          const body = { status: newStatus };
+          if (mech) body.employee = mech.initials;
+          window.apiPost('/api/workorder/' + woId + '/status', body)
             .then(function() {
-              if (window._posToast) window._posToast('Moved ' + woId + ' to ' + newStatus, 'success');
+              const label = mech ? (newStatus + ' (' + mech.initials + ')') : newStatus;
+              if (window._posToast) window._posToast('Moved ' + woId + ' to ' + label, 'success');
             })
             .catch(function() {
               if (window._posToast) window._posToast('Failed to update ' + woId, 'error');
-              // Refresh on failure
               setTick(function(t) { return t + 1; });
             });
         }
