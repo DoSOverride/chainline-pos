@@ -13,13 +13,12 @@ const { createRoot } = ReactDOM;
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
 const STAFF = [
-  { id:  1, name: 'Jason',   initials: 'JA', pin: '1139', role: 'Mechanic', tone: 'ja' },
-  { id:  2, name: 'Florian', initials: 'FL', pin: '1139', role: 'Mechanic', tone: 'fl' },
+  { id:  1, name: 'Jason',   initials: 'JA', pin: '1139', role: 'Warranty', tone: 'ja' },
   { id:  5, name: 'Phil',    initials: 'PH', pin: '1139', role: 'Mechanic', tone: 'ph' },
   { id:  6, name: 'Steve',   initials: 'ST', pin: '1139', role: 'Mechanic', tone: 'st' },
-  { id:  7, name: 'Matt',    initials: 'MA', pin: '1139', role: 'Mechanic', tone: 'ma' },
-  { id:  8, name: 'Darrin',  initials: 'DA', pin: '1139', role: 'Manager',  tone: 'da' },
-  { id:  9, name: 'Tao',     initials: 'TC', pin: '1139', role: 'Owner',    tone: 'tc' },
+  { id:  7, name: 'Matt',    initials: 'MA', pin: '1139', role: 'Manager',  tone: 'ma' },
+  { id:  8, name: 'Darrin',  initials: 'DA', pin: '1139', role: 'Owner',    tone: 'da' },
+  { id:  9, name: 'Tao',     initials: 'TC', pin: '1139', role: 'Manager',  tone: 'tc' },
   { id: 10, name: 'Beckett', initials: 'BE', pin: '1139', role: 'Mechanic', tone: 'be' },
   { id: 11, name: 'Curren',  initials: 'CU', pin: '1139', role: 'Mechanic', tone: 'cu' },
   { id: 12, name: 'Danny',   initials: 'DN', pin: '1139', role: 'Mechanic', tone: 'dn' },
