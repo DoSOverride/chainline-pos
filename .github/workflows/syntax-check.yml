@@ -1,0 +1,33 @@
+name: Syntax Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check JS syntax
+        run: |
+          echo "Checking all POS JS files for syntax errors..."
+          failed=0
+          for f in pos-*.js; do
+            if ! node --check "$f" 2>&1; then
+              echo "SYNTAX ERROR in $f"
+              failed=1
+            else
+              echo "OK: $f"
+            fi
+          done
+          if [ $failed -eq 1 ]; then
+            echo "One or more files have syntax errors — fix before deploying"
+            exit 1
+          fi
+          echo "All files OK"

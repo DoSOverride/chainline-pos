@@ -1,22 +1,11 @@
-const CACHE_NAME = 'chainline-pos-v2';
+const CACHE_NAME = 'chainline-pos-v3';
+
+// Only cache local app files — NOT versioned URLs (browser HTTP cache handles those)
 const APP_SHELL = [
   '/',
   '/index.html',
   '/pos-styles.css',
   '/pos-styles-v2.css',
-  '/pos-design.js',
-  '/pos-auth.js',
-  '/pos-print.js',
-  '/pos-offline.js',
-  '/pos-performance.js',
-  '/pos-payments.js',
-  '/pos-inventory-advanced.js',
-  '/pos-inventory.js',
-  '/pos-customers.js',
-  '/pos-reports-v2.js',
-  '/pos-eod.js',
-  '/pos-purchase-orders-v2.js',
-  '/pos-app.js',
   '/manifest.json',
 ];
 
@@ -39,30 +28,23 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Network-first for API calls and CDN scripts (React, fonts)
+  // Skip SW for: CDN scripts, fonts, external services — let browser handle directly
+  // (SW fetch() is blocked by CSP connect-src for these origins)
   if (
-    url.hostname.includes('workers.dev') ||
-    url.hostname.includes('unpkg.com') ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com') ||
+    url.hostname !== self.location.hostname ||
     url.pathname.startsWith('/api/')
   ) {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => new Response(JSON.stringify({ error: 'offline' }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' },
-        }))
-    );
-    return;
+    return; // no respondWith — browser handles natively
   }
 
-  // Cache-first for app shell
+  // Cache-first for local app shell files (CSS, HTML, manifest)
+  // JS files use versioned URLs (?v=N) — browser HTTP cache handles them (immutable 1yr)
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        if (response.ok && response.type !== 'opaque') {
+        // Only cache unversioned local files
+        if (response.ok && !url.search && response.type !== 'opaque') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }

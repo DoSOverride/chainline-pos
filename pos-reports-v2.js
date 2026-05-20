@@ -679,7 +679,7 @@
   ];
 
   function EndOfDayTab() {
-    const [counts, setCounts] = useState(() => Object.fromEntries(DENOMS.map(d => [d.value, '']));
+    const [counts, setCounts] = useState(() => Object.fromEntries(DENOMS.map(d => [d.value, ''])));
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [saved, setSaved] = useState(false);
 
