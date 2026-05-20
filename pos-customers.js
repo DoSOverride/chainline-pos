@@ -496,12 +496,21 @@
         tags: form.type !== 'Retail' ? [form.type] : [],
       };
 
-      const result = await apiPost('/api/pos-customer-create', payload);
+      const result = await apiPost('/api/customers', payload);
       setSaving(false);
+
+      if (result?.customer) {
+        window._posToast && window._posToast('Customer created', 'success');
+      } else {
+        window._posToast && window._posToast('Saved locally - will sync when connected', '');
+      }
 
       const newCustomer = result?.customer || {
         id: Date.now(),
-        ...payload,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        phone: payload.phone,
+        email: payload.email,
         memberSince: new Date().toISOString().slice(0, 10),
         totalSpent: 0,
         visitCount: 0,
@@ -685,16 +694,51 @@
     const [editForm, setEditForm] = useState(null);
     const [showSms, setShowSms] = useState(false);
     const [showMerge, setShowMerge] = useState(false);
-    const [bikes, setBikes] = useState(MOCK_BIKES[customer.id] || []);
+    const [bikes, setBikes] = useState(MOCK_BIKES[initialCustomer.id] || []);
     const [showAddBike, setShowAddBike] = useState(false);
     const [selectedBike, setSelectedBike] = useState(null);
-    const [notes, setNotes] = useState(() => loadNotes(customer.id));
+    const [notes, setNotes] = useState(() => loadNotes(initialCustomer.id));
     const [noteInput, setNoteInput] = useState('');
     const [saving, setSaving] = useState(false);
+    const [history, setHistory] = useState(MOCK_HISTORY[initialCustomer.id] || []);
+    const [workOrders, setWorkOrders] = useState(MOCK_WORKORDERS[initialCustomer.id] || []);
+
+    /* Load full customer detail from API when id is numeric (live LS customer) */
+    useEffect(() => {
+      const id = initialCustomer.id;
+      if (!id || !/^\d+$/.test(String(id))) return;
+      apiFetch('/api/customer/' + id).then(result => {
+        if (!result) return;
+        /* Merge enriched fields into customer state */
+        const c = result.customer || result;
+        if (c) {
+          const enriched = {
+            ...initialCustomer,
+            phone: c.Phones?.Phone?.[0]?.number || c.Phones?.Phone?.number || initialCustomer.phone || '',
+            email: c.Emails?.ContactEmail?.[0]?.address || initialCustomer.email || '',
+            memberSince: c.Customer?.createTime?.slice(0, 10) || initialCustomer.memberSince || '',
+            totalSpent: parseFloat(c.Customer?.totalSales || 0),
+            visitCount: parseInt(c.Customer?.noSaleCount || 0, 10),
+            city: c.Addresses?.ContactAddress?.city || initialCustomer.city || '',
+            province: c.Addresses?.ContactAddress?.state || initialCustomer.province || '',
+          };
+          setCustomer(enriched);
+        }
+        /* Map sale history if present */
+        if (result.sales && Array.isArray(result.sales)) {
+          const mapped = result.sales.map(s => ({
+            id: 'S-' + s.saleID,
+            date: s.createTime?.slice(0, 10) || '',
+            items: (s.SaleLines?.SaleLine || []).map(l => l.unitQuantity + 'x ' + (l.itemDescription || l.itemID)).join(', ') || 'Sale #' + s.saleID,
+            total: parseFloat(s.total || 0),
+            method: s.SalePayments?.SalePayment?.[0]?.PaymentType?.name || 'Card',
+          }));
+          setHistory(mapped);
+        }
+      }).catch(() => { /* silent — show mock data already set */ });
+    }, [initialCustomer.id]);
 
     const name = customer.firstName + ' ' + customer.lastName;
-    const history = MOCK_HISTORY[customer.id] || [];
-    const workOrders = MOCK_WORKORDERS[customer.id] || [];
 
     function startEdit() {
       setEditForm({ ...customer });
@@ -1096,29 +1140,41 @@
       };
     }, []);
 
-    /* Debounced search */
+    /* Debounced search — calls live API when ≥2 chars, falls back to mock on empty */
     useEffect(() => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
-        if (!q.trim()) {
+        const trimmed = q.trim();
+        if (trimmed.length < 2) {
           setCustomers(MOCK_CUSTOMERS_FULL);
           return;
         }
         setLoading(true);
-        const result = await apiFetch('/api/pos-customers?q=' + encodeURIComponent(q));
+        const result = await apiFetch('/api/customers?q=' + encodeURIComponent(trimmed));
         setLoading(false);
-        if (result && result.customers) {
-          setCustomers(result.customers);
+        /* Map LS customer shape → local shape */
+        const mapped = (result && result.customers && result.customers.length > 0)
+          ? result.customers.map(c => ({
+              id: c.customerID,
+              firstName: c.firstName || '',
+              lastName: c.lastName || '',
+              name: (c.firstName || '') + ' ' + (c.lastName || ''),
+              phone: c.Phones?.Phone?.[0]?.number || c.Phones?.Phone?.number || '',
+              email: c.Emails?.ContactEmail?.[0]?.address || '',
+              memberSince: c.Customer?.createTime?.slice(0, 10) || '2024-01-01',
+              bikesCount: 0,
+              totalSpent: 0,
+              visitCount: 0,
+              tags: c.Customer?.noSale ? ['No Sale'] : [],
+            }))
+          : null;
+        if (mapped) {
+          setCustomers(mapped);
         } else {
-          /* Fallback: filter mock data */
-          const ql = q.toLowerCase();
-          setCustomers(MOCK_CUSTOMERS_FULL.filter(c =>
-            (c.firstName + ' ' + c.lastName).toLowerCase().includes(ql) ||
-            (c.phone || '').includes(ql) ||
-            (c.email || '').toLowerCase().includes(ql)
-          ));
+          /* LS token expired or API down — fall back to full mock list */
+          setCustomers(MOCK_CUSTOMERS_FULL);
         }
-      }, 200);
+      }, 250);
       return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     }, [q]);
 
