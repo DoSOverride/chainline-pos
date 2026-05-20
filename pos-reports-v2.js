@@ -276,6 +276,12 @@
     const [from, setFrom] = useState('');
     const [to, setTo] = useState('');
     const [offline, setOffline] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [liveRevenue, setLiveRevenue] = useState(null);
+    const [liveSalesCount, setLiveSalesCount] = useState(null);
+    const [liveTopItems, setLiveTopItems] = useState(null);
+    const [liveMechanicStats, setLiveMechanicStats] = useState(null);
+    const [liveDaily, setLiveDaily] = useState(null);
 
     function handleRangeChange(p, f, t) {
       setPreset(p);
@@ -290,28 +296,92 @@
 
     useEffect(() => { handleRangeChange('this-month', null, null); }, []);
 
-    // Filter MOCK_DAILY to the selected date range
-    const filteredDaily = (() => {
+    // Fetch live data when date range is set
+    useEffect(() => {
+      if (!from || !to) return;
+      let cancelled = false;
+      setLoading(true);
+      fetchReport('/api/reports', { from, to }).then(({ data, offline: isOffline }) => {
+        if (cancelled) return;
+        setLoading(false);
+        setOffline(isOffline);
+        if (data && !isOffline) {
+          setLiveRevenue(data.revenue != null ? data.revenue : null);
+          setLiveSalesCount(data.salesCount != null ? data.salesCount : null);
+          setLiveTopItems(Array.isArray(data.topItems) ? data.topItems : null);
+          setLiveMechanicStats(Array.isArray(data.mechanicStats) ? data.mechanicStats : null);
+          // Build daily chart data from response if provided, else null (falls back to mock)
+          if (Array.isArray(data.daily) && data.daily.length) {
+            setLiveDaily(data.daily.map(d => ({ label: d.date ? d.date.slice(5) : d.label, value: d.revenue || d.value || 0 })));
+          } else {
+            setLiveDaily(null);
+          }
+        } else {
+          setLiveRevenue(null); setLiveSalesCount(null);
+          setLiveTopItems(null); setLiveMechanicStats(null); setLiveDaily(null);
+        }
+      });
+      return () => { cancelled = true; };
+    }, [from, to]);
+
+    // Filter MOCK_DAILY to the selected date range (used as fallback)
+    const filteredMockDaily = (() => {
       if (!from || !to) return MOCK_DAILY;
       return MOCK_DAILY.filter(d => {
-        // MOCK_DAILY labels are MM-DD; reconstruct full date using current year
         const year = new Date().getFullYear();
         const fullDate = year + '-' + d.label;
         return fullDate >= from && fullDate <= to;
       });
     })();
 
-    const totalRevenue = filteredDaily.reduce((s, d) => s + d.value, 0);
+    const filteredDaily = liveDaily || filteredMockDaily;
+    const totalRevenue = liveRevenue != null ? liveRevenue : filteredDaily.reduce((s, d) => s + d.value, 0);
     const totalTax = totalRevenue * 0.05;
-    // Approximate transactions proportional to filtered vs full range
-    const totalTx = Math.max(1, Math.round(247 * filteredDaily.length / Math.max(1, MOCK_DAILY.length)));
-    const avgSale = totalRevenue / totalTx;
+    const totalTx = liveSalesCount != null ? liveSalesCount : Math.max(1, Math.round(247 * filteredDaily.length / Math.max(1, MOCK_DAILY.length)));
+    const avgSale = totalTx > 0 ? totalRevenue / totalTx : 0;
     const payTotal = MOCK_PAYMENT_METHODS.reduce((s, m) => s + m.amount, 0);
 
+    // Expose live data for export (falls back to mock)
+    const exportTopItems = liveTopItems || MOCK_TOP_ITEMS;
+    const exportMechanicStats = liveMechanicStats || MOCK_MECHANICS.map(m => ({
+      name: m.name, wosCompleted: m.completed, revenue: m.partsRev + m.labourRev,
+    }));
+
     function exportSalesCSV() {
-      const header = 'Date,Revenue\n';
-      const rows = filteredDaily.map(d => d.label + ',' + d.value.toFixed(2)).join('\n');
-      const blob = new Blob([header + rows], { type: 'text/csv' });
+      const lines = [];
+
+      // Revenue summary
+      lines.push('REVENUE SUMMARY');
+      lines.push('From,To,Total Revenue,GST (5%),# Transactions,Avg Sale');
+      lines.push([from, to, totalRevenue.toFixed(2), totalTax.toFixed(2), totalTx, avgSale.toFixed(2)].join(','));
+      lines.push('');
+
+      // Daily breakdown
+      lines.push('DAILY REVENUE');
+      lines.push('Date,Revenue');
+      filteredDaily.forEach(d => lines.push(d.label + ',' + d.value.toFixed(2)));
+      lines.push('');
+
+      // Top items
+      lines.push('TOP ITEMS');
+      lines.push('Rank,Item,SKU/Description,Qty,Revenue');
+      exportTopItems.forEach((item, i) => {
+        const desc = item.description || item.name || '';
+        const sku = item.sku || '';
+        const qty = item.qty != null ? item.qty : '';
+        const rev = item.revenue != null ? Number(item.revenue).toFixed(2) : '';
+        lines.push([i + 1, '"' + desc + '"', sku, qty, rev].join(','));
+      });
+      lines.push('');
+
+      // Mechanic breakdown
+      lines.push('MECHANIC BREAKDOWN');
+      lines.push('Mechanic,WOs Completed,Revenue');
+      exportMechanicStats.forEach(m => {
+        lines.push(['"' + m.name + '"', m.wosCompleted != null ? m.wosCompleted : '', Number(m.revenue || 0).toFixed(2)].join(','));
+      });
+
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url;
       a.download = 'chainline-sales-' + (from || todayISO()) + '-to-' + (to || todayISO()) + '.csv';
@@ -325,13 +395,17 @@
       /* Date picker + Export */
       h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } },
         h(DateRangePicker, { preset, from, to, onChange: handleRangeChange }),
-        h('button', {
-          onClick: exportSalesCSV,
-          style: {
-            padding: '6px 14px', borderRadius: 6, border: '1px solid #333',
-            background: '#1a1a1a', color: '#aaa', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-          },
-        }, '↓ Export CSV')
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          loading && h('span', { style: { fontSize: 10, color: '#555', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em' } }, 'Loading...'),
+          !offline && !loading && liveRevenue != null && h('span', { style: { fontSize: 10, color: '#22c55e', fontFamily: 'JetBrains Mono, monospace' } }, 'Live'),
+          h('button', {
+            onClick: exportSalesCSV,
+            style: {
+              padding: '6px 14px', borderRadius: 6, border: '1px solid #333',
+              background: '#1a1a1a', color: '#aaa', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
+            },
+          }, '↓ Export CSV')
+        )
       ),
 
       /* Stat row */
