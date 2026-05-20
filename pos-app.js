@@ -509,6 +509,20 @@ const NAV_TOOLS = [
   { id: 'settings',         label: 'Settings',        mobileLabel: 'Settings', Icon: 'Dots'    },
 ];
 
+function OfflineBanner() {
+  const online = useConnectionStatus();
+  if (online) return null;
+  return h('div', { style: {
+    background: 'rgba(200,57,44,0.08)', borderBottom: '1px solid rgba(200,57,44,0.25)',
+    borderLeft: '3px solid var(--accent)', padding: '7px 20px',
+    fontFamily: 'var(--mono)', fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase',
+    color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 8,
+  }},
+    h('span', { style: { color: 'var(--accent)' } }, '●'),
+    'Offline · changes queued, will sync on reconnect'
+  );
+}
+
 function ConnectionStatus() {
   const online = useConnectionStatus();
   return h('div', { className: 'conn-status' },
@@ -2514,6 +2528,7 @@ function App() {
       h(Sidebar, { screen, setScreen, staff, onLogout: function() { try { sessionStorage.removeItem('pos-staff'); } catch {} setStaff(null); } }),
       h('main', { className: 'main' },
         h(Topbar, { screen, topbarSearchRef, onOpenSearch: function() { setShowGlobalSearch(true); } }),
+        h(OfflineBanner),
         h('div', { className: 'content' }, renderScreen()),
         h(StatusStrip)
       )
