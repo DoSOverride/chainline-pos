@@ -1339,6 +1339,12 @@ function ReceiptModal({ receipt, onClose }) {
   const { customer, saleItems = [], subtotal = 0, gst = 0, pst = 0, total = 0, method, customerObj } = receipt;
   const displayName = customer || (customerObj && customerObj.name) || 'Walk-in';
 
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose && onClose(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   return h('div', {
     style: {
       position: 'fixed', inset: 0, zIndex: 900,
@@ -1389,61 +1395,6 @@ function ReceiptModal({ receipt, onClose }) {
           h(Ico.Plus, { size: 13 }), ' New Sale'
         ),
         h('button', { className: 'btn', onClick: () => { if (window.printReceipt) window.printReceipt({ customerName: displayName, items: saleItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })), subtotal, gst, pst, total, paymentMethod: method }); } }, 'Print Receipt')
-      )
-    )
-  );
-}
-
-/* ─────────────────────────────────────────
-   RECEIPT MODAL
-───────────────────────────────────────── */
-function ReceiptModal({ receipt, onClose }) {
-  const { customer, saleItems, subtotal, gst, pst, total, method } = receipt || {};
-  const methodLabel = { card: 'Card', cash: 'Cash', other: 'Other' }[method] || method;
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose?.(); }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
-
-  return h('div', { className: 'modal-overlay', onClick: e => { if (e.target === e.currentTarget) onClose?.(); } },
-    h('div', { className: 'modal', style: { maxWidth: 420, padding: 0 } },
-      h('div', { className: 'card-head', style: { borderBottom: '1px solid var(--line)' } },
-        h('h3', null, 'Sale Complete'),
-        h('div', { className: 'right' },
-          h('button', { className: 'btn-ghost icon-btn', onClick: onClose }, h(Ico.X, { size: 14 }))
-        )
-      ),
-      h('div', { style: { padding: 18 } },
-        customer && h('div', { style: { marginBottom: 14, fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text2)' } }, 'Customer: ', h('span', { style: { color: 'var(--text)' } }, customer)),
-        h('table', { className: 'tbl', style: { marginBottom: 14 } },
-          h('thead', null, h('tr', null,
-            h('th', null, 'Item'), h('th', { style: { textAlign: 'center', width: 40 } }, 'Qty'),
-            h('th', { style: { textAlign: 'right', width: 80 } }, 'Total')
-          )),
-          h('tbody', null,
-            (saleItems || []).map(i =>
-              h('tr', { key: i.sku },
-                h('td', null,
-                  i.name,
-                  i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 4px' } }, 'PST-EXEMPT')
-                ),
-                h('td', { className: 'num', style: { textAlign: 'center' } }, i.qty),
-                h('td', { className: 'num', style: { textAlign: 'right' } }, fmt$(i.qty * i.price))
-              )
-            )
-          )
-        ),
-        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'Subtotal'), h('span', { className: 'val' }, fmt$(subtotal))),
-        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'GST \xb7 5%'), h('span', { className: 'val' }, fmt$(gst))),
-        h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'PST \xb7 7%'), h('span', { className: 'val' }, fmt$(pst))),
-        h('div', { className: 'totals-row grand' }, h('span', { className: 'label' }, 'Total'), h('span', { className: 'val' }, fmt$(total))),
-        h('div', { style: { marginTop: 14, fontFamily: 'var(--mono)', fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--text2)' } }, 'Payment: ', methodLabel)
-      ),
-      h('div', { style: { padding: '14px 18px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, justifyContent: 'flex-end' } },
-        h('button', { className: 'btn ghost', onClick: () => window.printReceipt?.(receipt) }, 'Print receipt'),
-        h('button', { className: 'btn primary', onClick: onClose }, 'New sale')
       )
     )
   );

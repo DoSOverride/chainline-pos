@@ -213,6 +213,7 @@ ul, ol { list-style: none; }
   background: rgba(200,57,44,0.06);
 }
 .nav-item.active .nav-count { color: var(--text2); }
+.nav-item-label-mobile { display: none; }
 
 .nav-icon {
   display: flex;
@@ -1698,6 +1699,8 @@ input[type="date"], .mono-input {
   }
   .nav-item svg { width: 18px; height: 18px; }
   .nav-count { display: none; }
+  .nav-item-label { display: none; }
+  .nav-item-label-mobile { display: inline; }
   #main, .main { padding-bottom: 72px; }
   .page { padding: 16px 12px 80px; }
   .page-head { flex-direction: column; gap: 8px; }
