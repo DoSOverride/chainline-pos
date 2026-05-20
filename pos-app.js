@@ -877,9 +877,7 @@ function WorkOrderDetail({ wo, onClose }) {
     { sku: 'LAB-SUSPN', name: 'Labour - Suspension service 1.5h', qty: 1, price: 142.50, taxablePst: false },
     { sku: 'SEAL-KIT',  name: 'Rear shock seal kit',               qty: 1, price: 48.00                    },
   ]);
-  const [noteText, setNoteText] = useState(
-    'Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load.'
-  );
+  const [noteText, setNoteText] = useState(wo.notes || '');
   const [showSms, setShowSms]   = useState(false);
   const [hookIn, setHookIn]     = useState('08:30');
   const [hookOut, setHookOut]   = useState('');
