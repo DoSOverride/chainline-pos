@@ -34,8 +34,8 @@ const SERVICE_TYPES = [
 ];
 
 const MOCK_WO = [
-  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50 },
-  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81 },
+  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50, notes: 'Replace full drivetrain - cassette, chain, chainrings. Customer reports skipping under load.' },
+  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81, notes: 'Rear shock feels harsh on chunder. Clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.' },
   { id: 'WO-2382', cust: 'Marc Lefebvre',      phone: '(250) 555-0119', bike: 'Trek Fuel EX 8 \xb7 Lithium Grey',             svc: 'Full tune + brake bleed',    due: 'May 18', dueState: 'overdue', overdueBy: '2d late', status: 'open',  mech: 'SR', tone: 'sr', prio: true,  total: 185.00 },
   { id: 'WO-2402', cust: 'Priya Sharma',       phone: '(778) 555-0207', bike: 'Specialized Stumpjumper Comp',                 svc: 'Booking \xb7 pre-season tune',due: 'May 22', status: 'booked',    mech: 'MB', tone: 'mb', prio: false, total: 0 },
   { id: 'WO-2379', cust: 'Owen Bartholomew',   phone: '(250) 555-0166', bike: 'Kona Process 134 \xb7 2022',                   svc: 'Wheel build \xb7 rear',       due: 'May 17', dueState: 'overdue', overdueBy: '3d late', status: 'open',  mech: 'AM', tone: 'am', prio: false, total: 275.00 },
@@ -494,17 +494,17 @@ function LoginScreen({ onLogin }) {
    SIDEBAR
 ───────────────────────────────────────── */
 const NAV_MAIN = [
-  { id: 'dashboard',   label: 'Dashboard',   Icon: 'Dashboard', count: null },
-  { id: 'work-orders', label: 'Work Orders', Icon: 'Wrench',    count: '23' },
-  { id: 'sales',       label: 'Sales',       Icon: 'Cart',      count: null },
-  { id: 'customers',   label: 'Customers',   Icon: 'Users',     count: null },
-  { id: 'inventory',   label: 'Inventory',   Icon: 'Box',       count: null },
+  { id: 'dashboard',   label: 'Dashboard',   mobileLabel: 'Home',    Icon: 'Dashboard', count: null },
+  { id: 'work-orders', label: 'Work Orders', mobileLabel: 'WOs',     Icon: 'Wrench',    count: '23' },
+  { id: 'sales',       label: 'Sales',       mobileLabel: 'Sales',   Icon: 'Cart',      count: null },
+  { id: 'customers',   label: 'Customers',   mobileLabel: 'Customers', Icon: 'Users',   count: null },
+  { id: 'inventory',   label: 'Inventory',   mobileLabel: 'Stock',   Icon: 'Box',       count: null },
 ];
 const NAV_TOOLS = [
-  { id: 'bookings',         label: 'Bookings',        Icon: 'Calendar' },
-  { id: 'purchase-orders',  label: 'Purchase Orders', Icon: 'Box'      },
-  { id: 'reports',          label: 'Reports',         Icon: 'Clock'    },
-  { id: 'settings',         label: 'Settings',        Icon: 'Dots'     },
+  { id: 'bookings',         label: 'Bookings',        mobileLabel: 'Book',    Icon: 'Calendar' },
+  { id: 'purchase-orders',  label: 'Purchase Orders', mobileLabel: 'POs',     Icon: 'Box'      },
+  { id: 'reports',          label: 'Reports',         mobileLabel: 'Reports', Icon: 'Clock'    },
+  { id: 'settings',         label: 'Settings',        mobileLabel: 'Settings', Icon: 'Dots'    },
 ];
 
 function ConnectionStatus() {
@@ -524,7 +524,8 @@ function Sidebar({ screen, setScreen, staff }) {
       onClick: () => setScreen(n.id),
     },
       h('span', { className: 'nav-icon' }, h(Ico[n.Icon], { size: 14 })),
-      h('span', null, n.label),
+      h('span', { className: 'nav-item-label' }, n.label),
+      h('span', { className: 'nav-item-label-mobile' }, n.mobileLabel || n.label),
       n.count && h('span', { className: 'nav-count' }, n.count)
     );
 
@@ -841,8 +842,8 @@ function WorkOrderDetail({ wo, onClose }) {
   const [newTask, setNewTask]   = useState('');
   const [lineQ, setLineQ]       = useState('');
   const [lines, setLines]       = useState([
-    { sku: 'LAB-SUSPN', name: 'Labour - Suspension service 1.5h', qty: 1, price: 142.50 },
-    { sku: 'SEAL-KIT',  name: 'Rear shock seal kit',               qty: 1, price: 48.00  },
+    { sku: 'LAB-SUSPN', name: 'Labour - Suspension service 1.5h', qty: 1, price: 142.50, taxablePst: false },
+    { sku: 'SEAL-KIT',  name: 'Rear shock seal kit',               qty: 1, price: 48.00                    },
   ]);
   const [noteText, setNoteText] = useState(
     'Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load.'
@@ -862,7 +863,7 @@ function WorkOrderDetail({ wo, onClose }) {
     setNewTask('');
   }
   function toggleTask(id) { setTasks(t => t.map(x => x.id === id ? { ...x, done: !x.done } : x)); }
-  function addLine(it) { setLines(l => [...l, { sku: it.sku, name: it.name, qty: 1, price: it.price }]); setLineQ(''); }
+  function addLine(it) { setLines(l => [...l, { sku: it.sku, name: it.name, qty: 1, price: it.price, taxablePst: it.taxablePst !== false }]); setLineQ(''); }
   function saveNotes() { apiPost('/api/workorder/' + wo.id + '/notes', { notes: noteText }).then(() => toast('Notes saved', 'success')); }
 
   function changeStatus(s) {
@@ -872,10 +873,11 @@ function WorkOrderDetail({ wo, onClose }) {
     });
   }
 
-  const subtotal = lines.reduce((a, l) => a + l.qty * l.price, 0);
-  const gst = round2(subtotal * 0.05);
-  const pst = round2(subtotal * 0.07);
-  const total = round2(subtotal + gst + pst);
+  const subtotal    = lines.reduce((a, l) => a + l.qty * l.price, 0);
+  const pstSubtotal = lines.reduce((a, l) => a + (l.taxablePst !== false ? l.qty * l.price : 0), 0);
+  const gst         = round2(subtotal * 0.05);
+  const pst         = round2(pstSubtotal * 0.07);
+  const total       = round2(subtotal + gst + pst);
 
   const today = new Date();
   const dueDate = new Date(wo.due + ' 2026');
