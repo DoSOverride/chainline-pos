@@ -1030,20 +1030,26 @@ function WorkOrdersScreen({ setScreen }) {
     apiGet('/api/workorders')
       .then(data => {
         if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
-          setWos(data.workorders.map(w => ({
-            id: w.workOrderID || w.id,
-            cust: w.Contact?.firstName + ' ' + w.Contact?.lastName || w.customerName || 'Unknown',
-            phone: w.Contact?.mobile || w.Contact?.phone || '',
-            bike: w.itemDescription || w.bikeDescription || '',
-            svc: w.note?.split('\n')[0] || w.serviceType || 'Service',
-            due: w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', {month:'short', day:'numeric'}) : 'TBD',
-            dueState: null,
-            status: (w.workOrderStatus || 'open').toLowerCase().replace(' ', ''),
-            mech: w.Employee?.firstName?.[0] + (w.Employee?.lastName?.[0] || '') || 'UN',
-            tone: 'am',
-            prio: false,
-            total: w.total || 0,
-          })));
+          setWos(data.workorders.map(w => {
+            // KV-native flat format (already mapped) — detect by presence of 'cust' field
+            if (w.cust) return w;
+            // LS R-Series shape → local shape
+            return {
+              id: w.workOrderID || w.id,
+              cust: [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || w.customerName || 'Unknown',
+              phone: w.Contact?.mobile || w.Contact?.phone || '',
+              bike: w.itemDescription || w.bikeDescription || '',
+              svc: w.note?.split('\n')[0] || w.serviceType || 'Service',
+              due: w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', {month:'short', day:'numeric'}) : 'TBD',
+              dueState: null,
+              status: (w.workOrderStatus || 'open').toLowerCase().replace(/\s+/g, ''),
+              mech: (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || 'UN',
+              tone: 'am',
+              prio: !!w.priority,
+              total: parseFloat(w.total || 0),
+              notes: w.notes || '',
+            };
+          }));
         }
       })
       .catch(() => {})
