@@ -1548,18 +1548,18 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
   const openWo = onOpenWo || (() => {});
-  const [wos, setWos] = useState(MOCK_WO);
-  const [loading, setLoading] = useState(false);
+  const [wos, setWos] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   function fetchWos() {
     setLoading(true);
     return apiGet('/api/workorders')
       .then(data => {
-        if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
+        // KV-backed worker always returns { workorders: [...] }. Even empty.
+        // Treat any successful response as authoritative — do NOT keep MOCK_WO if API succeeds.
+        if (data && Array.isArray(data.workorders)) {
           setWos(data.workorders.map(w => {
-            // KV-native flat format (already mapped) — detect by presence of 'cust' field
-            if (w.cust) return w;
-            // LS R-Series shape → local shape
+            if (w.cust) return w; // KV-native flat format
             return {
               id: w.workOrderID || w.id,
               cust: [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || w.customerName || 'Unknown',
@@ -1577,6 +1577,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
             };
           }));
         }
+        // data === null only when fetch failed entirely — keep current wos (mock fallback)
       })
       .catch(() => {})
       .finally(() => setLoading(false));
