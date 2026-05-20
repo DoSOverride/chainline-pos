@@ -638,8 +638,9 @@
           style: { height: 32, padding: '0 10px', marginLeft: 4 },
         }, 'Print')
       ),
-      /* body */
-      h('div', { style: { flex: 1, overflowY: 'auto', padding: '20px 24px' } },
+      /* body — two columns: PO lines (left) + vendor sheet sidebar (§16) */
+      h('div', { style: { flex: 1, overflowY: 'auto', display: 'flex', alignItems: 'flex-start', gap: 16, padding: '20px 24px' } },
+        h('div', { style: { flex: 1, minWidth: 0 } },
         /* notes */
         po.notes && h('div', {
           style: {
@@ -722,6 +723,45 @@
               h('span', null, 'PO Total:'), h('span', { style: { fontFamily: 'var(--font-mono)' } }, fmt$(total))
             )
           )
+        )
+        ), /* close left column */
+
+        /* ── Right column: Vendor sheet sidebar (§16) ── */
+        vendor && h('div', {
+          className: 'aside-card po-vendor-sheet',
+          style: { width: 280, flexShrink: 0, background: 'var(--surface)', border: '1px solid var(--line)', alignSelf: 'flex-start' },
+        },
+          h('div', { className: 'card-head', style: { padding: '12px 16px', borderBottom: '1px solid var(--line)' } },
+            h('span', { className: 'sub', style: { display: 'block', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-3)' } }, 'VENDOR'),
+            h('h3', { style: { margin: '2px 0 0', fontSize: 14, fontWeight: 700 } }, vendor.name)
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)' } }, 'Account #'),
+            h('span', { className: 'v mono', style: { fontFamily: 'var(--font-mono)' } }, vendor.account || '—')
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)' } }, 'Type'),
+            h('span', { className: 'v' }, vendor.type || '—')
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)' } }, 'Phone'),
+            h('span', { className: 'v mono', style: { fontFamily: 'var(--font-mono)' } }, vendor.phone || '—')
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)', flexShrink: 0 } }, 'Email'),
+            h('span', { className: 'v mono', style: { fontFamily: 'var(--font-mono)', fontSize: 11, textAlign: 'right', wordBreak: 'break-all' } }, vendor.email || '—')
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)' } }, 'Location'),
+            h('span', { className: 'v', style: { textAlign: 'right' } }, vendor.location || '—')
+          ),
+          h('div', { className: 'aside-row', style: { display: 'flex', justifyContent: 'space-between', padding: '8px 16px', fontSize: 12, gap: 10 } },
+            h('span', { className: 'k', style: { color: 'var(--text-3)' } }, 'API'),
+            h('span', { className: 'v', style: { color: vendor.apiAvailable ? '#4ade80' : 'var(--text-3)' } }, vendor.apiAvailable ? 'Available' : 'Not connected')
+          ),
+          vendor.notes && h('div', {
+            style: { padding: '12px 16px', borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--text-2)', whiteSpace: 'pre-wrap', fontStyle: 'italic' },
+          }, vendor.notes)
         )
       ),
       /* Receive Items modal */

@@ -605,6 +605,16 @@ window.CashModal = function CashModal({ total, onSuccess, onClose }) {
   const tenderedNum = parseFloat(tendered) || 0;
   const change = tenderedNum - total;
 
+  // §12 CAD denominations (bills + coins) — tap to add to tendered total
+  const DENOMS = [100, 50, 20, 10, 5, 2, 1, 0.25, 0.10, 0.05];
+
+  function addDenom(d) {
+    setTendered(function(t) {
+      const cur = parseFloat(t) || 0;
+      return (Math.round((cur + d) * 100) / 100).toFixed(2);
+    });
+  }
+
   const quickAmounts = [
     { label: 'Exact', val: total.toFixed(2) },
     { label: '+$5',   val: (Math.ceil(total / 5) * 5).toFixed(2) },
@@ -657,11 +667,52 @@ window.CashModal = function CashModal({ total, onSuccess, onClose }) {
       })
     ),
 
-    // Quick amounts
+    // §12 Denomination buttons — tap to add to tendered total
+    _h('div', { className: 'cash-denom-grid' },
+      DENOMS.map(d =>
+        _h('button', {
+          key: d,
+          type: 'button',
+          className: 'cash-denom-btn',
+          onClick: () => addDenom(d),
+        }, d >= 1 ? '$' + d : Math.round(d * 100) + '\xa2')
+      )
+    ),
+
+    // §12 Round-up quick actions
+    _h('div', { style: { display: 'flex', gap: 6, marginBottom: 12 } },
+      _h('button', {
+        type: 'button',
+        className: 'btn btn-secondary btn-sm',
+        style: { flex: 1 },
+        onClick: () => setTendered(total.toFixed(2)),
+      }, 'Exact'),
+      _h('button', {
+        type: 'button',
+        className: 'btn btn-secondary btn-sm',
+        style: { flex: 1 },
+        onClick: () => setTendered((Math.ceil(total / 5) * 5).toFixed(2)),
+      }, 'Round up $5'),
+      _h('button', {
+        type: 'button',
+        className: 'btn btn-secondary btn-sm',
+        style: { flex: 1 },
+        onClick: () => setTendered((Math.ceil(total / 10) * 10).toFixed(2)),
+      }, 'Round up $10'),
+      _h('button', {
+        type: 'button',
+        className: 'btn btn-ghost btn-sm',
+        onClick: () => setTendered(''),
+        title: 'Clear',
+      }, 'Clear')
+    ),
+
+    // Quick amounts (legacy +$5/+$10/+$20)
     _h('div', { style: { display: 'flex', gap: 8, marginBottom: 20 } },
       filteredQuick.map(q =>
         _h('button', {
           key: q.val,
+          type: 'button',
           className: 'btn btn-secondary btn-sm',
           style: { flex: 1 },
           onClick: () => setTendered(q.val),
