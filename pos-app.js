@@ -699,11 +699,15 @@ function EndOfDayModal({ onClose }) {
 
 function DashboardScreen({ setScreen }) {
   const [showEod, setShowEod] = useState(false);
+  const [apiStats, setApiStats] = useState(null);
+  useEffect(() => {
+    apiGet('/api/pos-stats').then(d => { if (d && d.openWorkOrders != null) setApiStats(d); });
+  }, []);
   const stats = [
-    { label: 'Open Work Orders',  value: '23',       foot: '8 in progress',       accentColor: null,            delta: null },
-    { label: 'Overdue',           value: '4',         foot: 'Action required',     accentColor: 'var(--accent)',  delta: null },
-    { label: "Today's Revenue",   value: '$3,842.18', foot: '+18.4% vs avg',       accentColor: null,            delta: 'up' },
-    { label: 'Bookings This Week',value: '17',        foot: '3 awaiting drop-off', accentColor: null,            delta: null },
+    { label: 'Open Work Orders',  value: String(apiStats?.openWorkOrders ?? 23),       foot: '8 in progress',       accentColor: null,            delta: null },
+    { label: 'Overdue',           value: String(apiStats?.overdueWorkOrders ?? 4),      foot: 'Action required',     accentColor: 'var(--accent)',  delta: null },
+    { label: "Today's Revenue",   value: apiStats?.todaysRevenue != null ? fmt$(apiStats.todaysRevenue) : '$3,842.18', foot: '+18.4% vs avg', accentColor: null, delta: 'up' },
+    { label: 'Bookings This Week',value: String(apiStats?.bookingsThisWeek ?? 17),      foot: '3 awaiting drop-off', accentColor: null,            delta: null },
   ];
 
   const activity = [
@@ -897,7 +901,12 @@ function WorkOrderDetail({ wo, onClose }) {
   function changeStatus(s) {
     setConfirm({
       message: 'Mark work order as ' + s + '?',
-      onConfirm: () => { setStatus(s); setConfirm(null); toast('Status updated to ' + s, 'success'); },
+      onConfirm: () => {
+        setStatus(s);
+        setConfirm(null);
+        toast('Status updated to ' + s, 'success');
+        apiPost('/api/workorder/' + wo.id + '/status', { status: s });
+      },
     });
   }
 
@@ -1015,17 +1024,44 @@ function WorkOrdersScreen({ setScreen }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedWo, setSelectedWo] = useState(null);
+  const [wos, setWos] = useState(MOCK_WO);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    apiGet('/api/workorders')
+      .then(data => {
+        if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
+          setWos(data.workorders.map(w => ({
+            id: w.workOrderID || w.id,
+            cust: w.Contact?.firstName + ' ' + w.Contact?.lastName || w.customerName || 'Unknown',
+            phone: w.Contact?.mobile || w.Contact?.phone || '',
+            bike: w.itemDescription || w.bikeDescription || '',
+            svc: w.note?.split('\n')[0] || w.serviceType || 'Service',
+            due: w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', {month:'short', day:'numeric'}) : 'TBD',
+            dueState: null,
+            status: (w.workOrderStatus || 'open').toLowerCase().replace(' ', ''),
+            mech: w.Employee?.firstName?.[0] + (w.Employee?.lastName?.[0] || '') || 'UN',
+            tone: 'am',
+            prio: false,
+            total: w.total || 0,
+          })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const counts = {
-    all:        MOCK_WO.length,
-    open:       MOCK_WO.filter(r => r.status === 'open').length,
-    inprogress: MOCK_WO.filter(r => r.status === 'inprogress').length,
-    ready:      MOCK_WO.filter(r => r.status === 'ready').length,
-    booked:     MOCK_WO.filter(r => r.status === 'booked').length,
-    overdue:    MOCK_WO.filter(r => r.dueState === 'overdue').length,
+    all:        wos.length,
+    open:       wos.filter(r => r.status === 'open').length,
+    inprogress: wos.filter(r => r.status === 'inprogress').length,
+    ready:      wos.filter(r => r.status === 'ready').length,
+    booked:     wos.filter(r => r.status === 'booked').length,
+    overdue:    wos.filter(r => r.dueState === 'overdue').length,
   };
 
-  const filtered = MOCK_WO.filter(r => {
+  const filtered = wos.filter(r => {
     const matchTab = tab === 'all' ? true
       : tab === 'overdue' ? r.dueState === 'overdue'
       : r.status === tab;
@@ -1095,7 +1131,19 @@ function WorkOrdersScreen({ setScreen }) {
           )
         ),
         h('tbody', null,
-          filtered.length === 0
+          loading
+            ? [
+                h('tr', { key: 'sk1' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                  h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
+                )),
+                h('tr', { key: 'sk2' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                  h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
+                )),
+                h('tr', { key: 'sk3' }, h('td', { colSpan: 8, style: { padding: 12 } },
+                  h('div', { style: { height: 14, background: 'var(--bg3)', borderRadius: 0, animation: 'pulse 1.5s infinite' } })
+                )),
+              ]
+            : filtered.length === 0
             ? h('tr', null,
                 h('td', {
                   colSpan: 8,
@@ -1165,7 +1213,7 @@ function WorkOrdersScreen({ setScreen }) {
       className: 'row',
       style: { justifyContent: 'space-between', marginTop: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' },
     },
-      h('span', null, 'Showing ' + filtered.length + ' of ' + MOCK_WO.length),
+      h('span', null, 'Showing ' + filtered.length + ' of ' + wos.length),
       h('span', null, 'Page 1 / 1')
     ),
     selectedWo && h('div', { className: 'panel-overlay', onClick: e => { if (e.target === e.currentTarget) setSelectedWo(null); } },
