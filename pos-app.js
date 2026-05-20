@@ -273,9 +273,28 @@ function LoginScreen({ onLogin }) {
 }
 
 /* ─────────────────────────────────────────────
+   THEME TOGGLE
+───────────────────────────────────────────── */
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('pos-theme') || 'dark'; } catch { return 'dark'; }
+  });
+
+  function toggle() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('pos-theme', next); } catch {}
+  }
+
+  return [theme, toggle];
+}
+
+/* ─────────────────────────────────────────────
    SIDEBAR
 ───────────────────────────────────────────── */
 function Sidebar({ page, setPage, staff, onLock, overdueCount }) {
+  const [theme, toggleTheme] = useTheme();
   const navItems = [
     { key: 'dashboard',   label: 'Dashboard',    icon: Icon.dashboard  },
     { key: 'workorders',  label: 'Work Orders',  icon: Icon.workorders, badge: overdueCount > 0 ? overdueCount : null, badgeCls: 'orange' },
@@ -291,7 +310,12 @@ function Sidebar({ page, setPage, staff, onLock, overdueCount }) {
       h('div', { className: 'sidebar-title' },
         h('div', { className: 'shop-name' }, 'ChainLine'),
         h('div', { className: 'shop-sub' }, 'POS')
-      )
+      ),
+      h('button', {
+        className: 'btn-theme-toggle',
+        title: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
+        onClick: toggleTheme,
+      }, theme === 'dark' ? '☀️' : '🌙')
     ),
 
     // Nav

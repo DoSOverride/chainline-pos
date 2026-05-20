@@ -1,26 +1,131 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta name="theme-color" content="#0a0a0a"/>
-<title>ChainLine POS</title>
-<meta name="description" content="ChainLine Cycle - Point of Sale and Service Management"/>
-<!-- No indexing for internal tool -->
-<meta name="robots" content="noindex, nofollow"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>ChainLine POS</title>
+  <meta name="description" content="ChainLine Cycle - Point of Sale and Service Management">
+  <!-- No indexing for internal tool -->
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="manifest" href="/manifest.json">
 
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link rel="stylesheet" href="/pos-styles.css"/>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Stylesheets: base, then v2 additions -->
+  <link rel="stylesheet" href="/pos-styles.css">
+  <link rel="stylesheet" href="/pos-styles-v2.css">
+
+  <!-- Inline critical: CSS variables for dark/light theme -->
+  <style>
+    /* Dark (default) */
+    :root,
+    [data-theme="dark"] {
+      --bg:       #0a0a0a;
+      --surface:  #141414;
+      --card:     #1c1c1c;
+      --border:   #2a2a2a;
+      --border2:  #333333;
+      --text:     #e8e8e8;
+      --text-dim: #888888;
+      --text-muted: #555555;
+      --red:      #c8392c;
+      --red-dim:  #8a2820;
+      --red-glow: rgba(200,57,44,0.15);
+      --green:    #16a34a;
+      --green-dim:#0d6b32;
+      --blue:     #2563eb;
+      --orange:   #d97706;
+      --yellow:   #ca8a04;
+      --gray:     #4b5563;
+    }
+
+    /* Light theme */
+    [data-theme="light"] {
+      --bg:       #f5f4f2;
+      --surface:  #eeede9;
+      --card:     #ffffff;
+      --border:   #d6d3cd;
+      --border2:  #c6c2bb;
+      --text:     #1a1916;
+      --text-dim: #5a5856;
+      --text-muted:#8a8885;
+      --red:      #c8392c;
+      --red-dim:  #e54c3e;
+      --red-glow: rgba(200,57,44,0.12);
+      --green:    #16a34a;
+      --green-dim:#15803d;
+      --blue:     #2563eb;
+      --orange:   #b45309;
+      --yellow:   #92400e;
+      --gray:     #6b7280;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+    }
+
+    /* Theme toggle button */
+    .btn-theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 14px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: 140ms ease;
+    }
+    .btn-theme-toggle:hover {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--border2);
+    }
+  </style>
 </head>
 <body>
-<div id="root"></div>
+  <!-- POS v1.0 built 2026-05-20 -->
+  <div id="root">Loading ChainLine POS...</div>
 
-<!-- React 18 via CDN -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- React 18 CDN -->
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 
-<!-- POS App -->
-<script src="/pos-app.js?v=1"></script>
+  <!-- Load POS modules in order:
+       1. Design system (tokens, Toast, Modal, Shortcuts, CommandPalette, Avatar, Skeleton, StatCard)
+       2. Auth module  (STAFF, useAuth, AuthScreen, AuthGuard — vanilla JS, global scope)
+       3. Print module (printWorkOrder, printReceipt, exportCSV)
+       4. Reports page (ReportsPage — vanilla JS)
+       5. Purchase orders page (PurchaseOrdersPage — vanilla JS)
+       6. Main React app (App, LoginScreen, Sidebar, Dashboard, WorkOrders, Sales, Customers, Inventory)
+  -->
+  <script src="/pos-design.js?v=1"></script>
+  <script src="/pos-auth.js?v=1"></script>
+  <script src="/pos-print.js?v=1"></script>
+  <script src="/pos-reports.js?v=1"></script>
+  <script src="/pos-purchase-orders.js?v=1"></script>
+  <script src="/pos-app.js?v=3"></script>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function() {});
+    }
+
+    // Apply persisted theme on load (before React hydrates, avoid flash)
+    (function() {
+      var t = localStorage.getItem('pos-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
 </body>
 </html>
