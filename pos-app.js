@@ -1607,6 +1607,7 @@ function App() {
       case 'work-orders': return h(WorkOrdersScreen,   { setScreen });
       case 'new-wo':      return h(NewWorkOrderScreen, { setScreen });
       case 'sales':       return h(SalesScreen);
+      case 'inventory':   return h(window.InventoryScreen || PlaceholderScreen, window.InventoryScreen ? { staff, setScreen } : { name: 'inventory' });
       default:            return h(PlaceholderScreen,  { name: screen });
     }
   };
