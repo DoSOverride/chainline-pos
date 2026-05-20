@@ -1,3 +1,5 @@
+(function() {
+'use strict';
 /**
  * ChainLine POS — Design System v2
  * Design tokens, UI components, keyboard shortcuts, command palette.
@@ -660,3 +662,5 @@ window.CommandPalette  = CommandPalette;
 window.Avatar          = Avatar;
 window.Skeleton        = Skeleton;
 window.StatCard        = StatCard;
+
+})();

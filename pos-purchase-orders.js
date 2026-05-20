@@ -1,3 +1,5 @@
+(function() {
+'use strict';
 // pos-purchase-orders.js — ChainLine POS V2 Purchase Orders Module
 // Pure vanilla JS, no frameworks
 
@@ -548,3 +550,5 @@ async function PurchaseOrdersPage() {
 }
 
 window.PurchaseOrdersPage = PurchaseOrdersPage;
+
+})();

@@ -1,3 +1,5 @@
+(function() {
+'use strict';
 // pos-offline.js — ChainLine POS V2 Offline / Sync Module
 // Pure vanilla JS, no frameworks
 
@@ -365,3 +367,5 @@ window.OfflineQueue = OfflineQueue;
 window.ConnectionStatus = ConnectionStatus;
 window.useSyncQueue = useSyncQueue;
 window.SyncQueuePanel = SyncQueuePanel;
+
+})();
