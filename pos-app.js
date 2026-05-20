@@ -913,164 +913,565 @@ function DashboardScreen({ setScreen }) {
 /* ─────────────────────────────────────────
    WORK ORDER DETAIL PANEL
 ───────────────────────────────────────── */
-function WorkOrderDetail({ wo, onClose, fullPage }) {
-  const [status, setStatus]   = useState(wo.status);
-  const [tasks, setTasks]     = useState([
-    { id: 1, text: 'Inspect rear shock linkage', done: true  },
-    { id: 2, text: 'Bleed rear shock seals',      done: false },
-    { id: 3, text: 'Check BB creak',               done: false },
-  ]);
-  const [newTask, setNewTask]   = useState('');
-  const [lineQ, setLineQ]       = useState('');
-  const [lines, setLines]       = useState([
-    { sku: 'LAB-SUSPN', name: 'Labour - Suspension service 1.5h', qty: 1, price: 142.50, taxablePst: false },
-    { sku: 'SEAL-KIT',  name: 'Rear shock seal kit',               qty: 1, price: 48.00                    },
-  ]);
-  const [noteText, setNoteText] = useState(wo.notes || '');
-  const [showSms, setShowSms]   = useState(false);
-  const [hookIn, setHookIn]     = useState('08:30');
-  const [hookOut, setHookOut]   = useState('');
-  const [confirm, setConfirm]   = useState(null);
+function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
+  // ── State ───────────────────────────────────────────────
+  const [status, setStatus]           = useState(wo.status || 'Open');
+  const [description, setDescription] = useState(wo.description || wo.svc || '');
+  const [color, setColor]             = useState(wo.color || '');
+  const [size, setSize]               = useState(wo.size || '');
+  const [serial, setSerial]           = useState(wo.serial || '');
+  const [employee, setEmployee]       = useState(wo.employee || wo.mech || '');
+  const [assignAll, setAssignAll]     = useState(false);
+  const [customerItem, setCustomerItem] = useState(wo.bike || '');
+  const [warranty, setWarranty]       = useState(!!wo.warranty);
+  const [saveParts, setSaveParts]     = useState(false);
 
+  const _todayISO = new Date().toISOString().slice(0, 10);
+  const [dateIn, setDateIn]   = useState(wo.dateIn  || _todayISO);
+  const [timeIn, setTimeIn]   = useState(wo.timeIn  || '08:30');
+  const [dateDue, setDateDue] = useState(wo.dateDue || _todayISO);
+  const [timeDue, setTimeDue] = useState(wo.timeDue || '17:00');
+  const [hookIn, setHookIn]   = useState(wo.hookIn  || '08:30');
+  const [hookOut, setHookOut] = useState(wo.hookOut || '');
+
+  const [receiptNote, setReceiptNote]   = useState(wo.receiptNote || '');
+  const [internalNote, setInternalNote] = useState(wo.internalNote || wo.notes || '');
+  const [notePos, setNotePos]           = useState('top');
+
+  const [lineQ, setLineQ] = useState('');
+  const [lines, setLines] = useState(wo.lines || []);
+
+  const [confirm, setConfirm] = useState(null);
+  const [showSms, setShowSms] = useState(false);
+  const [showRequestPay, setShowRequestPay] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const notesDebounce = useRef(null);
+
+  // ── Click-outside for 3-dot menu ────────────────────────
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
+
+  // ── Debounced notes save (1s) ───────────────────────────
+  useEffect(() => {
+    if (!wo.id) return;
+    if (notesDebounce.current) clearTimeout(notesDebounce.current);
+    notesDebounce.current = setTimeout(() => {
+      apiPost('/api/workorder/' + wo.id + '/notes', {
+        receiptNote: receiptNote, internalNote: internalNote, notePos: notePos,
+      });
+    }, 1000);
+    return () => { if (notesDebounce.current) clearTimeout(notesDebounce.current); };
+    // eslint-disable-next-line
+  }, [receiptNote, internalNote, notePos]);
+
+  // ── Helpers ─────────────────────────────────────────────
   const lineResults = lineQ
     ? MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase())).slice(0,5)
     : [];
 
-  function addTask() {
-    if (!newTask.trim()) return;
-    setTasks(t => [...t, { id: Date.now(), text: newTask.trim(), done: false }]);
-    setNewTask('');
+  function addLine(it) {
+    setLines(l => [...l, {
+      sku: it.sku, name: it.name, qty: 1, price: it.price,
+      taxablePst: it.taxablePst !== false, employee: employee, status: 'Open',
+    }]);
+    setLineQ('');
   }
-  function toggleTask(id) { setTasks(t => t.map(x => x.id === id ? { ...x, done: !x.done } : x)); }
-  function addLine(it) { setLines(l => [...l, { sku: it.sku, name: it.name, qty: 1, price: it.price, taxablePst: it.taxablePst !== false }]); setLineQ(''); }
-  function saveNotes() { apiPost('/api/workorder/' + wo.id + '/notes', { notes: noteText }).then(() => toast('Notes saved', 'success')); }
+  function removeLine(i) { setLines(l => l.filter((_, ii) => ii !== i)); }
+  function updateLine(i, patch) { setLines(l => l.map((row, ii) => ii === i ? Object.assign({}, row, patch) : row)); }
 
   function changeStatus(s) {
+    setStatus(s);
+    toast('Status updated to ' + s, 'success');
+    if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: s });
+  }
+
+  // Auto-save (full PUT) on field changes
+  useEffect(() => {
+    if (!wo.id) return;
+    const t = setTimeout(() => {
+      apiPut('/api/workorder/' + wo.id, {
+        status: status, description: description, color: color, size: size, serial: serial, employee: employee,
+        customerItem: customerItem, warranty: warranty, saveParts: saveParts,
+        dateIn: dateIn, timeIn: timeIn, dateDue: dateDue, timeDue: timeDue, hookIn: hookIn, hookOut: hookOut,
+        receiptNote: receiptNote, internalNote: internalNote, notePos: notePos, lines: lines,
+      });
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line
+  }, [description, color, size, serial, employee, customerItem, warranty, saveParts,
+      dateIn, timeIn, dateDue, timeDue, hookIn, hookOut]);
+
+  // ── Totals ──────────────────────────────────────────────
+  const labor = round2(lines.filter(l => /^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
+  const parts = round2(lines.filter(l => !/^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
+  const fees     = 0;
+  const subtotal = round2(labor + parts + fees);
+  const pstSubtotal = lines.reduce((a, l) => a + (l.taxablePst !== false ? l.qty * l.price : 0), 0);
+  const tax   = round2(subtotal * 0.05 + pstSubtotal * 0.07);
+  const total = round2(subtotal + tax);
+
+  // ── Action button handlers ──────────────────────────────
+  function handlePrintTag() {
+    if (window.printWorkOrderTag) { window.printWorkOrderTag(wo); toast('Printing tag...', 'success'); return; }
+    window.printWorkOrder && window.printWorkOrder(wo);
+    toast('Printing...', 'success');
+  }
+  function handlePrintQuote() {
+    if (window.printWorkOrderQuote) { window.printWorkOrderQuote(wo); toast('Printing quote...', 'success'); return; }
+    window.printWorkOrder && window.printWorkOrder(wo);
+    toast('Printing...', 'success');
+  }
+  function handleEmail() {
+    if (wo.email) {
+      const subj = encodeURIComponent('Work Order ' + (wo.id || ''));
+      const body = encodeURIComponent('Hi ' + (wo.cust || '') + ',\n\nYour work order details:\nWO: ' + (wo.id || '') + '\nStatus: ' + status + '\nTotal: ' + fmt$(total) + '\n\nThanks,\nChainLine Cycle');
+      window.location.href = 'mailto:' + wo.email + '?subject=' + subj + '&body=' + body;
+    }
+    if (wo.id) apiPost('/api/workorder/' + wo.id + '/email', { to: wo.email });
+    toast('Email sent', 'success');
+  }
+  function handleRequestPayment() {
+    if (window.RequestPaymentModal) setShowRequestPay(true);
+    else toast('Payment module not loaded', 'error');
+  }
+  function handleCheckout() {
+    if (window.posAddToCart) lines.forEach(l => window.posAddToCart(l));
+    if (setScreen) setScreen('sales');
+    toast('Sent to checkout', 'success');
+  }
+  function handleDuplicate() {
+    apiPost('/api/workorder', {
+      customer: wo.cust, bike: customerItem, service: description,
+      mechanic: employee, due: wo.due, notes: internalNote, lines: lines,
+    }).then(r => {
+      if (r && r.id) toast('Duplicated as ' + r.id, 'success');
+      else toast('Duplicated', 'success');
+    });
+  }
+  function handleDelete() {
     setConfirm({
-      message: 'Mark work order as ' + s + '?',
+      message: 'Archive this work order? It can be restored later.',
       onConfirm: () => {
-        setStatus(s);
         setConfirm(null);
-        toast('Status updated to ' + s, 'success');
-        apiPost('/api/workorder/' + wo.id + '/status', { status: s });
+        if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: 'Archived' });
+        toast('Archived', 'success');
+        onClose && onClose();
+      },
+    });
+  }
+  function handleEditCustomer() { if (setScreen) setScreen('customers'); }
+  function handleRemoveCustomer() {
+    setConfirm({
+      message: 'Remove customer from this work order?',
+      onConfirm: () => {
+        setConfirm(null);
+        if (wo.id) apiPut('/api/workorder/' + wo.id, { customer: null });
+        toast('Customer removed', 'success');
       },
     });
   }
 
-  const subtotal    = lines.reduce((a, l) => a + l.qty * l.price, 0);
-  const pstSubtotal = lines.reduce((a, l) => a + (l.taxablePst !== false ? l.qty * l.price : 0), 0);
-  const gst         = round2(subtotal * 0.05);
-  const pst         = round2(pstSubtotal * 0.07);
-  const total       = round2(subtotal + gst + pst);
+  // ── 3-dot menu items ────────────────────────────────────
+  const menuItems = [
+    { label: 'Add Tag/Label',    onClick: () => toast('Add tag - TODO', '') },
+    { label: 'Add Time',         onClick: () => toast('Add time - TODO', '') },
+    { label: 'Add Discount',     onClick: () => toast('Add discount - TODO', '') },
+    { label: 'Add Fee',          onClick: () => toast('Add fee - TODO', '') },
+    { label: 'Reserve Item',     onClick: () => toast('Reserve item - TODO', '') },
+    'divider',
+    { label: 'Convert to Quote', onClick: () => changeStatus('Estimate') },
+    { label: 'Convert to Sale',  onClick: handleCheckout },
+    'divider',
+    { label: 'View Audit Log',   onClick: () => toast('Audit log - TODO', '') },
+    { label: 'Archive',          onClick: handleDelete, danger: true },
+  ];
 
-  const today = new Date();
-  const dueDate = new Date(wo.due + ' 2026');
-  const daysOverdue = Math.floor((today - dueDate) / 86400000);
+  // ── Inline style tokens ─────────────────────────────────
+  const S = {
+    page:        { padding: '20px 24px 60px', color: 'var(--text)' },
+    actionBar:   { display: 'flex', alignItems: 'center', gap: 6, padding: '10px 0', flexWrap: 'wrap' },
+    leftGroup:   { display: 'flex', gap: 6, flexWrap: 'wrap' },
+    rightGroup:  { display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center', position: 'relative' },
+    btnSuccess:  { background: '#1f7a2f', borderColor: '#1f7a2f', color: '#fff' },
+    btnDanger:   { background: 'transparent', color: '#d04a3a', borderColor: '#d04a3a' },
+    btnBlue:     { background: '#2a6fc4', borderColor: '#2a6fc4', color: '#fff' },
+    custBlock:   { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--bg2)', border: '1px solid var(--line)', marginTop: 6 },
+    custLeft:    { display: 'flex', flexDirection: 'column', gap: 4 },
+    custLabel:   { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)' },
+    custName:    { fontSize: 18, fontWeight: 600, letterSpacing: '-0.01em' },
+    custMeta:    { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 2 },
+    pillBadge:   { padding: '2px 8px', fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--bg3)', border: '1px solid var(--line2)' },
+    formCard:    { display: 'grid', gridTemplateColumns: '32px 1fr 280px', marginTop: 12, border: '1px solid var(--line)', background: 'var(--bg2)' },
+    ribbon:      { background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', padding: '12px 4px', textAlign: 'center' },
+    formBody:    { padding: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+    fieldLabel:  { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 4, display: 'block' },
+    rightCol:    { padding: 16, borderLeft: '1px solid var(--line)', display: 'flex', flexDirection: 'column', gap: 14 },
+    addImg:      { width: '100%', height: 110, border: '1px dashed var(--line3)', background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)', fontSize: 12 },
+    totalsBox:   { display: 'flex', flexDirection: 'column', gap: 6 },
+    totalRow:    { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 },
+    totalGrand:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, fontWeight: 700, paddingTop: 8, borderTop: '1px solid var(--line)' },
+    rowCheck:    { display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: 12, color: 'var(--text2)' },
+    fourCol:     { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 },
+    linesBox:    { marginTop: 14, border: '1px solid var(--line)', background: 'var(--bg2)' },
+    linesHead:   { padding: 12, display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--line)', flexWrap: 'wrap' },
+    quickPurple: { background: '#6b3fa0', borderColor: '#6b3fa0', color: '#fff' },
+    quickRed:    { background: '#b9342c', borderColor: '#b9342c', color: '#fff' },
+    quickKhaki:  { background: '#a48a2c', borderColor: '#a48a2c', color: '#fff' },
+    linesTable:  { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+    th:          { textAlign: 'left', padding: '10px 12px', fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)', borderBottom: '1px solid var(--line)' },
+    td:          { padding: '10px 12px', borderBottom: '1px solid var(--line)' },
+    empty:       { padding: '40px 12px', textAlign: 'center', fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)' },
+    menuPanel:   { position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 220, background: 'var(--bg2)', border: '1px solid var(--line)', zIndex: 50, boxShadow: '0 6px 24px rgba(0,0,0,0.4)' },
+    menuItem:    { display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontFamily: 'var(--ui)' },
+  };
+
+  const EMPLOYEES = ['PHIL', 'STEVE', 'MATT', 'DARRIN', 'TAO', 'BECKETT', 'JASON'];
 
   return h(Fragment, null,
     confirm && h(ConfirmModal, { message: confirm.message, onConfirm: confirm.onConfirm, onCancel: () => setConfirm(null) }),
     showSms && h(SmsModal, { customer: wo.cust, phone: wo.phone, onClose: () => setShowSms(false) }),
-    fullPage && h(PageHead, {
-      title: wo.cust || 'Work Order',
-      sub: wo.id || 'Detail',
-      actions: [
-        h('button', { key: 'back', className: 'btn', onClick: onClose },
-          h(Ico.ChevronRight, { size: 13, style: { transform: 'rotate(180deg)' } }), ' Back'
-        ),
-        h('button', { key: 'print', className: 'btn', onClick: () => { window.printWorkOrder && window.printWorkOrder(wo); toast('Printing...', 'success'); } }, 'Print'),
-        h('button', { key: 'sms', className: 'btn', onClick: () => setShowSms(true) }, 'SMS'),
-      ],
+    showRequestPay && window.RequestPaymentModal && h(window.RequestPaymentModal, {
+      sale: { id: wo.id, total: total },
+      customer: { name: wo.cust, phone: wo.phone, email: wo.email },
+      onSuccess: () => { setShowRequestPay(false); toast('Payment received', 'success'); },
+      onClose: () => setShowRequestPay(false),
     }),
-    h('div', { className: fullPage ? null : 'slide-panel' },
-    !fullPage && h('div', { className: 'panel-head' },
-      h('div', null,
-        h('div', { className: 'page-sub' }, wo.id),
-        h('div', { className: 'page-title', style: { fontSize: 18 } }, wo.cust)
+
+    h('div', { style: S.page },
+      // ── Top back / breadcrumb ──
+      fullPage && h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+        h('button', { className: 'btn ghost', onClick: onClose, style: { padding: '4px 8px' } },
+          h(Ico.ChevronRight, { size: 12, style: { transform: 'rotate(180deg)' } }), ' Back'
+        ),
+        h('span', { className: 'page-sub' }, 'WORK ORDER ' + (wo.id || ''))
       ),
-      h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
-        h('button', { className: 'btn', onClick: () => { window.printWorkOrder && window.printWorkOrder(wo); toast('Printing...', 'success'); } }, 'Print'),
-        h('button', { className: 'btn', onClick: () => setShowSms(true) }, 'SMS'),
-        h('button', { className: 'btn ghost', onClick: onClose }, '×')
-      )
-    ),
-    h('div', { className: 'panel-body' },
-      // Status row
-      h('div', { className: 'wo-detail-status-row' },
-        h(Badge, { kind: status }, status === 'inprogress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)),
-        daysOverdue > 0 && h('span', { className: 'overdue-text' }, daysOverdue + 'd overdue'),
-        ['open','inprogress','ready','done','void'].map(s =>
-          s !== status && h('button', { key: s, className: 'btn ghost', style: { height: 24, padding: '0 8px', fontSize: 11 }, onClick: () => changeStatus(s) },
-            s === 'inprogress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)
+
+      // ── Action bar ──
+      h('div', { style: S.actionBar },
+        h('div', { style: S.leftGroup },
+          h('button', { className: 'btn', onClick: handlePrintTag }, 'Print Tag'),
+          h('button', { className: 'btn', onClick: handlePrintQuote }, 'Print Quote'),
+          h('button', { className: 'btn', onClick: handleEmail }, 'Send As Email'),
+          h('button', { className: 'btn', style: S.btnBlue, onClick: handleRequestPayment }, 'Request payment'),
+          h('button', { className: 'btn', style: S.btnSuccess, onClick: handleCheckout }, 'Checkout')
+        ),
+        h('div', { style: S.rightGroup, ref: menuRef },
+          h('button', { className: 'btn', onClick: handleDuplicate }, 'Duplicate'),
+          h('button', { className: 'btn', style: S.btnDanger, onClick: handleDelete }, 'Delete'),
+          h('button', {
+            className: 'btn ghost',
+            style: { padding: '4px 10px', fontSize: 16, lineHeight: 1 },
+            onClick: () => setMenuOpen(o => !o),
+            'aria-label': 'More actions',
+          }, '⋯'),
+          menuOpen && h('div', { style: S.menuPanel },
+            menuItems.map((item, i) =>
+              item === 'divider'
+                ? h('div', { key: 'div'+i, style: { height: 1, background: 'var(--line)' } })
+                : h('button', {
+                    key: i,
+                    style: Object.assign({}, S.menuItem, { color: item.danger ? '#d04a3a' : 'var(--text)' }),
+                    onMouseDown: e => { e.preventDefault(); setMenuOpen(false); item.onClick && item.onClick(); },
+                  }, item.label)
+            )
           )
         )
       ),
-      // Info grid
-      h('div', { className: 'wo-detail-info' },
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bike'),    h('span', { className: 'v' }, wo.bike)),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Service'), h('span', { className: 'v' }, wo.svc)),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Phone'),   h('span', { className: 'v mono' }, wo.phone)),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Due'),     h('span', { className: 'v mono' }, wo.due)),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Hook in'), h('span', { className: 'v' }, h('input', { className: 'input mono', type: 'time', value: hookIn, onChange: e => setHookIn(e.target.value), style: { height: 26, padding: '2px 6px', width: 90 } }))),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Hook out'), h('span', { className: 'v' }, h('input', { className: 'input mono', type: 'time', value: hookOut, onChange: e => setHookOut(e.target.value), style: { height: 26, padding: '2px 6px', width: 90 } }))),
-        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Mechanic'), h('span', { className: 'v' }, h(AvInit, { initials: wo.mech, tone: wo.tone })))
-      ),
-      // Checklist
-      h('div', { className: 'panel-section' },
-        h('div', { className: 'panel-section-head' }, 'Checklist'),
-        tasks.map(t =>
-          h('div', { key: t.id, className: 'task-row' },
-            h('button', { className: 'task-check' + (t.done ? ' done' : ''), onClick: () => toggleTask(t.id) },
-              t.done ? h(Ico.Check, { size: 12 }) : null
-            ),
-            h('span', { style: { flex: 1, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--text-3)' : 'var(--text-1)' } }, t.text)
+
+      // ── Customer block ──
+      h('div', { style: S.custBlock },
+        h('div', { style: S.custLeft },
+          h('span', { style: S.custLabel }, 'Customer'),
+          h('span', { style: S.custName }, wo.cust || 'Walk-in'),
+          h('div', { style: S.custMeta },
+            h('span', { style: S.pillBadge }, wo.staffCustomer ? 'Staff' : 'Customer'),
+            wo.phone && h('span', { className: 'mono', style: { fontSize: 12, color: 'var(--text2)' } }, 'Mobile: ' + wo.phone),
+            wo.email && h('a', { href: 'mailto:' + wo.email, style: { fontSize: 12, color: 'var(--accent)' } }, wo.email)
           )
         ),
-        h('div', { className: 'task-add' },
-          h('input', { className: 'input', placeholder: 'Add task...', value: newTask, onChange: e => setNewTask(e.target.value), onKeyDown: e => e.key === 'Enter' && addTask() }),
-          h('button', { className: 'btn', onClick: addTask }, h(Ico.Plus, { size: 12 }))
+        h('div', { style: { display: 'flex', gap: 6 } },
+          h('button', { className: 'btn', onClick: handleEditCustomer }, 'Edit Customer'),
+          h('button', { className: 'btn ghost', onClick: handleRemoveCustomer }, 'Remove')
         )
       ),
-      // Line items
-      h('div', { className: 'panel-section' },
-        h('div', { className: 'panel-section-head' }, 'Line Items'),
-        lines.map((l, i) =>
-          h('div', { key: i, className: 'wo-line-row' },
-            h('span', { style: { flex: 1 } }, l.name),
-            h('span', { className: 'mono', style: { marginRight: 12 } }, 'x' + l.qty),
-            h('span', { className: 'mono' }, fmt$(l.qty * l.price)),
-            h('button', { className: 'icon-btn', onClick: () => setLines(lines.filter((_, ii) => ii !== i)) }, h(Ico.Trash, { size: 12 }))
-          )
-        ),
-        h('div', { className: 'line-add-wrap' },
-          h('div', { className: 'search-field' },
-            h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
-            h('input', { className: 'input', placeholder: 'Add part or labour...', value: lineQ, onChange: e => setLineQ(e.target.value) })
+
+      // ── Form card with status ribbon ──
+      h('div', { style: S.formCard },
+        h('div', { style: S.ribbon }, status || 'Open'),
+
+        // middle column - form fields
+        h('div', { style: S.formBody },
+          // Row 1: Status + Customer Item
+          h('div', null,
+            h('label', { style: S.fieldLabel }, 'Status'),
+            h('select', {
+              className: 'input',
+              value: status,
+              onChange: e => changeStatus(e.target.value),
+              style: { width: '100%' },
+            },
+              !WO_STATUSES.includes(status) && status && h('option', { value: status }, status),
+              WO_STATUSES.map(s => h('option', { key: s, value: s }, s))
+            )
           ),
-          lineQ && lineResults.length > 0 && h('div', { className: 'item-results' },
-            lineResults.map(c =>
-              h('div', { key: c.sku, className: 'item-row', onClick: () => addLine(c) },
-                h('div', null, h('div', null, c.name), h('div', { className: 'sku' }, c.sku)),
-                h('div', { className: 'stock' }, c.stock + ' in stock'),
-                h('div', { className: 'price' }, fmt$(c.price))
+          h('div', null,
+            h('label', { style: S.fieldLabel }, 'Customer Item'),
+            h('div', { style: { display: 'flex', gap: 6 } },
+              h('select', {
+                className: 'input',
+                value: customerItem,
+                onChange: e => setCustomerItem(e.target.value),
+                style: { flex: 1 },
+              },
+                h('option', { value: '' }, '-- Select --'),
+                customerItem && h('option', { value: customerItem }, customerItem)
+              ),
+              h('button', { className: 'btn', type: 'button' }, 'Edit')
+            ),
+            h('div', { style: S.rowCheck },
+              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                h('input', { type: 'checkbox', checked: warranty, onChange: e => setWarranty(e.target.checked) }),
+                'Warranty'
+              ),
+              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                h('input', { type: 'checkbox', checked: saveParts, onChange: e => setSaveParts(e.target.checked) }),
+                'Save Parts'
               )
+            )
+          ),
+
+          // Row 2: Description / Color / Size / Serial
+          h('div', { style: { gridColumn: '1 / -1' } },
+            h('div', { style: S.fourCol },
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Description'),
+                h('input', { className: 'input', value: description, onChange: e => setDescription(e.target.value), style: { width: '100%' } })
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Color'),
+                h('input', { className: 'input', value: color, onChange: e => setColor(e.target.value), style: { width: '100%' } })
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Size'),
+                h('input', { className: 'input', value: size, onChange: e => setSize(e.target.value), style: { width: '100%' } })
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Serial'),
+                h('input', { className: 'input mono', value: serial, onChange: e => setSerial(e.target.value), style: { width: '100%' } })
+              )
+            )
+          ),
+
+          // Row 3: Employee
+          h('div', { style: { gridColumn: '1 / -1' } },
+            h('label', { style: S.fieldLabel }, 'Employee'),
+            h('div', { style: { display: 'flex', gap: 10, alignItems: 'center' } },
+              h('select', {
+                className: 'input',
+                value: employee,
+                onChange: e => setEmployee(e.target.value),
+                style: { minWidth: 220 },
+              },
+                h('option', { value: '' }, '-- Unassigned --'),
+                EMPLOYEES.map(name => h('option', { key: name, value: name }, name)),
+                employee && EMPLOYEES.indexOf(employee) === -1 && h('option', { value: employee }, employee)
+              ),
+              h('label', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text2)' } },
+                h('input', { type: 'checkbox', checked: assignAll, onChange: e => setAssignAll(e.target.checked) }),
+                'Assign Employee To All Lines'
+              )
+            )
+          ),
+
+          // Row 4: Dates / Hook
+          h('div', { style: { gridColumn: '1 / -1' } },
+            h('div', { style: S.fourCol },
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Date In'),
+                h('div', { style: { display: 'flex', gap: 4 } },
+                  h('input', { className: 'input mono', type: 'date', value: dateIn, onChange: e => setDateIn(e.target.value), style: { flex: 1, minWidth: 0 } }),
+                  h('input', { className: 'input mono', type: 'time', value: timeIn, onChange: e => setTimeIn(e.target.value), style: { width: 86 } })
+                )
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Due'),
+                h('div', { style: { display: 'flex', gap: 4 } },
+                  h('input', { className: 'input mono', type: 'date', value: dateDue, onChange: e => setDateDue(e.target.value), style: { flex: 1, minWidth: 0 } }),
+                  h('input', { className: 'input mono', type: 'time', value: timeDue, onChange: e => setTimeDue(e.target.value), style: { width: 86 } })
+                )
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Hook In'),
+                h('input', { className: 'input mono', type: 'time', value: hookIn, onChange: e => setHookIn(e.target.value), style: { width: '100%' } })
+              ),
+              h('div', null,
+                h('label', { style: S.fieldLabel }, 'Hook Out'),
+                h('input', { className: 'input mono', type: 'time', value: hookOut, onChange: e => setHookOut(e.target.value), style: { width: '100%' } })
+              )
+            )
+          ),
+
+          // Row 5: Notes
+          h('div', null,
+            h('label', { style: S.fieldLabel }, 'Receipt Note'),
+            h('textarea', {
+              className: 'textarea', rows: 4,
+              value: receiptNote, onChange: e => setReceiptNote(e.target.value),
+              style: { width: '100%', resize: 'vertical' },
+            })
+          ),
+          h('div', null,
+            h('label', { style: S.fieldLabel }, 'Internal Note'),
+            h('textarea', {
+              className: 'textarea', rows: 4,
+              value: internalNote, onChange: e => setInternalNote(e.target.value),
+              style: { width: '100%', resize: 'vertical' },
+            }),
+            h('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
+              h('select', {
+                className: 'input',
+                value: notePos,
+                onChange: e => setNotePos(e.target.value),
+                style: { flex: 1, height: 28 },
+              },
+                h('option', { value: 'top' }, 'To top'),
+                h('option', { value: 'bottom' }, 'To bottom')
+              ),
+              h('button', {
+                className: 'btn', type: 'button',
+                style: { height: 28 },
+                onClick: () => {
+                  const ts = new Date().toLocaleString('en-CA', { hour12: false });
+                  setInternalNote(prev => (notePos === 'top' ? '[' + ts + '] \n' + prev : prev + '\n[' + ts + '] '));
+                },
+              }, 'Add time')
             )
           )
         ),
-        h('div', { className: 'wo-totals' },
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Subtotal'), h('span', { className: 'v mono' }, fmt$(subtotal))),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'GST 5%'), h('span', { className: 'v mono' }, fmt$(gst))),
-          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'PST 7%'), h('span', { className: 'v mono' }, fmt$(pst))),
-          h('div', { className: 'aside-row', style: { background: 'var(--bg-2)' } }, h('span', { className: 'k strong' }, 'Total'), h('span', { className: 'v mono', style: { fontSize: 15, fontWeight: 600 } }, fmt$(total)))
+
+        // right column - images + totals
+        h('div', { style: S.rightCol },
+          h('button', { className: 'btn', style: S.addImg, type: 'button' },
+            h(Ico.Plus, { size: 14 }), ' Add Images'
+          ),
+          h('div', { style: S.totalsBox },
+            h('div', { style: S.totalRow },
+              h('span', { style: { color: 'var(--text2)' } }, 'Labor'),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(labor))
+            ),
+            h('div', { style: S.totalRow },
+              h('span', { style: { color: 'var(--text2)' } }, 'Parts'),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(parts))
+            ),
+            h('div', { style: S.totalRow },
+              h('span', { style: { color: 'var(--text2)' } }, 'Fees'),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(fees))
+            ),
+            h('div', { style: S.totalRow },
+              h('span', { style: { color: 'var(--text2)' } }, 'Tax'),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(tax))
+            ),
+            h('div', { style: S.totalGrand },
+              h('span', null, 'Total'),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(total))
+            )
+          )
         )
       ),
-      // Notes
-      h('div', { className: 'panel-section' },
-        h('div', { className: 'panel-section-head' }, 'Notes'),
-        h('textarea', { className: 'textarea', rows: 4, value: noteText, onChange: e => setNoteText(e.target.value) }),
-        h('button', { className: 'btn', style: { marginTop: 8 }, onClick: saveNotes }, 'Save notes')
+
+      // ── Line items section ──
+      h('div', { style: S.linesBox },
+        h('div', { style: S.linesHead },
+          h('div', { style: { flex: 1, display: 'flex', gap: 6, minWidth: 240 } },
+            h('input', {
+              className: 'input',
+              placeholder: 'Item',
+              value: lineQ,
+              onChange: e => setLineQ(e.target.value),
+              onKeyDown: e => { if (e.key === 'Enter' && lineResults[0]) addLine(lineResults[0]); },
+              style: { flex: 1, height: 30, padding: '4px 8px' },
+            }),
+            h('button', { className: 'btn', style: { height: 30 } }, 'Search')
+          ),
+          h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'NEW-' + Date.now(), name: 'New Item', price: 0 }) }, '+ New'),
+          h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'MISC', name: 'Miscellaneous', price: 0 }) }, 'Misc.'),
+          h('button', { className: 'btn', style: { height: 30 }, onClick: () => addLine({ sku: 'LAB-GEN', name: 'Labor', price: 95, taxablePst: false }) }, 'Labor'),
+          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickPurple), onClick: () => addLine({ sku: 'SVC-GEN', name: 'Service', price: 75, taxablePst: false }) }, 'Services'),
+          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickRed) }, 'Mountain Bike'),
+          h('button', { className: 'btn', style: Object.assign({ height: 30 }, S.quickKhaki) }, 'Road Bike')
+        ),
+        lineQ && lineResults.length > 0 && h('div', { style: { padding: '4px 12px 8px', background: 'var(--bg3)' } },
+          lineResults.map(c =>
+            h('div', {
+              key: c.sku,
+              onClick: () => addLine(c),
+              style: { padding: '6px 8px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: '1px solid var(--line)' },
+            },
+              h('span', null, c.name + ' '),
+              h('span', { className: 'mono', style: { color: 'var(--text3)' } }, c.sku + ' - ' + fmt$(c.price))
+            )
+          )
+        ),
+        h('table', { style: S.linesTable },
+          h('thead', null,
+            h('tr', null,
+              h('th', { style: S.th }, 'Description'),
+              h('th', { style: S.th }, 'Employee'),
+              h('th', { style: S.th }, 'Status'),
+              h('th', { style: Object.assign({}, S.th, { textAlign: 'right' }) }, 'Price / Time'),
+              h('th', { style: Object.assign({}, S.th, { textAlign: 'right' }) }, 'Qty'),
+              h('th', { style: Object.assign({}, S.th, { textAlign: 'right' }) }, 'Reserved'),
+              h('th', { style: Object.assign({}, S.th, { textAlign: 'right' }) }, 'Subtotal'),
+              h('th', { style: Object.assign({}, S.th, { width: 30 }) }, '')
+            )
+          ),
+          h('tbody', null,
+            lines.length === 0
+              ? h('tr', null, h('td', { colSpan: 8, style: S.empty }, 'No items added yet'))
+              : lines.map((l, i) =>
+                  h('tr', { key: i },
+                    h('td', { style: S.td },
+                      h('div', null, l.name),
+                      h('div', { className: 'mono', style: { fontSize: 10, color: 'var(--text3)' } }, l.sku)
+                    ),
+                    h('td', { style: S.td }, l.employee || employee || '-'),
+                    h('td', { style: S.td }, l.status || 'Open'),
+                    h('td', { style: Object.assign({}, S.td, { textAlign: 'right' }) },
+                      h('input', {
+                        className: 'input mono',
+                        type: 'number', step: '0.01',
+                        value: l.price,
+                        onChange: e => updateLine(i, { price: parseFloat(e.target.value) || 0 }),
+                        style: { width: 80, height: 26, padding: '2px 6px', textAlign: 'right' },
+                      })
+                    ),
+                    h('td', { style: Object.assign({}, S.td, { textAlign: 'right' }) },
+                      h('input', {
+                        className: 'input mono',
+                        type: 'number', min: '1',
+                        value: l.qty,
+                        onChange: e => updateLine(i, { qty: parseInt(e.target.value) || 1 }),
+                        style: { width: 50, height: 26, padding: '2px 6px', textAlign: 'right' },
+                      })
+                    ),
+                    h('td', { style: Object.assign({}, S.td, { textAlign: 'right' }), className: 'mono' }, l.reserved || 0),
+                    h('td', { style: Object.assign({}, S.td, { textAlign: 'right' }), className: 'mono' }, fmt$(l.qty * l.price)),
+                    h('td', { style: S.td },
+                      h('button', { className: 'btn ghost', style: { padding: '2px 6px' }, onClick: () => removeLine(i) },
+                        h(Ico.Trash, { size: 12 })
+                      )
+                    )
+                  )
+                )
+          )
+        )
       )
-    ) // end panel-body
-    ) // end slide-panel div wrapper
+    )
   );
 }
 
@@ -2845,7 +3246,7 @@ function App() {
     switch (screen) {
       case 'dashboard':      return h(DashboardScreen,       { setScreen });
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
-      case 'wo-detail':      return h(WorkOrderDetail,       { wo: activeWo || {}, onClose: () => setScreen('work-orders'), fullPage: true });
+      case 'wo-detail':      return h(WorkOrderDetail,       { wo: activeWo || {}, onClose: () => setScreen('work-orders'), fullPage: true, setScreen: setScreen });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
       case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
