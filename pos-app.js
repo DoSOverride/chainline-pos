@@ -594,15 +594,16 @@ function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
    STATUS STRIP
 ───────────────────────────────────────── */
 function StatusStrip() {
+  const online = useConnectionStatus();
   return h('div', { className: 'status-strip' },
-    h('span', { className: 'dot-live' }),
-    h('span', null, 'Live \xb7 synced 2s ago'),
-    h('span', null, '\xb7'),
-    h('span', null, 'Terminal MOBY-A920 paired'),
-    h('span', null, '\xb7'),
-    h('span', null, 'Printer EPSON-TM-T20 ready'),
+    h('span', { className: online ? 'dot-live' : 'status-dot', style: online ? null : { background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)', animation: 'none' } }),
+    h('span', null, online ? '● ONLINE' : '● OFFLINE'),
+    h('span', { style: { color: 'var(--text3)', margin: '0 4px' } }, '\xb7'),
+    h('span', null, 'TERMINAL READY'),
+    h('span', { style: { color: 'var(--text3)', margin: '0 4px' } }, '\xb7'),
+    h('span', null, 'PRINTER READY'),
     h('span', { className: 'spacer' }),
-    h('span', null, 'CL POS v1.0 \xb7 2026-05-20')
+    h('span', null, 'CHAINLINE POS \xb7 v1.0 \xb7 MAY 20')
   );
 }
 
@@ -2272,6 +2273,7 @@ function App() {
       if (!staff) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
+        if (topbarSearchRef.current) topbarSearchRef.current.focus();
         setShowGlobalSearch(true);
         return;
       }
