@@ -13,18 +13,21 @@ const { createRoot } = ReactDOM;
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
 const STAFF = [
-  { id: 1, name: 'Jason',   initials: 'JA', pin: '1234', role: 'Mechanic', tone: 'jk' },
-  { id: 2, name: 'Florian', initials: 'FL', pin: '5678', role: 'Mechanic', tone: 'sr' },
-  { id: 3, name: 'Darrin',  initials: 'DA', pin: '7777', role: 'Manager',  tone: 'am' },
-  { id: 4, name: 'Tao',     initials: 'TC', pin: '7777', role: 'Owner',    tone: 'mb' },
+  { id:  1, name: 'Jason',   initials: 'JA', pin: '1139', role: 'Mechanic', tone: 'ja' },
+  { id:  2, name: 'Florian', initials: 'FL', pin: '1139', role: 'Mechanic', tone: 'fl' },
+  { id:  5, name: 'Phil',    initials: 'PH', pin: '1139', role: 'Mechanic', tone: 'ph' },
+  { id:  6, name: 'Steve',   initials: 'ST', pin: '1139', role: 'Mechanic', tone: 'st' },
+  { id:  7, name: 'Matt',    initials: 'MA', pin: '1139', role: 'Mechanic', tone: 'ma' },
+  { id:  8, name: 'Darrin',  initials: 'DA', pin: '1139', role: 'Manager',  tone: 'da' },
+  { id:  9, name: 'Tao',     initials: 'TC', pin: '1139', role: 'Owner',    tone: 'tc' },
+  { id: 10, name: 'Beckett', initials: 'BE', pin: '1139', role: 'Mechanic', tone: 'be' },
+  { id: 11, name: 'Curren',  initials: 'CU', pin: '1139', role: 'Mechanic', tone: 'cu' },
+  { id: 12, name: 'Danny',   initials: 'DN', pin: '1139', role: 'Mechanic', tone: 'dn' },
 ];
 
-const MECHANICS = [
-  { initials: 'AM', name: 'Avery Miller', tone: 'am', load: '3 open' },
-  { initials: 'JK', name: 'Jude Kovac',  tone: 'jk', load: '5 open' },
-  { initials: 'SR', name: 'Sam Reyes',   tone: 'sr', load: '2 open' },
-  { initials: 'MB', name: 'Mira Bell',   tone: 'mb', load: '4 open' },
-];
+const MECHANICS = STAFF.filter(s => s.role === 'Mechanic' || s.role === 'Manager').map(s => ({
+  initials: s.initials, name: s.name, tone: s.tone, load: '0 open',
+}));
 
 const SERVICE_TYPES = [
   'Basic tune', 'Full tune', 'Premium tune', 'Brake bleed', 'Drivetrain replace',

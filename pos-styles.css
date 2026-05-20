@@ -1413,3 +1413,15 @@ table { border-collapse: collapse; width: 100%; }
   .stat-grid { grid-template-columns: 1fr; }
   .quick-actions { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Staff avatar tone colors ── */
+.av-ja { background: #1e3a5f; color: #93c5fd; } /* Jason — Dark Blue */
+.av-fl { background: #1e3a5f; color: #93c5fd; } /* Florian — Dark Blue */
+.av-ph { background: #1e3a5f; color: #93c5fd; } /* Phil — Dark Blue */
+.av-st { background: #78350f; color: #fde68a; } /* Steve — Dark Yellow */
+.av-ma { background: #831843; color: #fbcfe8; } /* Matt — Light Pink */
+.av-da { background: #7c2d12; color: #fed7aa; } /* Darrin — Dark Orange */
+.av-tc { background: #713f12; color: #fef08a; } /* Tao — Yellow */
+.av-be { background: #374151; color: #e5e7eb; } /* Beckett — Light Grey */
+.av-cu { background: #1e3a5f; color: #93c5fd; } /* Curren — Dark Blue */
+.av-dn { background: #1e3a5f; color: #93c5fd; } /* Danny — Dark Blue */
