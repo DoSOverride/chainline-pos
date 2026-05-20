@@ -1,91 +1,74 @@
-/* ChainLine POS — pos-app.js
- * Plain React 18 via CDN, no JSX, no build step.
- * All createElement calls. Worker: https://still-term-f1ec.taocaruso77.workers.dev
+/* ChainLine POS v1.0 — 2026-05-20
+ * React 18 via CDN. No JSX, no Babel. Pure createElement.
+ * Design: design_handoff_chainline_pos/README.md
+ * Worker: https://still-term-f1ec.taocaruso77.workers.dev
  */
 
 'use strict';
 
-const { createElement: h, useState, useEffect, useRef, useCallback, useMemo } = React;
+const { createElement: h, useState, useEffect, useRef, Fragment } = React;
 const { createRoot } = ReactDOM;
 
 /* ── Constants ── */
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
 const STAFF = [
-  { id: 1, name: 'Jason',   initials: 'JA', pin: '1234', role: 'mechanic' },
-  { id: 2, name: 'Florian', initials: 'FL', pin: '5678', role: 'mechanic' },
-  { id: 3, name: 'Darrin',  initials: 'DA', pin: '9999', role: 'manager'  },
+  { id: 1, name: 'Jason',   initials: 'JA', pin: '1234', role: 'Mechanic', tone: 'jk' },
+  { id: 2, name: 'Florian', initials: 'FL', pin: '5678', role: 'Mechanic', tone: 'sr' },
+  { id: 3, name: 'Darrin',  initials: 'DA', pin: '9999', role: 'Manager',  tone: 'am' },
 ];
 
-const STATUS_CONFIG = {
-  'READY':    { label: 'READY',    cls: 'badge-ready'    },
-  'Open':     { label: 'OPEN',     cls: 'badge-open'     },
-  'BOOKED':   { label: 'BOOKED',   cls: 'badge-booked'   },
-  'READY-WO': { label: 'READY-WO', cls: 'badge-ready-wo' },
-  'Finished': { label: 'FINISHED', cls: 'badge-finished' },
-};
+const MECHANICS = [
+  { initials: 'AM', name: 'Avery Miller', tone: 'am', load: '3 open' },
+  { initials: 'JK', name: 'Jude Kovac',  tone: 'jk', load: '5 open' },
+  { initials: 'SR', name: 'Sam Reyes',   tone: 'sr', load: '2 open' },
+  { initials: 'MB', name: 'Mira Bell',   tone: 'mb', load: '4 open' },
+];
 
 const SERVICE_TYPES = [
-  'Tune-Up Basic', 'Tune-Up Standard', 'Tune-Up Premium',
-  'Brake Bleed', 'Drivetrain Service', 'Suspension Service',
-  'Flat Repair', 'Custom',
+  'Basic tune', 'Full tune', 'Premium tune', 'Brake bleed', 'Drivetrain replace',
+  'Suspension service', 'Shock service', 'Wheel build', 'Tubeless setup', 'Bike fit', 'Other',
 ];
 
-const GST = 0.05;
-const PST = 0.07;
-const TAX = GST + PST; // 12% BC
-
-/* ── Mock Data ── */
 const MOCK_WO = [
-  { id: 22027, customer: 'Nick Kusmich',  item: 'Hydrogen Silver 24',          mechanic: '',     status: 'READY',    dateIn: '2026-05-19', dueOn: '2026-05-19', total: 0,     daysOverdue: 1  },
-  { id: 22026, customer: 'Angus Leslie',  item: 'Norco Fireball white/gray Large', mechanic: 'FLOR', status: 'Open',  dateIn: '2026-05-19', dueOn: '2026-05-28', total: 0,     daysOverdue: -8 },
-  { id: 22025, customer: 'Joe Wessel',    item: 'Loose Wheel Rainbow 700c',     mechanic: 'WH',   status: 'READY',    dateIn: '2026-05-19', dueOn: '2026-05-29', total: 0,     daysOverdue: -9 },
-  { id: 22022, customer: 'Steve Gaucher', item: 'Turbine 27.5 Rear Wheel',     mechanic: 'RA!',  status: 'READY',    dateIn: '2026-05-16', dueOn: '2026-05-16', total: 0,     daysOverdue: 4  },
-  { id: 22018, customer: 'Shelley Draper',item: 'Race Face Wheel Black',        mechanic: '',     status: 'Open',     dateIn: '2026-05-15', dueOn: '2026-05-26', total: 35.75, daysOverdue: -6 },
+  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50 },
+  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81 },
+  { id: 'WO-2382', cust: 'Marc Lefebvre',      phone: '(250) 555-0119', bike: 'Trek Fuel EX 8 \xb7 Lithium Grey',             svc: 'Full tune + brake bleed',    due: 'May 18', dueState: 'overdue', overdueBy: '2d late', status: 'open',  mech: 'SR', tone: 'sr', prio: true,  total: 185.00 },
+  { id: 'WO-2402', cust: 'Priya Sharma',       phone: '(778) 555-0207', bike: 'Specialized Stumpjumper Comp',                 svc: 'Booking \xb7 pre-season tune',due: 'May 22', status: 'booked',    mech: 'MB', tone: 'mb', prio: false, total: 0 },
+  { id: 'WO-2379', cust: 'Owen Bartholomew',   phone: '(250) 555-0166', bike: 'Kona Process 134 \xb7 2022',                   svc: 'Wheel build \xb7 rear',       due: 'May 17', dueState: 'overdue', overdueBy: '3d late', status: 'open',  mech: 'AM', tone: 'am', prio: false, total: 275.00 },
+  { id: 'WO-2399', cust: 'Eli Constantine',    phone: '(604) 555-0152', bike: 'Yeti SB140 LR \xb7 Cobalt',                    svc: 'Shock service \xb7 Float X',  due: 'May 21', status: 'inprogress', mech: 'JK', tone: 'jk', prio: false, total: 145.00 },
+  { id: 'WO-2404', cust: 'Mei Ito',            phone: '(250) 555-0173', bike: 'Rocky Mountain Altitude',                      svc: 'Booking \xb7 derailleur align',due: 'May 23', status: 'booked',   mech: 'SR', tone: 'sr', prio: false, total: 0 },
+  { id: 'WO-2395', cust: 'Jasper Quinn-Holden', phone: '(250) 555-0131',bike: 'Pivot Trail 429 \xb7 Slate',                   svc: 'Tubeless setup + bearing',   due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'MB', tone: 'mb', prio: false, total: 88.50 },
+  { id: 'WO-2387', cust: 'Sienna Park',        phone: '(250) 555-0145', bike: 'Devinci Marshall A29',                         svc: 'Hydraulic line replace',     due: 'May 21', status: 'open',      mech: 'AM', tone: 'am', prio: false, total: 95.00 },
+  { id: 'WO-2403', cust: 'Augustin Vega',      phone: '(250) 555-0198', bike: 'Cerv\xe9lo Aspero \xb7 Champagne',             svc: 'Booking \xb7 pedal swap + fit',due: 'May 24', status: 'booked',   mech: 'JK', tone: 'jk', prio: false, total: 0 },
 ];
 
 const MOCK_CUSTOMERS = [
-  { id: 1, firstName: 'Nick',    lastName: 'Kusmich',  email: 'nick@example.com',     phone: '250-555-0101', totalSpent: 1240.00, woCount: 3 },
-  { id: 2, firstName: 'Angus',   lastName: 'Leslie',   email: 'angus@example.com',    phone: '250-555-0102', totalSpent: 890.50,  woCount: 2 },
-  { id: 3, firstName: 'Joe',     lastName: 'Wessel',   email: 'joe@example.com',      phone: '250-555-0103', totalSpent: 240.00,  woCount: 5 },
-  { id: 4, firstName: 'Steve',   lastName: 'Gaucher',  email: 'steve@example.com',    phone: '250-555-0104', totalSpent: 3200.00, woCount: 8 },
-  { id: 5, firstName: 'Shelley', lastName: 'Draper',   email: 'shelley@example.com',  phone: '250-555-0105', totalSpent: 567.25,  woCount: 1 },
+  { id: 1, name: 'Hannah Riise',    phone: '(250) 555-0142', bikes: 3, memberSince: '2021-03-14' },
+  { id: 2, name: 'Devon Tran',      phone: '(250) 555-0188', bikes: 2, memberSince: '2020-07-22' },
+  { id: 3, name: 'Marc Lefebvre',   phone: '(250) 555-0119', bikes: 1, memberSince: '2019-01-08' },
+  { id: 4, name: 'Hannah Kowalski', phone: '(250) 555-0319', bikes: 1, memberSince: '2024-04-11' },
+  { id: 5, name: 'Priya Sharma',    phone: '(778) 555-0207', bikes: 2, memberSince: '2022-09-30' },
 ];
 
-const MOCK_INVENTORY = [
-  { id: 1,  name: 'Shimano XT Brake Pads B01S', dept: 'Parts', qty: 12, price: 18.99,  sku: 'SHM-B01S'   },
-  { id: 2,  name: 'Maxxis Minion DHF 29x2.5',  dept: 'Tires',  qty: 4,  price: 84.99,  sku: 'MAX-DHF-29' },
-  { id: 3,  name: 'Marin Tune-Up Basic',        dept: 'Labour', qty: 99, price: 75.00,  sku: 'SVC-TUNE-B' },
-  { id: 4,  name: 'Marin Tune-Up Standard',     dept: 'Labour', qty: 99, price: 120.00, sku: 'SVC-TUNE-S' },
-  { id: 5,  name: 'Marin Tune-Up Premium',      dept: 'Labour', qty: 99, price: 175.00, sku: 'SVC-TUNE-P' },
-  { id: 6,  name: 'SRAM Eagle Cassette 10-52',  dept: 'Parts',  qty: 2,  price: 219.99, sku: 'SRM-CAS-10' },
-  { id: 7,  name: 'Trek Bontrager Flat Kit',    dept: 'Accessories', qty: 8, price: 12.99, sku: 'BNT-FLT-K' },
-  { id: 8,  name: 'RockShox Fork Service',      dept: 'Labour', qty: 99, price: 95.00,  sku: 'SVC-FORK'   },
-  { id: 9,  name: 'WD-40 Bike Chain Lube',      dept: 'Accessories', qty: 20, price: 14.99, sku: 'WD40-CHAIN' },
-  { id: 10, name: 'Shimano Deore Derailleur RD', dept: 'Parts', qty: 1, price: 89.99,  sku: 'SHM-RD-DER'  },
+const MOCK_CATALOG = [
+  { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',       price: 189.00, stock: 3,  low: false },
+  { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip', price: 84.00,  stock: 8,  low: false },
+  { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                  price: 25.00,  stock: 99, low: false },
+  { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                   price: 62.00,  stock: 5,  low: false },
+  { sku: 'BRAKE-PAD-CODE',  name: 'SRAM Code Brake Pads \xb7 Metallic',           price: 38.00,  stock: 14, low: false },
+  { sku: 'GREASE-SLICK',    name: 'SlickHoney Suspension Grease \xb7 32g',        price: 18.00,  stock: 6,  low: true  },
+  { sku: 'GRIP-ODI-ELITE',  name: 'ODI Elite Pro Lock-On Grips',                  price: 32.00,  stock: 9,  low: false },
+  { sku: 'TUBE-29-PRES',    name: '29" Tube \xb7 Presta Valve',                   price: 11.00,  stock: 38, low: false },
+  { sku: 'SVC-TUNE-B',      name: 'Marin Tune-Up Basic',                          price: 75.00,  stock: 99, low: false },
+  { sku: 'SVC-TUNE-S',      name: 'Marin Tune-Up Standard',                       price: 120.00, stock: 99, low: false },
 ];
 
 /* ── Utilities ── */
 function fmt$(n) {
-  return '$' + Number(n).toFixed(2);
+  return '$' + Number(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
-function initials(name) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-}
-
-function daysDiff(dateStr) {
-  const due = new Date(dateStr);
-  const today = new Date('2026-05-20');
-  const diff = Math.floor((today - due) / 86400000);
-  return diff;
-}
-
-function fmtDate(str) {
-  if (!str) return '-';
-  const d = new Date(str + 'T00:00:00');
-  return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-}
+function round2(n) { return Math.round(n * 100) / 100; }
 
 /* ── API ── */
 async function apiGet(path) {
@@ -93,9 +76,7 @@ async function apiGet(path) {
     const r = await fetch(WORKER + path);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
 
 async function apiPost(path, body) {
@@ -107,111 +88,156 @@ async function apiPost(path, body) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
-  } catch (e) {
-    return null;
-  }
+  } catch { return null; }
 }
 
 /* ── Toast ── */
 let _toastSetter = null;
-
 function Toast() {
   const [toasts, setToasts] = useState([]);
   _toastSetter = setToasts;
-
   useEffect(() => {
-    if (toasts.length === 0) return;
-    const t = setTimeout(() => setToasts(prev => prev.slice(1)), 3000);
+    if (!toasts.length) return;
+    const t = setTimeout(() => setToasts(p => p.slice(1)), 3000);
     return () => clearTimeout(t);
   }, [toasts]);
-
   return h('div', { className: 'toast-container' },
     ...toasts.map((t, i) =>
       h('div', { key: i, className: 'toast ' + (t.type || '') },
-        t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ',
+        t.type === 'success' ? '✓ ' : t.type === 'error' ? '✕ ' : '\xb7 ',
         t.message
       )
     )
   );
 }
-
-function toast(message, type = '') {
-  if (_toastSetter) _toastSetter(prev => [...prev, { message, type }]);
-}
-
-/* ── Status Badge ── */
-function StatusBadge({ status }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, cls: 'badge-open' };
-  return h('span', { className: 'badge ' + cfg.cls }, cfg.label);
-}
+function toast(msg, type) { if (_toastSetter) _toastSetter(p => [...p, { message: msg, type: type || '' }]); }
 
 /* ── SVG Icons ── */
-const Icon = {
-  dashboard: () => h('svg', { className: 'nav-icon', viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { d: 'M2 10a8 8 0 1116 0A8 8 0 012 10zm8-4a1 1 0 100 2 1 1 0 000-2zm-1 6a1 1 0 011-1h.01a1 1 0 010 2H10a1 1 0 01-1-1z' })
-  ),
-  workorders: () => h('svg', { className: 'nav-icon', viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { fillRule: 'evenodd', d: 'M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z', clipRule: 'evenodd' })
-  ),
-  sales: () => h('svg', { className: 'nav-icon', viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { d: 'M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3z' }),
-    h('path', { d: 'M16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z' })
-  ),
-  customers: () => h('svg', { className: 'nav-icon', viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { d: 'M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z' })
-  ),
-  inventory: () => h('svg', { className: 'nav-icon', viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { d: 'M4 3a2 2 0 100 4h12a2 2 0 100-4H4z' }),
-    h('path', { fillRule: 'evenodd', d: 'M3 8h14v7a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm5 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z', clipRule: 'evenodd' })
-  ),
-  search: () => h('svg', { width: 14, height: 14, viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { fillRule: 'evenodd', d: 'M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z', clipRule: 'evenodd' })
-  ),
-  plus: () => h('svg', { width: 14, height: 14, viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { fillRule: 'evenodd', d: 'M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z', clipRule: 'evenodd' })
-  ),
-  arrow: () => h('svg', { width: 14, height: 14, viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { fillRule: 'evenodd', d: 'M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z', clipRule: 'evenodd' })
-  ),
-  x: () => h('svg', { width: 14, height: 14, viewBox: '0 0 20 20', fill: 'currentColor' },
-    h('path', { fillRule: 'evenodd', d: 'M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z', clipRule: 'evenodd' })
-  ),
+const Ico = {
+  Dashboard: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('rect',{x:'2',y:'2',width:'5',height:'6'}),h('rect',{x:'9',y:'2',width:'5',height:'3'}),
+      h('rect',{x:'2',y:'10',width:'5',height:'4'}),h('rect',{x:'9',y:'7',width:'5',height:'7'})),
+  Wrench: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
+      h('path',{d:'M10.5 2.5a3 3 0 0 0-3.7 3.7l-4.5 4.5 1.5 1.5 4.5-4.5a3 3 0 0 0 3.7-3.7l-1.7 1.7-1.5-1.5 1.7-1.7Z'})),
+  Cart: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
+      h('path',{d:'M1.5 2.5h2l1.6 7.4a1 1 0 0 0 1 .8h5.6a1 1 0 0 0 1-.8L14 5H4.2'}),
+      h('circle',{cx:'6',cy:'13.2',r:'1'}),h('circle',{cx:'12',cy:'13.2',r:'1'})),
+  Users: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
+      h('circle',{cx:'6',cy:'5.5',r:'2.2'}),h('path',{d:'M2.2 13c0-2 1.7-3.4 3.8-3.4S9.8 11 9.8 13'}),
+      h('circle',{cx:'11',cy:'6',r:'1.8'}),h('path',{d:'M10 9.8c2 0 3.8 1.2 3.8 3.2'})),
+  Box: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinejoin:'round'},
+      h('path',{d:'M8 1.6 2 4v8l6 2.4L14 12V4L8 1.6Z'}),h('path',{d:'M2 4l6 2.4L14 4'}),h('path',{d:'M8 6.4V14.4'})),
+  Search: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.4',strokeLinecap:'round'},
+      h('circle',{cx:'7',cy:'7',r:'4.5'}),h('path',{d:'m10.5 10.5 3 3'})),
+  Plus: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.4',strokeLinecap:'round'},
+      h('path',{d:'M8 3v10M3 8h10'})),
+  Calendar: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('rect',{x:'2',y:'3',width:'12',height:'11'}),h('path',{d:'M2 6h12M5 2v2M11 2v2'})),
+  Flag: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinejoin:'round'},
+      h('path',{d:'M3.5 14V2.5h8l-1.5 2.5L11.5 8H3.5'})),
+  Trash: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round'},
+      h('path',{d:'M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5'})),
+  Card: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('rect',{x:'1.5',y:'3.5',width:'13',height:'9'}),h('path',{d:'M1.5 6.5h13'})),
+  Cash: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('rect',{x:'1.5',y:'4',width:'13',height:'8'}),h('circle',{cx:'8',cy:'8',r:'1.7'})),
+  Dots: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'currentColor'},
+      h('circle',{cx:'4',cy:'8',r:'1'}),h('circle',{cx:'8',cy:'8',r:'1'}),h('circle',{cx:'12',cy:'8',r:'1'})),
+  ArrowUp: ({ size=12 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.4',strokeLinecap:'round'},
+      h('path',{d:'M8 12V4M4.5 7.5 8 4l3.5 3.5'})),
+  Check: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.6',strokeLinecap:'round',strokeLinejoin:'round'},
+      h('path',{d:'m3 8 3.5 3.5L13 5'})),
+  Clock: ({ size=14 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2'},
+      h('circle',{cx:'8',cy:'8',r:'6'}),h('path',{d:'M8 4.5V8l2.5 1.5'})),
+  ChevronRight: ({ size=12 }) =>
+    h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.5',strokeLinecap:'round'},
+      h('path',{d:'m6 3 4 5-4 5'})),
 };
 
-/* ─────────────────────────────────────────────
-   LOGIN SCREEN
-───────────────────────────────────────────── */
+/* ── Atoms ── */
+function Badge({ kind, children }) {
+  return h('span', { className: 'badge ' + kind },
+    h('span', { className: 'dot' }), children);
+}
+
+function AvInit({ initials, tone }) {
+  return h('span', { className: 'av-init ' + (tone || '') }, initials);
+}
+
+function PageHead({ title, sub, actions }) {
+  return h('div', { className: 'page-head' },
+    h('div', null,
+      sub && h('div', { className: 'page-sub' }, sub),
+      h('div', { className: 'page-title' }, title)
+    ),
+    actions && h('div', { className: 'page-head-actions' }, ...actions)
+  );
+}
+
+function Field({ label, required, hint, children }) {
+  return h('div', { className: 'field' },
+    h('label', { className: 'field-label' },
+      label,
+      required && h('span', { className: 'req' }, '*')
+    ),
+    children,
+    hint && h('div', { className: 'field-hint' }, hint)
+  );
+}
+
+function Toggle({ on, onChange, label, sub }) {
+  return h('div', {
+    className: 'toggle ' + (on ? 'on' : ''),
+    onClick: () => onChange && onChange(!on),
+    role: 'switch', 'aria-checked': on,
+  },
+    h('div', { className: 'track' }, h('div', { className: 'thumb' })),
+    label && h('div', { style: { display: 'flex', flexDirection: 'column', lineHeight: '1.15' } },
+      h('span', { className: 'lbl' }, label),
+      sub && h('span', { className: 'lbl-sub' }, sub)
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   LOGIN / PIN SCREEN
+───────────────────────────────────────── */
 function LoginScreen({ onLogin }) {
   const [selected, setSelected] = useState(null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
 
-  function selectStaff(s) {
-    setSelected(s);
-    setPin('');
-    setError('');
-  }
+  function selectStaff(s) { setSelected(s); setPin(''); setError(''); }
 
   function pressKey(k) {
     if (!selected) { setError('Select a staff member first'); return; }
-    if (k === 'del') {
-      setPin(p => p.slice(0, -1));
-      setError('');
-      return;
-    }
+    if (k === 'del') { setPin(p => p.slice(0, -1)); setError(''); return; }
     const next = pin + k;
     setPin(next);
-    if (next.length >= 4) {
-      // attempt auth
-      setTimeout(() => tryLogin(next), 80);
-    }
+    if (next.length >= 4) setTimeout(() => tryLogin(next), 80);
   }
 
   function tryLogin(p) {
     const match = STAFF.find(s => s.id === selected.id && s.pin === p);
     if (match) {
-      sessionStorage.setItem('pos-staff', JSON.stringify(match));
+      try { sessionStorage.setItem('pos-staff', JSON.stringify(match)); } catch {}
       onLogin(match);
     } else {
       setError('Wrong PIN');
@@ -221,24 +247,14 @@ function LoginScreen({ onLogin }) {
     }
   }
 
-  const maxDots = 6;
-  const dots = Array.from({ length: maxDots }, (_, i) => {
-    const filled = i < pin.length;
-    return h('div', {
-      key: i,
-      className: 'pin-dot' + (filled ? ' filled' : '') + (shake ? ' error' : ''),
-    });
-  });
-
   const keys = ['1','2','3','4','5','6','7','8','9','del','0','ok'];
 
   return h('div', { id: 'login-screen' },
     h('div', { className: 'login-logo' },
-      h('div', { className: 'logo-monogram' }, 'CL'),
+      h('div', { className: 'brand-mark-lg' }),
       h('h1', null, 'ChainLine POS'),
-      h('p', null, 'Workshop Terminal')
+      h('p', null, 'Workshop Terminal \xb7 KEL-01')
     ),
-
     h('div', { className: 'staff-grid' },
       STAFF.map(s =>
         h('button', {
@@ -252,17 +268,18 @@ function LoginScreen({ onLogin }) {
         )
       )
     ),
-
     h('div', { className: 'pin-container' },
-      h('div', { className: 'pin-label' },
-        selected ? 'Enter PIN for ' + selected.name : 'Select a staff member'
+      h('div', { className: 'pin-label' }, selected ? 'Enter PIN for ' + selected.name : 'Select a staff member'),
+      h('div', { className: 'pin-display' },
+        [0,1,2,3].map(i =>
+          h('div', { key: i, className: 'pin-dot' + (i < pin.length ? ' filled' : '') + (shake ? ' error' : '') })
+        )
       ),
-      h('div', { className: 'pin-display' }, ...dots),
       h('div', { className: 'pin-grid' },
         keys.map(k =>
           h('button', {
             key: k,
-            className: 'pin-key' + (k === 'del' ? ' delete' : '') + (k === '0' ? ' zero' : '') + (k === 'ok' ? ' zero' : ''),
+            className: 'pin-key' + (k === 'del' ? ' delete' : ''),
             onClick: () => k === 'ok' ? (pin.length >= 4 ? tryLogin(pin) : null) : pressKey(k),
           }, k === 'del' ? '⌫' : k === 'ok' ? '↵' : k)
         )
@@ -272,1248 +289,894 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-/* ─────────────────────────────────────────────
-   THEME TOGGLE
-───────────────────────────────────────────── */
-function useTheme() {
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('pos-theme') || 'dark'; } catch { return 'dark'; }
-  });
-
-  function toggle() {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
-    try { localStorage.setItem('pos-theme', next); } catch {}
-  }
-
-  return [theme, toggle];
-}
-
-/* ─────────────────────────────────────────────
+/* ─────────────────────────────────────────
    SIDEBAR
-───────────────────────────────────────────── */
-function Sidebar({ page, setPage, staff, onLock, overdueCount }) {
-  const [theme, toggleTheme] = useTheme();
-  const navItems = [
-    { key: 'dashboard',       label: 'Dashboard',       icon: Icon.dashboard  },
-    { key: 'workorders',      label: 'Work Orders',     icon: Icon.workorders, badge: overdueCount > 0 ? overdueCount : null, badgeCls: 'orange' },
-    { key: 'sales',           label: 'Sales',           icon: Icon.sales      },
-    { key: 'customers',       label: 'Customers',       icon: Icon.customers  },
-    { key: 'inventory',       label: 'Inventory',       icon: Icon.inventory  },
-    { key: 'purchase-orders', label: 'Purchase Orders', icon: Icon.inventory  },
-    { key: 'reports',         label: 'Reports',         icon: Icon.dashboard  },
-  ];
+───────────────────────────────────────── */
+const NAV_MAIN = [
+  { id: 'dashboard',   label: 'Dashboard',   Icon: 'Dashboard', count: null },
+  { id: 'work-orders', label: 'Work Orders', Icon: 'Wrench',    count: '23' },
+  { id: 'sales',       label: 'Sales',       Icon: 'Cart',      count: null },
+  { id: 'customers',   label: 'Customers',   Icon: 'Users',     count: null },
+  { id: 'inventory',   label: 'Inventory',   Icon: 'Box',       count: null },
+];
+const NAV_TOOLS = [
+  { id: 'bookings',         label: 'Bookings',        Icon: 'Calendar' },
+  { id: 'purchase-orders',  label: 'Purchase Orders', Icon: 'Box'      },
+  { id: 'reports',          label: 'Reports',         Icon: 'Clock'    },
+];
 
-  return h('aside', { id: 'sidebar' },
-    // Header
-    h('div', { className: 'sidebar-header' },
-      h('div', { className: 'sidebar-logo' }, 'CL'),
-      h('div', { className: 'sidebar-title' },
-        h('div', { className: 'shop-name' }, 'ChainLine'),
-        h('div', { className: 'shop-sub' }, 'POS')
-      ),
-      h('button', {
-        className: 'btn-theme-toggle',
-        title: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
-        onClick: toggleTheme,
-      }, theme === 'dark' ? '☀️' : '🌙')
-    ),
+function Sidebar({ screen, setScreen, staff }) {
+  const activeNav = screen === 'new-wo' ? 'work-orders' : screen;
+  const navItem = (n) =>
+    h('a', {
+      key: n.id,
+      className: 'nav-item' + (activeNav === n.id ? ' active' : ''),
+      onClick: () => setScreen(n.id),
+    },
+      h('span', { className: 'nav-icon' }, h(Ico[n.Icon], { size: 14 })),
+      h('span', null, n.label),
+      n.count && h('span', { className: 'nav-count' }, n.count)
+    );
 
-    // Nav
-    h('nav', { className: 'sidebar-nav' },
-      h('div', { className: 'nav-section-label' }, 'Menu'),
-      navItems.map(item =>
-        h('div', {
-          key: item.key,
-          className: 'nav-item' + (page === item.key ? ' active' : ''),
-          onClick: () => setPage(item.key),
-        },
-          h(item.icon),
-          item.label,
-          item.badge ? h('span', { className: 'nav-badge ' + (item.badgeCls || '') }, item.badge) : null
-        )
+  return h('aside', { className: 'sidebar' },
+    h('div', { className: 'sidebar-brand' },
+      h('div', { className: 'brand-mark' }),
+      h('div', { style: { display: 'flex', flexDirection: 'column' } },
+        h('span', { className: 'brand-name' }, 'ChainLine'),
+        h('span', { className: 'brand-sub' }, 'Kelowna \xb7 KEL-01')
       )
     ),
-
-    // Footer
-    h('div', { className: 'sidebar-footer' },
-      h('div', { className: 'staff-info' },
-        h('div', { className: 'avatar' }, staff.initials),
-        h('div', { className: 'info' },
-          h('div', { className: 'name' }, staff.name),
-          h('div', { className: 'role' }, staff.role)
-        )
-      ),
-      h('div', { className: 'sidebar-actions' },
-        h('button', { className: 'btn-sidebar-action', onClick: () => window.open('https://chainline.ca', '_blank') }, 'chainline.ca'),
-        h('button', { className: 'btn-sidebar-action danger', onClick: onLock }, 'Lock')
+    h('div', { className: 'nav-section' },
+      h('div', { className: 'nav-label' }, 'Workspace'),
+      NAV_MAIN.map(navItem)
+    ),
+    h('div', { className: 'nav-section nav-grow' },
+      h('div', { className: 'nav-label' }, 'Tools'),
+      NAV_TOOLS.map(navItem)
+    ),
+    h('div', { className: 'sidebar-foot' },
+      h(AvInit, { initials: staff ? staff.initials : 'CL', tone: staff ? staff.tone : 'am' }),
+      h('div', { className: 'user-meta' },
+        h('span', { className: 'user-name' }, staff ? staff.name : 'ChainLine'),
+        h('span', { className: 'user-role' }, staff ? staff.role : '')
       )
     )
   );
 }
 
-/* ─────────────────────────────────────────────
-   DASHBOARD
-───────────────────────────────────────────── */
-function Dashboard({ setPage, workOrders }) {
-  const today = new Date('2026-05-20');
+/* ─────────────────────────────────────────
+   TOPBAR
+───────────────────────────────────────── */
+function Topbar({ screen, topbarSearchRef }) {
+  const crumbs = {
+    'dashboard': ['Shop', 'Dashboard'],
+    'work-orders': ['Service', 'Work Orders'],
+    'new-wo': ['Service', 'Work Orders', 'New'],
+    'sales': ['Retail', 'Sales Register'],
+    'customers': ['CRM', 'Customers'],
+    'inventory': ['Stock', 'Inventory'],
+    'bookings': ['Tools', 'Bookings'],
+    'purchase-orders': ['Tools', 'Purchase Orders'],
+    'reports': ['Tools', 'Reports'],
+  }[screen] || ['ChainLine'];
 
-  const openCount    = workOrders.filter(w => w.status === 'Open').length;
-  const readyCount   = workOrders.filter(w => w.status === 'READY').length;
-  const overdueCount = workOrders.filter(w => w.daysOverdue > 0).length;
-  const totalToday   = workOrders
-    .filter(w => w.dateIn === '2026-05-19' || w.dateIn === '2026-05-20')
-    .length;
+  return h('div', { className: 'topbar' },
+    h('div', { className: 'crumbs' },
+      crumbs.reduce((acc, c, i) => {
+        if (i > 0) acc.push(h('span', { key: 'sep'+i, className: 'crumb-sep' }, '/'));
+        acc.push(h('span', { key: 'c'+i, className: 'crumb' + (i === crumbs.length-1 ? ' last' : '') }, c));
+        return acc;
+      }, [])
+    ),
+    h('div', { className: 'topbar-spacer' }),
+    h('div', { className: 'topbar-search' },
+      h(Ico.Search, { size: 12 }),
+      h('input', { ref: topbarSearchRef, placeholder: 'Search WO, customer, SKU…' }),
+      h('span', { className: 'kbd' }, '⌘K')
+    ),
+    h('div', { className: 'station' }, 'Drawer ', h('b', null, 'open'), ' \xb7 08:14'),
+    h('button', { className: 'btn ghost' }, h(Ico.Dots, { size: 14 }))
+  );
+}
 
-  const recent = [
-    { type: 'green',  text: h('span', null, 'WO #22027 marked ', h('strong', null, 'READY'), ' - Nick Kusmich'),      time: '9:14 AM' },
-    { type: 'blue',   text: h('span', null, 'New work order ', h('strong', null, '#22026'), ' - Angus Leslie'),         time: '8:52 AM' },
-    { type: 'orange', text: h('span', null, 'WO #22022 overdue - ', h('strong', null, 'Steve Gaucher')),                time: 'Yesterday' },
-    { type: 'blue',   text: h('span', null, 'New work order ', h('strong', null, '#22025'), ' - Joe Wessel'),           time: 'Yesterday' },
-    { type: 'green',  text: h('span', null, 'Sale completed - ', h('strong', null, '$84.99'), ' Maxxis Minion DHF'),    time: 'Yesterday' },
+/* ─────────────────────────────────────────
+   STATUS STRIP
+───────────────────────────────────────── */
+function StatusStrip() {
+  return h('div', { className: 'status-strip' },
+    h('span', { className: 'dot-live' }),
+    h('span', null, 'Live \xb7 synced 2s ago'),
+    h('span', null, '\xb7'),
+    h('span', null, 'Terminal MOBY-A920 paired'),
+    h('span', null, '\xb7'),
+    h('span', null, 'Printer EPSON-TM-T20 ready'),
+    h('span', { className: 'spacer' }),
+    h('span', null, 'CL POS v1.0 \xb7 2026-05-20')
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN A — DASHBOARD
+───────────────────────────────────────── */
+function DashboardScreen({ setScreen }) {
+  const stats = [
+    { label: 'Open Work Orders',  value: '23',       foot: '8 in progress',       accentColor: null,            delta: null },
+    { label: 'Overdue',           value: '4',         foot: 'Action required',     accentColor: 'var(--accent)',  delta: null },
+    { label: "Today's Revenue",   value: '$3,842.18', foot: '+18.4% vs avg',       accentColor: null,            delta: 'up' },
+    { label: 'Bookings This Week',value: '17',        foot: '3 awaiting drop-off', accentColor: null,            delta: null },
   ];
 
-  return h('div', null,
-    h('div', { className: 'page-header' },
-      h('div', { className: 'page-title' }, 'Dashboard'),
-      h('div', { className: 'page-subtitle' }, 'Wed, May 20, 2026'),
-      h('div', { className: 'page-header-actions' },
-        h('button', { className: 'btn btn-primary', onClick: () => setPage('workorders') },
-          h(Icon.plus), 'New Work Order'
+  const activity = [
+    { t: '11:42', who: 'A. Miller', what: 'closed',    obj: 'WO-2384',      tail: ' \xb7 Full Tune' },
+    { t: '11:18', who: 'J. Kovac',  what: 'sold',      obj: 'SHIM-XT-CS',   tail: ' \xb7 $189.00' },
+    { t: '10:55', who: 'S. Reyes',  what: 'booked',    obj: 'WO-2401',      tail: ' \xb7 Suspension service \xb7 due Thu' },
+    { t: '10:31', who: 'A. Miller', what: 'received',  obj: 'PO-0451',      tail: ' \xb7 24 items' },
+    { t: '09:48', who: 'M. Bell',   what: 'completed', obj: 'WO-2378',      tail: ' \xb7 Brake bleed' },
+    { t: '09:12', who: 'J. Kovac',  what: 'sold',      obj: 'TIRE-MAXX-29', tail: ' \xb7 $84.00 \xd7 2' },
+  ];
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Dashboard',
+      sub: 'MON \xb7 MAY 20',
+      actions: [
+        h('button', { key: 'today', className: 'btn' }, 'Today ', h(Ico.ChevronRight, { size: 10 })),
+        h('button', { key: 'sale', className: 'btn primary', onClick: () => setScreen('sales') },
+          h(Ico.Plus, { size: 13 }), ' New Sale ', h('span', { className: 'kbd' }, 'N')
+        ),
+      ],
+    }),
+
+    h('div', { className: 'stat-grid mb-22' },
+      stats.map((s, i) =>
+        h('div', { key: i, className: 'stat' },
+          h('div', { className: 'stat-label' }, s.label),
+          h('div', { className: 'stat-value', style: s.accentColor ? { color: s.accentColor } : null }, s.value),
+          h('div', { className: 'stat-foot' },
+            s.delta === 'up' && h('span', { className: 'delta-up' }, h(Ico.ArrowUp, { size: 10 })),
+            h('span', null, s.foot)
+          )
         )
       )
     ),
 
-    h('div', { className: 'page-body' },
-      h('div', { className: 'dash-stats' },
-        h('div', { className: 'stat-card' },
-          h('div', { className: 'stat-label' }, 'Open WOs'),
-          h('div', { className: 'stat-value blue' }, openCount),
-          h('div', { className: 'stat-sub' }, 'Active work orders')
-        ),
-        h('div', { className: 'stat-card' },
-          h('div', { className: 'stat-label' }, 'Ready for Pickup'),
-          h('div', { className: 'stat-value green' }, readyCount),
-          h('div', { className: 'stat-sub' }, 'Awaiting customer')
-        ),
-        h('div', { className: 'stat-card' },
-          h('div', { className: 'stat-label' }, 'Overdue'),
-          h('div', { className: 'stat-value ' + (overdueCount > 0 ? 'red' : '') }, overdueCount),
-          h('div', { className: 'stat-sub' }, 'Past due date')
-        ),
-        h('div', { className: 'stat-card' },
-          h('div', { className: 'stat-label' }, "Today's Intake"),
-          h('div', { className: 'stat-value' }, totalToday),
-          h('div', { className: 'stat-sub' }, 'New this morning')
-        )
-      ),
-
-      h('div', { className: 'dash-grid' },
-        // Quick actions
+    h('div', { className: 'grid-2' },
+      // Left column
+      h('div', { className: 'col', style: { gap: 16 } },
         h('div', { className: 'card' },
-          h('div', { className: 'dash-section-title' }, 'Quick Actions'),
-          h('div', { className: 'quick-actions' },
-            h('button', { className: 'quick-action-btn', onClick: () => setPage('workorders') },
-              h('div', { className: 'qa-icon' }, '🔧'),
-              h('div', { className: 'qa-label' }, 'New Work Order'),
-              h('div', { className: 'qa-sub' }, 'Open service ticket')
+          h('div', { className: 'card-head' },
+            h('h3', null, 'Quick actions'),
+            h('span', { className: 'sub' }, 'Shortcuts')
+          ),
+          h('div', { className: 'qa-grid' },
+            h('button', { className: 'qa', onClick: () => setScreen('new-wo') },
+              h('span', { className: 'qa-ico' }, h(Ico.Wrench, { size: 18 })),
+              h('span', { className: 'qa-title' }, 'New Work Order'),
+              h('span', { className: 'qa-sub' }, 'Intake a bike')
             ),
-            h('button', { className: 'quick-action-btn', onClick: () => setPage('sales') },
-              h('div', { className: 'qa-icon' }, '💰'),
-              h('div', { className: 'qa-label' }, 'New Sale'),
-              h('div', { className: 'qa-sub' }, 'Open register')
+            h('button', { className: 'qa', onClick: () => setScreen('sales') },
+              h('span', { className: 'qa-ico' }, h(Ico.Cart, { size: 18 })),
+              h('span', { className: 'qa-title' }, 'New Sale'),
+              h('span', { className: 'qa-sub' }, 'Open register')
             ),
-            h('button', { className: 'quick-action-btn', onClick: () => setPage('customers') },
-              h('div', { className: 'qa-icon' }, '👤'),
-              h('div', { className: 'qa-label' }, 'Customer Lookup'),
-              h('div', { className: 'qa-sub' }, 'Search customers')
+            h('button', { className: 'qa' },
+              h('span', { className: 'qa-ico' }, h(Ico.Users, { size: 18 })),
+              h('span', { className: 'qa-title' }, 'Customer Lookup'),
+              h('span', { className: 'qa-sub' }, 'Search profiles')
             ),
-            h('button', { className: 'quick-action-btn', onClick: () => setPage('workorders') },
-              h('div', { className: 'qa-icon' }, '📋'),
-              h('div', { className: 'qa-label' }, 'Work Orders'),
-              h('div', { className: 'qa-sub' }, overdueCount + ' overdue')
+            h('button', { className: 'qa' },
+              h('span', { className: 'qa-ico' }, h(Ico.Clock, { size: 18 })),
+              h('span', { className: 'qa-title' }, 'End of Day'),
+              h('span', { className: 'qa-sub' }, 'Close drawer')
             )
           )
         ),
 
-        // Recent activity
         h('div', { className: 'card' },
-          h('div', { className: 'dash-section-title' }, 'Recent Activity'),
-          h('div', { className: 'activity-list' },
-            recent.map((item, i) =>
-              h('div', { key: i, className: 'activity-item' },
-                h('div', { className: 'activity-dot ' + item.type }),
-                h('div', { className: 'activity-text' }, item.text),
-                h('div', { className: 'activity-time' }, item.time)
+          h('div', { className: 'card-head' },
+            h('h3', null, 'Service queue'),
+            h('span', { className: 'sub' }, 'Today \xb7 6 open'),
+            h('div', { className: 'right' },
+              h('button', { className: 'btn ghost', onClick: () => setScreen('work-orders') },
+                'View all ', h(Ico.ChevronRight, { size: 10 })
+              )
+            )
+          ),
+          h('table', { className: 'tbl' },
+            h('thead', null,
+              h('tr', null,
+                h('th', { style: { width: 90 } }, 'WO'),
+                h('th', null, 'Customer'),
+                h('th', null, 'Bike'),
+                h('th', { style: { width: 130 } }, 'Status'),
+                h('th', { style: { width: 110 } }, 'Due'),
+                h('th', { style: { width: 60 } }, 'Mech')
+              )
+            ),
+            h('tbody', null,
+              [
+                ['WO-2391', 'Devon Tran',    'Norco Sight C2 \xb7 2023', 'ready',      'May 20', null,     'AM', 'am'],
+                ['WO-2388', 'Hannah Riise',  'Santa Cruz Bronson',        'inprogress', 'May 20', null,     'JK', 'jk'],
+                ['WO-2382', 'Marc Lefebvre', 'Trek Fuel EX 8',            'open',       null,     '2d late','SR', 'sr'],
+                ['WO-2402', 'Priya Sharma',  'Specialized Stumpjumper',   'booked',     'May 22', null,     'MB', 'mb'],
+              ].map(([id, cust, bike, status, due, overdue, mech, tone]) =>
+                h('tr', { key: id },
+                  h('td', { className: 'num' }, id),
+                  h('td', null, cust),
+                  h('td', { className: 'muted' }, bike),
+                  h('td', null, h(Badge, { kind: status }, status === 'inprogress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1))),
+                  h('td', null, overdue ? h('span', { className: 'overdue-text' }, overdue) : h('span', { className: 'num muted' }, due)),
+                  h('td', null, h(AvInit, { initials: mech, tone }))
+                )
               )
             )
           )
         )
-      )
-    )
-  );
-}
-
-/* ─────────────────────────────────────────────
-   WORK ORDER — NEW FORM (slide panel)
-───────────────────────────────────────────── */
-function NewWOPanel({ onClose, onSave, staff }) {
-  const [form, setForm] = useState({
-    customer: '', item: '', service: 'Tune-Up Basic',
-    notes: '', dueOn: '2026-05-27', mechanic: staff.name,
-  });
-  const [saving, setSaving] = useState(false);
-
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
-
-  async function handleSave() {
-    if (!form.customer || !form.item) {
-      toast('Customer and item are required', 'error');
-      return;
-    }
-    setSaving(true);
-    const newWO = {
-      customer: form.customer,
-      item: form.item,
-      mechanic: form.mechanic.slice(0, 4).toUpperCase(),
-      status: 'Open',
-      dateIn: '2026-05-20',
-      dueOn: form.dueOn,
-      total: 0,
-      daysOverdue: daysDiff(form.dueOn),
-      notes: form.notes,
-      service: form.service,
-    };
-    const result = await apiPost('/api/workorder', newWO);
-    if (!result) {
-      // Mock success
-      newWO.id = 22028 + Math.floor(Math.random() * 100);
-      toast('Work order created (offline mode)', 'success');
-    } else {
-      toast('Work order created', 'success');
-    }
-    setSaving(false);
-    onSave(newWO);
-  }
-
-  return h('div', { className: 'modal-overlay', onClick: e => e.target === e.currentTarget && onClose() },
-    h('div', { className: 'slide-panel' },
-      h('div', { className: 'panel-header' },
-        h('button', { className: 'btn btn-ghost btn-icon', onClick: onClose }, h(Icon.x)),
-        h('div', { className: 'panel-title' }, 'New Work Order'),
-        h('button', { className: 'btn btn-primary', onClick: handleSave, disabled: saving },
-          saving ? h('span', { className: 'loading-spinner' }) : null,
-          'Save WO'
-        )
       ),
-      h('div', { className: 'panel-body' },
-        h('div', { className: 'form-group' },
-          h('label', { className: 'form-label' }, 'Customer Name'),
-          h('input', {
-            className: 'form-input',
-            placeholder: 'e.g. John Smith',
-            value: form.customer,
-            onChange: e => set('customer', e.target.value),
-          })
-        ),
-        h('div', { className: 'form-group' },
-          h('label', { className: 'form-label' }, 'Bike / Item'),
-          h('input', {
-            className: 'form-input',
-            placeholder: 'e.g. Marin Rift Zone 29 Large',
-            value: form.item,
-            onChange: e => set('item', e.target.value),
-          })
-        ),
-        h('div', { className: 'form-group' },
-          h('label', { className: 'form-label' }, 'Service Type'),
-          h('select', {
-            className: 'form-select',
-            value: form.service,
-            onChange: e => set('service', e.target.value),
-          },
-            SERVICE_TYPES.map(s => h('option', { key: s, value: s }, s))
-          )
-        ),
-        h('div', { className: 'form-row' },
-          h('div', { className: 'form-group mb-0' },
-            h('label', { className: 'form-label' }, 'Due Date'),
-            h('input', {
-              className: 'form-input',
-              type: 'date',
-              value: form.dueOn,
-              onChange: e => set('dueOn', e.target.value),
-            })
+
+      // Right column
+      h('div', { className: 'col', style: { gap: 16 } },
+        h('div', { className: 'card' },
+          h('div', { className: 'card-head' },
+            h('h3', null, 'Activity'),
+            h('span', { className: 'sub' }, 'Live'),
+            h('div', { className: 'right' },
+              h('span', { className: 'mono', style: { fontSize: 10, color: 'var(--text-2)', letterSpacing: '0.08em' } }, 'SHOP \xb7 KEL-01')
+            )
           ),
-          h('div', { className: 'form-group mb-0' },
-            h('label', { className: 'form-label' }, 'Assign Mechanic'),
-            h('select', {
-              className: 'form-select',
-              value: form.mechanic,
-              onChange: e => set('mechanic', e.target.value),
-            },
-              h('option', { value: '' }, 'Unassigned'),
-              STAFF.map(s => h('option', { key: s.id, value: s.name }, s.name))
+          h('div', null,
+            activity.map((a, i) =>
+              h('div', { key: i, className: 'feed-item' },
+                h('span', { className: 'feed-time' }, a.t),
+                h('span', { className: 'feed-text' },
+                  h('span', { className: 'who' }, a.who), ' ',
+                  h('span', { className: 'what' }, a.what), ' ',
+                  h('span', { className: 'obj' }, a.obj),
+                  h('span', { className: 'muted' }, a.tail)
+                ),
+                h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px' } }, h(Ico.Dots, { size: 12 }))
+              )
             )
           )
         ),
-        h('div', { className: 'form-group mt-3' },
-          h('label', { className: 'form-label' }, 'Notes'),
-          h('textarea', {
-            className: 'form-textarea',
-            placeholder: 'Service notes, customer requests...',
-            value: form.notes,
-            onChange: e => set('notes', e.target.value),
-          })
+
+        h('div', { className: 'card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'End of day'), h('span', { className: 'sub' }, 'Drawer')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Cash sales'),       h('span', { className: 'v mono' }, '$412.00')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Card sales'),       h('span', { className: 'v mono' }, '$3,189.18')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Other / transfer'), h('span', { className: 'v mono' }, '$241.00')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Refunds'),          h('span', { className: 'v mono' }, '−$48.00')),
+          h('div', { className: 'aside-row' },
+            h('span', { className: 'k strong' }, 'Net'),
+            h('span', { className: 'v mono', style: { fontSize: 15, fontWeight: 600 } }, '$3,794.18')
+          )
         )
       )
     )
   );
 }
 
-/* ─────────────────────────────────────────────
-   WORK ORDER DETAIL (slide panel)
-───────────────────────────────────────────── */
-function WODetail({ wo, onClose, onUpdate, staff }) {
-  const [note, setNote] = useState('');
-  const [notes, setNotes] = useState([
-    { text: 'Brake pads worn to metal - replaced front and rear.', by: 'Jason', time: '9:05 AM' },
-    { text: 'Derailleur hanger was bent, straightened.', by: 'Jason', time: '8:50 AM' },
-  ]);
-  const [loading, setLoading] = useState(false);
-
-  async function updateStatus(status) {
-    setLoading(true);
-    try {
-      const result = await apiPost('/api/workorder/' + wo.id, { status });
-      if (result && result.error) { toast('Update failed: ' + result.error, 'error'); }
-      else { toast('Status updated to ' + status, 'success'); onUpdate({ ...wo, status }); }
-    } catch(e) { toast('Update failed — check connection', 'error'); }
-    setLoading(false);
-  }
-
-  function addNote() {
-    if (!note.trim()) return;
-    setNotes(n => [...n, { text: note.trim(), by: staff.name, time: 'Just now' }]);
-    setNote('');
-    toast('Note added', 'success');
-  }
-
-  const overdue = wo.daysOverdue > 0;
-
-  return h('div', { className: 'modal-overlay', onClick: e => e.target === e.currentTarget && onClose() },
-    h('div', { className: 'slide-panel' },
-      h('div', { className: 'panel-header' },
-        h('button', { className: 'btn btn-ghost btn-icon', onClick: onClose }, h(Icon.x)),
-        h('div', { className: 'panel-title' }, 'WO #' + wo.id),
-        loading ? h('span', { className: 'loading-spinner' }) : null
-      ),
-
-      h('div', { className: 'panel-body' },
-        // Status line
-        h('div', { className: 'flex items-center gap-2', style: { marginBottom: 16 } },
-          h(StatusBadge, { status: wo.status }),
-          overdue ? h('span', { className: 'badge badge-overdue' }, wo.daysOverdue + 'd overdue') : null
-        ),
-
-        // Info grid
-        h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 } },
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Customer'),
-            h('div', { style: { fontWeight: 600, fontSize: 15 } }, wo.customer)
-          ),
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Mechanic'),
-            h('div', null, wo.mechanic ? h('span', { className: 'mechanic-chip' }, wo.mechanic) : h('span', { className: 'text-muted' }, 'Unassigned'))
-          ),
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Item / Bike'),
-            h('div', { style: { fontSize: 13 } }, wo.item)
-          ),
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Total'),
-            h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 13 } }, wo.total > 0 ? fmt$(wo.total) : '-')
-          ),
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Date In'),
-            h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 13 } }, fmtDate(wo.dateIn))
-          ),
-          h('div', null,
-            h('div', { className: 'form-label', style: { marginBottom: 4 } }, 'Due On'),
-            h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 13, color: overdue ? 'var(--red)' : 'inherit' } }, fmtDate(wo.dueOn))
-          )
-        ),
-
-        h('div', { className: 'divider' }),
-
-        // Status buttons
-        h('div', { className: 'form-label', style: { marginBottom: 8 } }, 'Update Status'),
-        h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 } },
-          ['Open', 'BOOKED', 'READY', 'READY-WO', 'Finished'].map(s =>
-            h('button', {
-              key: s,
-              className: 'btn btn-secondary btn-sm' + (wo.status === s ? ' btn-primary' : ''),
-              onClick: () => updateStatus(s),
-              disabled: wo.status === s,
-            }, s)
-          )
-        ),
-
-        h('div', { className: 'divider' }),
-
-        // Notes
-        h('div', { className: 'form-label', style: { marginBottom: 8 } }, 'Notes'),
-        notes.map((n, i) =>
-          h('div', { key: i, className: 'wo-note-item' },
-            h('div', { className: 'wo-note-meta' }, n.by + ' - ' + n.time),
-            n.text
-          )
-        ),
-        h('div', { style: { display: 'flex', gap: 8, marginTop: 10 } },
-          h('input', {
-            className: 'form-input',
-            placeholder: 'Add a note...',
-            value: note,
-            onChange: e => setNote(e.target.value),
-            onKeyDown: e => e.key === 'Enter' && addNote(),
-            style: { flex: 1 },
-          }),
-          h('button', { className: 'btn btn-secondary', onClick: addNote }, 'Add')
-        )
-      )
-    )
-  );
-}
-
-/* ─────────────────────────────────────────────
-   WORK ORDERS PAGE
-───────────────────────────────────────────── */
-function WorkOrders({ staff }) {
-  const [workOrders, setWorkOrders] = useState(MOCK_WO);
-  const [loading, setLoading] = useState(false);
-  const [usingMock, setUsingMock] = useState(true);
+/* ─────────────────────────────────────────
+   SCREEN B — WORK ORDERS LIST
+───────────────────────────────────────── */
+function WorkOrdersScreen({ setScreen }) {
+  const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [mechFilter, setMechFilter] = useState('all');
-  const [showNew, setShowNew] = useState(false);
-  const [detailWO, setDetailWO] = useState(null);
-  const [sortKey, setSortKey] = useState('id');
-  const [sortDir, setSortDir] = useState('desc');
 
-  useEffect(() => {
-    setLoading(true);
-    apiGet('/api/workorders').then(data => {
-      setLoading(false);
-      if (data && Array.isArray(data.workOrders)) {
-        setWorkOrders(data.workOrders);
-        setUsingMock(false);
-      }
-    });
-  }, []);
+  const counts = {
+    all:        MOCK_WO.length,
+    open:       MOCK_WO.filter(r => r.status === 'open').length,
+    inprogress: MOCK_WO.filter(r => r.status === 'inprogress').length,
+    ready:      MOCK_WO.filter(r => r.status === 'ready').length,
+    booked:     MOCK_WO.filter(r => r.status === 'booked').length,
+    overdue:    MOCK_WO.filter(r => r.dueState === 'overdue').length,
+  };
 
-  function toggleSort(k) {
-    if (sortKey === k) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(k); setSortDir('desc'); }
-  }
+  const filtered = MOCK_WO.filter(r => {
+    const matchTab = tab === 'all' ? true
+      : tab === 'overdue' ? r.dueState === 'overdue'
+      : r.status === tab;
+    const q = search.toLowerCase();
+    const matchSearch = !q
+      || r.id.toLowerCase().includes(q)
+      || r.cust.toLowerCase().includes(q)
+      || r.bike.toLowerCase().includes(q)
+      || r.phone.includes(q);
+    return matchTab && matchSearch;
+  });
 
-  const filtered = useMemo(() => {
-    let r = workOrders;
-    if (search) {
-      const q = search.toLowerCase();
-      r = r.filter(w => w.customer.toLowerCase().includes(q) || w.item.toLowerCase().includes(q) || String(w.id).includes(q));
-    }
-    if (statusFilter !== 'all') r = r.filter(w => w.status === statusFilter);
-    if (mechFilter !== 'all') r = r.filter(w => (mechFilter === 'unassigned' ? !w.mechanic : w.mechanic?.toUpperCase().includes(mechFilter.toUpperCase())));
+  const TABS = [
+    ['all','All'],['open','Open'],['inprogress','In progress'],
+    ['ready','Ready'],['booked','Booked'],['overdue','Overdue'],
+  ];
 
-    r = [...r].sort((a, b) => {
-      let av = a[sortKey], bv = b[sortKey];
-      if (typeof av === 'string') av = av.toLowerCase(), bv = bv.toLowerCase();
-      if (av < bv) return sortDir === 'asc' ? -1 : 1;
-      if (av > bv) return sortDir === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return r;
-  }, [workOrders, search, statusFilter, mechFilter, sortKey, sortDir]);
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Work Orders',
+      sub: 'Service queue',
+      actions: [
+        h('button', { key: 'cal', className: 'btn' }, h(Ico.Calendar, { size: 13 }), ' Calendar view'),
+        h('button', { key: 'new', className: 'btn primary', onClick: () => setScreen('new-wo') },
+          h(Ico.Plus, { size: 13 }), ' New Work Order ', h('span', { className: 'kbd' }, '⌘N')
+        ),
+      ],
+    }),
 
-  function handleSaveNew(newWO) {
-    setWorkOrders(w => [{ ...newWO, id: newWO.id || 22028 + w.length }, ...w]);
-    setShowNew(false);
-    toast('WO created', 'success');
-  }
-
-  function handleUpdate(updated) {
-    setWorkOrders(wos => wos.map(w => w.id === updated.id ? updated : w));
-    setDetailWO(updated);
-  }
-
-  const overdueCount = workOrders.filter(w => w.daysOverdue > 0).length;
-
-  const ThSort = ({ k, children }) =>
-    h('th', {
-      className: 'sortable',
-      onClick: () => toggleSort(k),
-    }, children, sortKey === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '');
-
-  return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-    h('div', { className: 'page-header' },
-      h('div', { className: 'page-title' }, 'Work Orders'),
-      loading ? h('span', { className: 'loading-spinner', style: { marginLeft: 8 } }) : null,
-      overdueCount > 0 ? h('span', { className: 'badge badge-overdue', style: { marginLeft: 8 } }, overdueCount + ' overdue') : null,
-      h('div', { className: 'page-header-actions' },
-        h('button', { className: 'btn btn-primary', onClick: () => setShowNew(true) },
-          h(Icon.plus), 'New WO'
+    h('div', { className: 'sub-tabs' },
+      TABS.map(([k, l]) =>
+        h('button', { key: k, className: 'sub-tab' + (tab === k ? ' active' : ''), onClick: () => setTab(k) },
+          l, h('span', { className: 'count' }, counts[k])
         )
       )
     ),
 
-    h('div', { className: 'filter-bar' },
-      h('div', { className: 'search-wrap' },
-        h(Icon.search),
+    h('div', { className: 'filters' },
+      h('div', { className: 'search-field', style: { maxWidth: 340, flex: '0 0 340px' } },
+        h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
         h('input', {
-          className: 'input-search',
-          placeholder: 'Search customer or item...',
+          className: 'input',
+          placeholder: 'Search WO #, customer, bike, serial…',
           value: search,
           onChange: e => setSearch(e.target.value),
         })
       ),
-      h('select', {
-        className: 'filter-select',
-        value: statusFilter,
-        onChange: e => setStatusFilter(e.target.value),
-      },
-        h('option', { value: 'all' }, 'All Status'),
-        ['Open', 'READY', 'BOOKED', 'READY-WO', 'Finished'].map(s =>
-          h('option', { key: s, value: s }, s)
-        )
-      ),
-      h('select', {
-        className: 'filter-select',
-        value: mechFilter,
-        onChange: e => setMechFilter(e.target.value),
-      },
-        h('option', { value: 'all' }, 'All Mechs'),
-        h('option', { value: 'unassigned' }, 'Unassigned'),
-        STAFF.map(s => h('option', { key: s.id, value: s.name }, s.name))
-      ),
-      usingMock ? h('div', { className: 'api-banner' }, '⚠ Showing mock data - POS API not yet deployed') : null
+      h('button', { className: 'pill' }, 'Mechanic ', h('span', { className: 'mono' }, '\xb7 all')),
+      h('button', { className: 'pill' }, 'Due ', h('span', { className: 'mono' }, '\xb7 any')),
+      h('button', { className: 'pill' }, 'Service ', h('span', { className: 'mono' }, '\xb7 any')),
+      h('div', { style: { flex: 1 } }),
+      h('button', { className: 'btn ghost' }, h(Ico.Dots, { size: 14 }))
     ),
 
-    h('div', { style: { flex: 1, overflow: 'auto', padding: '0 24px 24px' } },
-      h('table', { className: 'data-table' },
+    h('div', { className: 'card' },
+      h('table', { className: 'tbl' },
         h('thead', null,
           h('tr', null,
-            h(ThSort, { k: 'id' }, '#'),
-            h(ThSort, { k: 'customer' }, 'Customer'),
-            h('th', null, 'Item / Bike'),
-            h('th', null, 'Status'),
-            h(ThSort, { k: 'dateIn' }, 'Date In'),
-            h(ThSort, { k: 'dueOn' }, 'Due On'),
-            h('th', null, 'Overdue'),
-            h('th', null, 'Mech'),
-            h('th', { style: { textAlign: 'right' } }, 'Total')
+            h('th', { style: { width: 96 } }, 'WO'),
+            h('th', null, 'Customer'),
+            h('th', null, 'Bike / Item'),
+            h('th', null, 'Service'),
+            h('th', { style: { width: 130 } }, 'Status'),
+            h('th', { style: { width: 120 } }, 'Due'),
+            h('th', { style: { width: 70 } }, 'Mech'),
+            h('th', { style: { width: 32 } })
           )
         ),
         h('tbody', null,
           filtered.length === 0
-            ? h('tr', null, h('td', { colSpan: 9 },
-                h('div', { className: 'empty-state' },
-                  h('div', { className: 'es-icon' }, '🔧'),
-                  h('p', null, 'No work orders match your filters')
-                )
-              ))
-            : filtered.map(wo =>
-                h('tr', {
-                  key: wo.id,
-                  className: wo.daysOverdue > 0 ? 'overdue-row' : '',
-                  onClick: () => setDetailWO(wo),
-                },
-                  h('td', null, h('span', { className: 'wo-id-cell' }, '#', h('span', { className: 'id-num' }, wo.id))),
-                  h('td', null, h('span', { className: 'customer-cell' }, wo.customer)),
-                  h('td', null, h('span', { className: 'item-cell' }, wo.item)),
-                  h('td', null, h(StatusBadge, { status: wo.status })),
-                  h('td', null, h('span', { className: 'text-mono', style: { fontSize: 12 } }, fmtDate(wo.dateIn))),
-                  h('td', null, h('span', {
-                    className: 'text-mono',
-                    style: { fontSize: 12, color: wo.daysOverdue > 0 ? 'var(--red)' : 'inherit' }
-                  }, fmtDate(wo.dueOn))),
+            ? h('tr', null,
+                h('td', {
+                  colSpan: 8,
+                  style: { textAlign: 'center', padding: '32px 16px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' },
+                }, 'No work orders match these filters')
+              )
+            : filtered.map(r =>
+                h('tr', { key: r.id, style: { cursor: 'pointer' } },
                   h('td', null,
-                    wo.daysOverdue > 0
-                      ? h('span', { className: 'days-overdue-cell red' }, '+' + wo.daysOverdue + 'd')
-                      : wo.daysOverdue < -14
-                        ? h('span', { className: 'days-overdue-cell dim' }, wo.daysOverdue + 'd')
-                        : h('span', { className: 'days-overdue-cell green' }, wo.daysOverdue + 'd')
+                    h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                      h('span', { className: 'num', style: { fontSize: 12 } }, r.id),
+                      r.prio && h('span', { className: 'prio-flag', title: 'Priority' }, h(Ico.Flag, { size: 11 }))
+                    )
                   ),
-                  h('td', null, wo.mechanic ? h('span', { className: 'mechanic-chip' }, wo.mechanic) : h('span', { className: 'text-muted', style:{fontSize:11} }, '-')),
-                  h('td', null, h('span', { className: 'total-cell' }, wo.total > 0 ? fmt$(wo.total) : '-'))
+                  h('td', null,
+                    h('div', { className: 'cell-customer' },
+                      h('div', { style: { display: 'flex', flexDirection: 'column', lineHeight: 1.2 } },
+                        h('span', { className: 'name' }, r.cust),
+                        h('span', { className: 'phone' }, r.phone)
+                      )
+                    )
+                  ),
+                  h('td', { className: 'muted' }, r.bike),
+                  h('td', null, r.svc),
+                  h('td', null,
+                    r.status === 'ready'      ? h(Badge, { kind: 'ready' }, 'Ready') :
+                    r.status === 'open'       ? h(Badge, { kind: 'open' }, 'Open') :
+                    r.status === 'inprogress' ? h(Badge, { kind: 'inprogress' }, 'In Progress') :
+                    r.status === 'booked'     ? h(Badge, { kind: 'booked' }, 'Booked') : null
+                  ),
+                  h('td', null,
+                    r.dueState === 'overdue'
+                      ? h('span', { className: 'overdue-text' }, r.overdueBy)
+                      : h('span', { className: 'num muted', style: { fontSize: 12 } }, r.due)
+                  ),
+                  h('td', null, h(AvInit, { initials: r.mech, tone: r.tone })),
+                  h('td', null, h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px' } }, h(Ico.Dots, { size: 12 })))
                 )
               )
         )
       )
     ),
 
-    showNew ? h(NewWOPanel, { onClose: () => setShowNew(false), onSave: handleSaveNew, staff }) : null,
-    detailWO ? h(WODetail, { wo: detailWO, onClose: () => setDetailWO(null), onUpdate: handleUpdate, staff }) : null
+    h('div', {
+      className: 'row',
+      style: { justifyContent: 'space-between', marginTop: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' },
+    },
+      h('span', null, 'Showing ' + filtered.length + ' of ' + MOCK_WO.length),
+      h('span', null, 'Page 1 / 1')
+    )
   );
 }
 
-/* ─────────────────────────────────────────────
-   SALES / REGISTER
-───────────────────────────────────────────── */
-function Sales({ staff }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
-  const [cart, setCart] = useState([]);
-  const [customer, setCustomer] = useState('');
-  const [discount, setDiscount] = useState('');
-  const [usingMock, setUsingMock] = useState(false);
-  const searchRef = useRef(null);
-  const barcodeBuffer = useRef('');
-  const barcodeTimer = useRef(null);
+/* ─────────────────────────────────────────
+   SCREEN C — NEW WORK ORDER
+───────────────────────────────────────── */
+function NewWorkOrderScreen({ setScreen }) {
+  const [customer, setCustomer] = useState('Hannah Riise');
+  const [showSuggest, setShowSuggest] = useState(false);
+  const [mech, setMech] = useState('JK');
+  const [prio, setPrio] = useState(true);
+  const [notify, setNotify] = useState(true);
+  const [service, setService] = useState('Suspension service');
+  const [bike, setBike] = useState('Santa Cruz Bronson \xb7 CC X01 \xb7 2023 \xb7 Charcoal');
+  const [due, setDue] = useState('2026-05-22');
+  const [notes, setNotes] = useState('Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.');
+  const [submitting, setSubmitting] = useState(false);
+  const suggestRef = useRef(null);
 
-  // Barcode scanner listener
   useEffect(() => {
-    const handleKey = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === 'Enter') {
-        if (barcodeBuffer.current.length >= 3) {
-          setQuery(barcodeBuffer.current);
-          doSearch(barcodeBuffer.current);
-        }
-        barcodeBuffer.current = '';
-      } else if (e.key.length === 1) {
-        barcodeBuffer.current += e.key;
-        clearTimeout(barcodeTimer.current);
-        barcodeTimer.current = setTimeout(() => { barcodeBuffer.current = ''; }, 100);
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    function onDown(e) {
+      if (suggestRef.current && !suggestRef.current.contains(e.target)) setShowSuggest(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
   }, []);
 
-  async function doSearch(q) {
-    if (!q.trim()) { setResults([]); return; }
-    setSearching(true);
-    const data = await apiGet('/api/items-search?q=' + encodeURIComponent(q));
-    setSearching(false);
-    if (data && Array.isArray(data.items)) {
-      setResults(data.items);
-      setUsingMock(false);
-    } else {
-      const q2 = q.toLowerCase();
-      setResults(MOCK_INVENTORY.filter(i => i.name.toLowerCase().includes(q2) || i.sku.toLowerCase().includes(q2)));
-      setUsingMock(true);
+  const suggestions = MOCK_CUSTOMERS.filter(c =>
+    !customer || c.name.toLowerCase().includes(customer.toLowerCase()) || c.phone.includes(customer)
+  ).slice(0, 6);
+
+  function handleCreate() {
+    if (!mech) { toast('Select a mechanic', 'error'); return; }
+    if (!bike.trim()) { toast('Enter bike description', 'error'); return; }
+    setSubmitting(true);
+    apiPost('/api/workorder', { customer, bike, service, mechanic: mech, due, priority: prio, notifySms: notify, notes })
+      .then(res => {
+        setSubmitting(false);
+        toast(res ? 'Work order created' : 'Saved offline (worker unavailable)', res ? 'success' : '');
+        setScreen('work-orders');
+      });
+  }
+
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); handleCreate(); }
     }
-  }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
 
-  const searchDebounce = useRef(null);
-  function handleQueryChange(v) {
-    setQuery(v);
-    clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => doSearch(v), 280);
-  }
-
-  function addToCart(item) {
-    setCart(c => {
-      const ex = c.find(l => l.id === item.id);
-      if (ex) return c.map(l => l.id === item.id ? { ...l, qty: l.qty + 1 } : l);
-      return [...c, { ...item, qty: 1 }];
-    });
-    toast(item.name + ' added', 'success');
-  }
-
-  function removeFromCart(id) { setCart(c => c.filter(l => l.id !== id)); }
-
-  function adjustQty(id, delta) {
-    setCart(c => c.map(l => l.id === id
-      ? { ...l, qty: Math.max(0, l.qty + delta) }
-      : l
-    ).filter(l => l.qty > 0));
-  }
-
-  const discPct = parseFloat(discount) || 0;
-  const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0);
-  const discAmt = subtotal * (discPct / 100);
-  const postDisc = subtotal - discAmt;
-  const gst = postDisc * GST;
-  const pst = postDisc * PST;
-  const total = postDisc + gst + pst;
-
-  async function handlePayment(method) {
-    if (cart.length === 0) { toast('Cart is empty', 'error'); return; }
-    try {
-      const result = await apiPost('/api/sale', { items: cart, customer, total, method, staff: staff.name });
-      if (result && result.error) { toast('Sale failed: ' + result.error, 'error'); return; }
-      toast('Sale complete - ' + fmt$(total) + ' via ' + method, 'success');
-      setCart([]); setCustomer(''); setDiscount(''); setQuery(''); setResults([]);
-    } catch(e) { toast('Sale failed — check connection', 'error'); }
-  }
-
-  async function handleQuote() {
-    toast('Saved as quote (offline mode)', '');
-  }
-
-  return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-    h('div', { className: 'page-header' },
-      h('div', { className: 'page-title' }, 'Sales / Register'),
-      h('div', { className: 'page-subtitle' }, staff.name + ' - ' + new Date().toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })),
-      h('div', { className: 'page-header-actions' },
-        h('div', { className: 'barcode-indicator' },
-          h('div', { className: 'dot' }),
-          'Barcode ready'
-        )
-      )
-    ),
-
-    h('div', { className: 'register-layout', style: { flex: 1, overflow: 'hidden' } },
-      // Left: item search
-      h('div', { className: 'register-items' },
-        h('div', { className: 'register-search' },
-          h('div', { className: 'search-wrap', style: { flex: 1 } },
-            h(Icon.search),
-            h('input', {
-              ref: searchRef,
-              className: 'input-search',
-              placeholder: 'Search item by name or SKU...',
-              value: query,
-              onChange: e => handleQueryChange(e.target.value),
-              autoFocus: true,
-            })
-          ),
-          searching ? h('span', { className: 'loading-spinner' }) : null
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'New Work Order',
+      sub: 'Intake \xb7 WO-2405',
+      actions: [
+        h('button', { key: 'cancel', className: 'btn', onClick: () => setScreen('work-orders') }, 'Cancel'),
+        h('button', { key: 'draft', className: 'btn' }, 'Save draft'),
+        h('button', { key: 'create', className: 'btn primary', onClick: handleCreate, disabled: submitting },
+          h(Ico.Check, { size: 13 }), ' Create work order ', h('span', { className: 'kbd' }, '⌘↵')
         ),
+      ],
+    }),
 
-        h('div', { className: 'item-results' },
-          query && results.length === 0 && !searching
-            ? h('div', { className: 'no-results' },
-                h('div', { className: 'nr-icon' }, '🔍'),
-                'No items found for "' + query + '"'
-              )
-            : !query
-              ? h('div', { className: 'no-results' },
-                  h('div', { className: 'nr-icon' }, '⌨'),
-                  h('p', null, 'Type to search inventory'),
-                  h('p', { style: { marginTop: 8, fontSize: 12, color: 'var(--text-muted)' } }, 'or scan barcode to auto-add')
-                )
-              : results.map(item =>
-                  h('div', { key: item.id, className: 'item-result-row', onClick: () => addToCart(item) },
-                    h('div', { style: { flex: 1 } },
-                      h('div', { className: 'item-result-name' }, item.name),
-                      h('div', { className: 'item-result-dept' }, item.sku + ' - ' + item.dept)
-                    ),
-                    h('div', { className: 'item-result-qty', style: { color: item.qty <= 2 ? 'var(--orange)' : 'var(--text-muted)' } },
-                      item.qty <= 0 ? 'OUT' : 'Qty: ' + item.qty
-                    ),
-                    h('div', { className: 'item-result-price' }, fmt$(item.price)),
-                    h('div', { className: 'btn btn-primary btn-sm' }, h(Icon.plus))
+    h('div', { className: 'grid-2', style: { gridTemplateColumns: '1fr 360px' } },
+      // Left — form
+      h('div', { className: 'card' },
+        h('div', { className: 'card-head' }, h('h3', null, 'Intake'), h('span', { className: 'sub' }, 'Required marked *')),
+        h('div', { style: { padding: 18 } },
+          h(Field, { label: 'Customer', required: true, hint: 'Search by name, phone or last 4 of card.' },
+            h('div', { className: 'combobox-wrap', ref: suggestRef },
+              h('div', { className: 'search-field' },
+                h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+                h('input', {
+                  className: 'input',
+                  value: customer,
+                  onChange: e => { setCustomer(e.target.value); setShowSuggest(true); },
+                  onFocus: () => setShowSuggest(true),
+                  placeholder: 'Hannah Riise',
+                })
+              ),
+              showSuggest && h('div', { className: 'suggest-list' },
+                suggestions.map(c =>
+                  h('div', { key: c.id, className: 'suggest-item', onClick: () => { setCustomer(c.name); setShowSuggest(false); } },
+                    h(AvInit, { initials: c.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase(), tone: 'mb' }),
+                    h('span', { className: 'name' }, c.name),
+                    h('span', { className: 'phone' }, c.phone),
+                    h('span', { className: 'meta' }, c.bikes + ' bikes \xb7 since ' + c.memberSince.slice(0,4))
                   )
+                ),
+                h('div', { className: 'suggest-create', onClick: () => setShowSuggest(false) },
+                  h('span', { style: { width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--line-2)', color: 'var(--text-2)', flexShrink: 0 } }, h(Ico.Plus, { size: 11 })),
+                  h('span', null, 'Create new customer "' + (customer || '') + '"')
                 )
-        )
-      ),
-
-      // Right: cart
-      h('div', { className: 'cart-panel' },
-        h('div', { className: 'cart-header' },
-          h('div', { className: 'cart-title' }, 'Cart', cart.length > 0 ? h('span', { style: { fontSize: 12, fontFamily: 'var(--font-mono)', marginLeft: 6, color: 'var(--text-dim)' } }, cart.length + ' item' + (cart.length === 1 ? '' : 's')) : null),
-          cart.length > 0 ? h('button', { className: 'btn btn-ghost btn-sm', onClick: () => setCart([]) }, 'Clear') : null
-        ),
-
-        h('div', { className: 'cart-customer' },
-          h('input', {
-            className: 'form-input',
-            placeholder: 'Customer name (optional)',
-            value: customer,
-            onChange: e => setCustomer(e.target.value),
-          })
-        ),
-
-        cart.length === 0
-          ? h('div', { className: 'cart-empty' },
-              h('div', { className: 'ce-icon' }, '🛒'),
-              h('p', null, 'Cart is empty'),
-              h('p', { style: { fontSize: 12 } }, 'Search and click items to add')
+              )
             )
-          : h('div', { className: 'cart-items' },
-              cart.map(line =>
-                h('div', { key: line.id, className: 'cart-line' },
-                  h('div', { className: 'cart-line-info' },
-                    h('div', { className: 'cart-line-name' }, line.name),
-                    h('div', { className: 'cart-line-price' }, fmt$(line.price) + ' ea')
-                  ),
-                  h('div', { className: 'cart-line-controls' },
-                    h('button', { className: 'qty-btn', onClick: () => adjustQty(line.id, -1) }, '-'),
-                    h('span', { className: 'qty-display' }, line.qty),
-                    h('button', { className: 'qty-btn', onClick: () => adjustQty(line.id, 1) }, '+')
-                  ),
-                  h('div', { className: 'cart-line-subtotal' }, fmt$(line.price * line.qty)),
-                  h('button', { className: 'void-btn', onClick: () => removeFromCart(line.id) }, '×')
+          ),
+
+          h('div', { style: { height: 16 } }),
+
+          h('div', { className: 'grid-form' },
+            h('div', { className: 'span-2' },
+              h(Field, { label: 'Bike / Item', required: true, hint: 'Make \xb7 model \xb7 year \xb7 color \xb7 serial (optional)' },
+                h('input', { className: 'input', value: bike, onChange: e => setBike(e.target.value), placeholder: 'Santa Cruz Bronson \xb7 CC X01 \xb7 2023' })
+              )
+            ),
+            h(Field, { label: 'Service type', required: true },
+              h('select', { className: 'select', value: service, onChange: e => setService(e.target.value) },
+                SERVICE_TYPES.map(s => h('option', { key: s }, s))
+              )
+            ),
+            h(Field, { label: 'Due date', required: true },
+              h('input', { className: 'input mono', type: 'date', value: due, onChange: e => setDue(e.target.value) })
+            ),
+            h('div', { className: 'span-2' },
+              h(Field, { label: 'Assigned mechanic', required: true },
+                h('div', { className: 'chip-group' },
+                  MECHANICS.map(m =>
+                    h('button', { key: m.initials, className: 'chip' + (mech === m.initials ? ' active' : ''), onClick: () => setMech(m.initials) },
+                      h(AvInit, { initials: m.initials, tone: m.tone }),
+                      h('span', { style: { display: 'flex', flexDirection: 'column', lineHeight: 1.1, textAlign: 'left' } },
+                        h('span', null, m.name),
+                        h('span', { className: 'mono', style: { fontSize: 10, color: 'var(--text-2)' } }, m.load)
+                      )
+                    )
+                  )
                 )
               )
             ),
+            h('div', { className: 'span-2' },
+              h(Field, { label: 'Notes' },
+                h('textarea', { className: 'textarea', rows: 5, value: notes, onChange: e => setNotes(e.target.value) })
+              )
+            ),
+            h('div', { className: 'span-2', style: { display: 'flex', gap: 24, borderTop: '1px solid var(--line)', paddingTop: 14 } },
+              h(Toggle, { on: prio, onChange: setPrio, label: 'Priority', sub: 'Bump to top of queue' }),
+              h(Toggle, { on: notify, onChange: setNotify, label: 'SMS when ready', sub: '(250) 555-0142' })
+            )
+          )
+        )
+      ),
 
-        h('div', { className: 'cart-totals' },
-          h('div', { className: 'cart-total-line' },
-            h('span', { className: 'label' }, 'Subtotal'),
-            h('span', { className: 'value' }, fmt$(subtotal))
+      // Right — aside
+      h('div', { className: 'col', style: { gap: 16 } },
+        h('div', { className: 'aside-card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'Customer'), h('span', { className: 'sub' }, 'On file')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Name'),         h('span', { className: 'v' }, 'Hannah Riise')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Phone'),        h('span', { className: 'v mono' }, '(250) 555-0142')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Email'),        h('span', { className: 'v mono', style: { fontSize: 11 } }, 'h.riise@protonmail.com')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Member since'), h('span', { className: 'v mono' }, '2021-03-14')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bikes on file'), h('span', { className: 'v mono' }, '3')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Open balance'), h('span', { className: 'v mono' }, '$0.00'))
+        ),
+
+        h('div', { className: 'aside-card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'Estimate'), h('span', { className: 'sub' }, 'Service + parts')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Labour \xb7 1.5h'),     h('span', { className: 'v mono' }, '$142.50')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Shock seal kit'),     h('span', { className: 'v mono' }, '$48.00')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Float fluid \xb7 15ml'), h('span', { className: 'v mono' }, '$12.00')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'GST 5%'),             h('span', { className: 'v mono' }, '$10.13')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'PST 7%'),             h('span', { className: 'v mono' }, '$14.18')),
+          h('div', { className: 'aside-row', style: { background: 'var(--bg-2)' } },
+            h('span', { className: 'k strong', style: { color: 'var(--text)' } }, 'Estimate total'),
+            h('span', { className: 'v mono', style: { fontSize: 16, fontWeight: 600 } }, '$226.81')
           ),
-          h('div', { className: 'discount-row' },
-            h('span', { style: { fontSize: 12, color: 'var(--text-dim)', flex: 1 } }, 'Discount (%)'),
-            h('input', {
-              className: 'discount-input',
-              type: 'number',
-              min: 0,
-              max: 100,
-              placeholder: '0',
-              value: discount,
-              onChange: e => setDiscount(e.target.value),
-            }),
-            h('span', { style: { fontSize: 12, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' } }, discPct > 0 ? '-' + fmt$(discAmt) : '')
-          ),
-          h('div', { className: 'cart-total-line' },
-            h('span', { className: 'label' }, 'GST (5%)'),
-            h('span', { className: 'value' }, fmt$(gst))
-          ),
-          h('div', { className: 'cart-total-line' },
-            h('span', { className: 'label' }, 'PST (7%)'),
-            h('span', { className: 'value' }, fmt$(pst))
-          ),
-          h('div', { className: 'cart-total-line grand-total' },
-            h('span', { className: 'label' }, 'TOTAL'),
-            h('span', { className: 'value' }, fmt$(total))
+          h('div', { style: { padding: 12, borderTop: '1px solid var(--line)' } },
+            h('button', { className: 'btn', style: { width: '100%', justifyContent: 'center' } }, 'Send estimate')
           )
         ),
 
-        h('div', { className: 'cart-actions' },
-          h('div', { className: 'payment-btns' },
-            h('button', { className: 'btn btn-primary btn-lg', onClick: () => handlePayment('Card'), disabled: cart.length === 0 }, 'Card'),
-            h('button', { className: 'btn btn-secondary btn-lg', onClick: () => handlePayment('Cash'), disabled: cart.length === 0 }, 'Cash'),
-            h('button', { className: 'btn btn-secondary btn-lg', onClick: () => handlePayment('Other'), disabled: cart.length === 0 }, 'Other')
-          ),
-          h('button', { className: 'btn btn-ghost', onClick: handleQuote, disabled: cart.length === 0 }, 'Save as Quote')
+        h('div', { className: 'aside-card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'Last 3 services'), h('span', { className: 'sub' }, 'History')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2025-11-04'), h('span', { className: 'v' }, 'Full tune')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2025-06-18'), h('span', { className: 'v' }, 'Brake bleed')),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k mono' }, '2024-09-30'), h('span', { className: 'v' }, 'Wheel true \xb7 rear'))
         )
       )
     )
   );
 }
 
-/* ─────────────────────────────────────────────
-   CUSTOMER DETAIL (slide panel)
-───────────────────────────────────────────── */
-function CustomerDetail({ customer: c, onClose }) {
-  const recentWOs = MOCK_WO.filter(w => w.customer.includes(c.lastName));
-
-  return h('div', { className: 'modal-overlay', onClick: e => e.target === e.currentTarget && onClose() },
-    h('div', { className: 'slide-panel' },
-      h('div', { className: 'panel-header' },
-        h('button', { className: 'btn btn-ghost btn-icon', onClick: onClose }, h(Icon.x)),
-        h('div', { className: 'panel-title' }, c.firstName + ' ' + c.lastName)
-      ),
-      h('div', { className: 'panel-body' },
-        // Avatar + info
-        h('div', { style: { display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' } },
-          h('div', { className: 'customer-avatar-lg', style: { width: 56, height: 56, fontSize: 20 } }, initials(c.firstName + ' ' + c.lastName)),
-          h('div', { style: { flex: 1 } },
-            h('div', { style: { fontSize: 20, fontWeight: 600, marginBottom: 8 } }, c.firstName + ' ' + c.lastName),
-            h('div', { className: 'contact-item', style: { marginBottom: 4 } }, '✉ ' + c.email),
-            h('div', { className: 'contact-item' }, '📞 ' + c.phone)
-          )
-        ),
-
-        h('div', { style: { display: 'flex', gap: 24, marginBottom: 20, padding: '16px', background: 'var(--card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' } },
-          h('div', { className: 'cs-stat' },
-            h('div', { className: 'cs-val', style: { color: 'var(--green)' } }, fmt$(c.totalSpent)),
-            h('div', { className: 'cs-label' }, 'Total Spent')
-          ),
-          h('div', { className: 'cs-stat' },
-            h('div', { className: 'cs-val' }, c.woCount),
-            h('div', { className: 'cs-label' }, 'Work Orders')
-          )
-        ),
-
-        h('div', { className: 'divider' }),
-
-        h('div', { className: 'form-label', style: { marginBottom: 8 } }, 'Recent Work Orders'),
-        recentWOs.length === 0
-          ? h('div', { style: { color: 'var(--text-muted)', fontSize: 13 } }, 'No work orders found')
-          : recentWOs.map(wo =>
-              h('div', { key: wo.id, style: { padding: '10px 12px', background: 'var(--card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', marginBottom: 6, display: 'flex', gap: 10, alignItems: 'center' } },
-                h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' } }, '#' + wo.id),
-                h('span', { style: { flex: 1, fontSize: 13 } }, wo.item),
-                h(StatusBadge, { status: wo.status }),
-                h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)' } }, fmtDate(wo.dateIn))
-              )
-            )
-      )
-    )
-  );
-}
-
-/* ─────────────────────────────────────────────
-   CUSTOMERS PAGE
-───────────────────────────────────────────── */
-function Customers() {
-  const [search, setSearch] = useState('');
-  const [customers, setCustomers] = useState(MOCK_CUSTOMERS);
-  const [loading, setLoading] = useState(false);
-  const [usingMock, setUsingMock] = useState(true);
-  const [detail, setDetail] = useState(null);
-  const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ firstName: '', lastName: '', email: '', phone: '' });
-  const debounce = useRef(null);
-
-  useEffect(() => {
-    setLoading(true);
-    apiGet('/api/customers?q=').then(data => {
-      setLoading(false);
-      if (data && Array.isArray(data.customers)) {
-        setCustomers(data.customers);
-        setUsingMock(false);
-      }
-    });
-  }, []);
-
-  function handleSearch(v) {
-    setSearch(v);
-    clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
-      if (!v.trim()) {
-        setCustomers(MOCK_CUSTOMERS);
-        return;
-      }
-      setLoading(true);
-      const data = await apiGet('/api/customers?q=' + encodeURIComponent(v));
-      setLoading(false);
-      if (data && Array.isArray(data.customers)) {
-        setCustomers(data.customers);
-      } else {
-        const q = v.toLowerCase();
-        setCustomers(MOCK_CUSTOMERS.filter(c =>
-          c.firstName.toLowerCase().includes(q) ||
-          c.lastName.toLowerCase().includes(q) ||
-          c.email.toLowerCase().includes(q) ||
-          c.phone.includes(q)
-        ));
-      }
-    }, 300);
-  }
-
-  function handleNewCustomer() {
-    if (!newForm.firstName || !newForm.lastName) {
-      toast('First and last name required', 'error');
-      return;
-    }
-    const nc = { ...newForm, id: Date.now(), totalSpent: 0, woCount: 0 };
-    setCustomers(c => [nc, ...c]);
-    setShowNew(false);
-    setNewForm({ firstName: '', lastName: '', email: '', phone: '' });
-    toast(newForm.firstName + ' ' + newForm.lastName + ' added', 'success');
-  }
-
-  return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-    h('div', { className: 'page-header' },
-      h('div', { className: 'page-title' }, 'Customers'),
-      loading ? h('span', { className: 'loading-spinner', style: { marginLeft: 8 } }) : null,
-      h('div', { className: 'page-header-actions' },
-        h('button', { className: 'btn btn-primary', onClick: () => setShowNew(s => !s) },
-          h(Icon.plus), 'New Customer'
-        )
-      )
-    ),
-
-    h('div', { className: 'filter-bar' },
-      h('div', { className: 'search-wrap', style: { maxWidth: 400 } },
-        h(Icon.search),
-        h('input', {
-          className: 'input-search',
-          placeholder: 'Search name, email or phone...',
-          value: search,
-          onChange: e => handleSearch(e.target.value),
-          autoFocus: true,
-        })
-      ),
-      usingMock ? h('div', { className: 'api-banner', style: { marginBottom: 0 } }, '⚠ Mock data') : null
-    ),
-
-    showNew ? h('div', { style: { padding: '16px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' } },
-      h('div', { style: { display: 'flex', gap: 12, alignItems: 'flex-end' } },
-        ...[
-          { k: 'firstName', label: 'First Name', ph: 'John' },
-          { k: 'lastName',  label: 'Last Name',  ph: 'Smith' },
-          { k: 'email',     label: 'Email',       ph: 'john@example.com' },
-          { k: 'phone',     label: 'Phone',       ph: '250-555-0100' },
-        ].map(f =>
-          h('div', { key: f.k, className: 'form-group mb-0', style: { flex: 1 } },
-            h('label', { className: 'form-label' }, f.label),
-            h('input', {
-              className: 'form-input',
-              placeholder: f.ph,
-              value: newForm[f.k],
-              onChange: e => setNewForm(p => ({ ...p, [f.k]: e.target.value })),
-              onKeyDown: e => e.key === 'Enter' && handleNewCustomer(),
-            })
-          )
-        ),
-        h('button', { className: 'btn btn-primary', onClick: handleNewCustomer }, 'Add'),
-        h('button', { className: 'btn btn-ghost', onClick: () => setShowNew(false) }, 'Cancel')
-      )
-    ) : null,
-
-    h('div', { className: 'customer-grid' },
-      customers.length === 0
-        ? h('div', { className: 'empty-state', style: { gridColumn: '1/-1' } },
-            h('div', { className: 'es-icon' }, '👤'),
-            h('p', null, 'No customers found')
-          )
-        : customers.map(c =>
-            h('div', {
-              key: c.id,
-              className: 'customer-card',
-              onClick: () => setDetail(c),
-            },
-              h('div', { className: 'customer-card-top' },
-                h('div', { className: 'customer-avatar-lg' }, initials(c.firstName + ' ' + c.lastName)),
-                h('div', { style: { flex: 1, minWidth: 0 } },
-                  h('div', { className: 'customer-card-name' }, c.firstName + ' ' + c.lastName),
-                  h('div', { className: 'customer-card-email' }, c.email)
-                )
-              ),
-              c.phone ? h('div', { style: { fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: 10 } }, c.phone) : null,
-              h('div', { className: 'customer-card-stats' },
-                h('div', { className: 'cs-stat' },
-                  h('div', { className: 'cs-val', style: { color: 'var(--green)' } }, fmt$(c.totalSpent)),
-                  h('div', { className: 'cs-label' }, 'Spent')
-                ),
-                h('div', { className: 'cs-stat' },
-                  h('div', { className: 'cs-val' }, c.woCount),
-                  h('div', { className: 'cs-label' }, 'WOs')
-                )
-              )
-            )
-          )
-    ),
-
-    detail ? h(CustomerDetail, { customer: detail, onClose: () => setDetail(null) }) : null
-  );
-}
-
-/* ─────────────────────────────────────────────
-   INVENTORY PAGE
-───────────────────────────────────────────── */
-function Inventory() {
+/* ─────────────────────────────────────────
+   SCREEN D — SALES REGISTER
+───────────────────────────────────────── */
+function SalesScreen() {
+  const [items, setItems] = useState([
+    { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        qty: 1, price: 189.00 },
+    { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip',  qty: 2, price: 84.00  },
+    { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                   qty: 1, price: 25.00  },
+    { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                    qty: 1, price: 62.00  },
+  ]);
   const [query, setQuery] = useState('');
-  const [items, setItems] = useState(MOCK_INVENTORY);
-  const [loading, setLoading] = useState(false);
-  const [usingMock, setUsingMock] = useState(true);
-  const [deptFilter, setDeptFilter] = useState('all');
-  const debounce = useRef(null);
+  const [customerName, setCustomerName] = useState('Devon Tran');
+  const searchRef = useRef(null);
+
+  useEffect(() => { if (searchRef.current) searchRef.current.focus(); }, []);
 
   useEffect(() => {
-    setLoading(true);
-    apiGet('/api/parts').then(data => {
-      setLoading(false);
-      if (data && (Array.isArray(data) || Array.isArray(data.items))) {
-        setItems(Array.isArray(data) ? data : data.items);
-        setUsingMock(false);
+    function onKey(e) {
+      if (e.key === '/' && document.activeElement !== searchRef.current) {
+        e.preventDefault();
+        if (searchRef.current) searchRef.current.focus();
       }
+      if (e.key === 'F1') { e.preventDefault(); handlePay('card'); }
+      if (e.key === 'F2') { e.preventDefault(); handlePay('cash'); }
+      if (e.key === 'F3') { e.preventDefault(); handlePay('other'); }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  });
+
+  const results = query
+    ? MOCK_CATALOG.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        c.sku.toLowerCase().includes(query.toLowerCase())
+      )
+    : [];
+
+  function addItem(it) {
+    const existing = items.find(i => i.sku === it.sku);
+    if (existing) {
+      setItems(items.map(i => i.sku === it.sku ? { ...i, qty: i.qty + 1 } : i));
+    } else {
+      setItems([...items, { sku: it.sku, name: it.name, qty: 1, price: it.price }]);
+    }
+    setQuery('');
+    if (searchRef.current) searchRef.current.focus();
+  }
+
+  function setQty(sku, delta) { setItems(items.map(i => i.sku === sku ? { ...i, qty: Math.max(1, i.qty + delta) } : i)); }
+  function setQtyDirect(sku, val) {
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && n >= 1) setItems(items.map(i => i.sku === sku ? { ...i, qty: n } : i));
+  }
+  function removeItem(sku) { setItems(items.filter(i => i.sku !== sku)); }
+
+  // GST 5% + PST 7% independently from subtotal (BC)
+  const subtotal = items.reduce((a, i) => a + round2(i.qty * i.price), 0);
+  const gst      = round2(subtotal * 0.05);
+  const pst      = round2(subtotal * 0.07);
+  const total    = round2(subtotal + gst + pst);
+
+  function handlePay(method) {
+    if (!items.length) { toast('Cart is empty', 'error'); return; }
+    apiPost('/api/sale', {
+      customer: customerName,
+      lines: items.map(i => ({ sku: i.sku, name: i.name, qty: i.qty, unitPrice: i.price })),
+      subtotal, gst, pst, total, payment: { method },
+    }).then(res => {
+      toast(res ? 'Sale completed \xb7 ' + fmt$(total) : 'Sale recorded offline', res ? 'success' : '');
+      setItems([]);
     });
-  }, []);
-
-  function handleSearch(v) {
-    setQuery(v);
-    clearTimeout(debounce.current);
-    debounce.current = setTimeout(async () => {
-      if (!v.trim()) { setItems(MOCK_INVENTORY); return; }
-      setLoading(true);
-      const data = await apiGet('/api/items-search?q=' + encodeURIComponent(v));
-      setLoading(false);
-      if (data && Array.isArray(data.items)) {
-        setItems(data.items);
-        setUsingMock(false);
-      } else {
-        const q = v.toLowerCase();
-        setItems(MOCK_INVENTORY.filter(i => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q) || i.dept.toLowerCase().includes(q)));
-      }
-    }, 280);
   }
 
-  const depts = ['all', ...Array.from(new Set(MOCK_INVENTORY.map(i => i.dept)))];
+  const totalUnits = items.reduce((a, i) => a + i.qty, 0);
 
-  const filtered = useMemo(() => {
-    if (deptFilter === 'all') return items;
-    return items.filter(i => i.dept === deptFilter);
-  }, [items, deptFilter]);
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Sales Register',
+      sub: 'Sale #S-1188 \xb7 Drawer open',
+      actions: [
+        h('button', { key: 'park', className: 'btn' }, 'Park sale'),
+        h('button', { key: 'disc', className: 'btn' }, 'Discount'),
+        h('button', { key: 'ret', className: 'btn' }, 'Returns'),
+      ],
+    }),
 
-  function stockCls(qty) {
-    if (qty <= 0) return 'out-stock';
-    if (qty <= 2) return 'low-stock';
-    return 'in-stock';
-  }
-
-  function stockLabel(qty) {
-    if (qty <= 0) return 'OUT';
-    if (qty <= 2) return 'LOW: ' + qty;
-    return qty;
-  }
-
-  return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-    h('div', { className: 'page-header' },
-      h('div', { className: 'page-title' }, 'Inventory'),
-      loading ? h('span', { className: 'loading-spinner', style: { marginLeft: 8 } }) : null,
-      h('div', { className: 'page-header-actions' })
-    ),
-
-    h('div', { className: 'filter-bar' },
-      h('div', { className: 'search-wrap' },
-        h(Icon.search),
-        h('input', {
-          className: 'input-search',
-          placeholder: 'Search items or SKU...',
-          value: query,
-          onChange: e => handleSearch(e.target.value),
-          autoFocus: true,
-        })
-      ),
-      h('select', {
-        className: 'filter-select',
-        value: deptFilter,
-        onChange: e => setDeptFilter(e.target.value),
-      },
-        depts.map(d => h('option', { key: d, value: d }, d === 'all' ? 'All Depts' : d))
-      ),
-      usingMock ? h('div', { className: 'api-banner', style: { marginBottom: 0 } }, '⚠ Mock data - connect Lightspeed') : null
-    ),
-
-    h('div', { className: 'inventory-table-wrap', style: { flex: 1, overflow: 'auto', paddingTop: 0 } },
-      h('table', { className: 'data-table' },
-        h('thead', null,
-          h('tr', null,
-            h('th', null, 'SKU'),
-            h('th', null, 'Name'),
-            h('th', null, 'Dept'),
-            h('th', { style: { textAlign: 'center' } }, 'Stock'),
-            h('th', { style: { textAlign: 'right' } }, 'Price')
+    h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, alignItems: 'flex-start' } },
+      // LEFT — cart
+      h('div', { className: 'card' },
+        h('div', { className: 'card-head' },
+          h('h3', null, 'Cart'),
+          h('span', { className: 'sub' }, items.length + ' line' + (items.length === 1 ? '' : 's')),
+          h('div', { className: 'right' },
+            h('span', { className: 'mono', style: { fontSize: 10, color: 'var(--text-2)', letterSpacing: '0.08em' } }, 'SCAN OR TYPE SKU')
           )
         ),
-        h('tbody', null,
-          filtered.length === 0
-            ? h('tr', null, h('td', { colSpan: 5 },
-                h('div', { className: 'empty-state' },
-                  h('div', { className: 'es-icon' }, '📦'),
-                  h('p', null, 'No items found')
-                )
-              ))
-            : filtered.map(item =>
-                h('tr', { key: item.id },
-                  h('td', null, h('span', { className: 'text-mono', style: { fontSize: 12, color: 'var(--text-muted)' } }, item.sku)),
-                  h('td', null, h('span', { style: { fontWeight: 500 } }, item.name)),
-                  h('td', null, h('span', { className: 'text-mono', style: { fontSize: 12, color: 'var(--text-dim)' } }, item.dept)),
-                  h('td', { style: { textAlign: 'center' } },
-                    h('span', { className: 'stock-badge ' + stockCls(item.qty) }, stockLabel(item.qty))
-                  ),
-                  h('td', { style: { textAlign: 'right' } },
-                    h('span', { className: 'text-mono', style: { fontWeight: 500 } }, fmt$(item.price))
-                  )
-                )
+
+        h('div', { style: { padding: 12, borderBottom: '1px solid var(--line)' } },
+          h('div', { className: 'search-field' },
+            h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+            h('input', {
+              ref: searchRef,
+              className: 'input lg',
+              value: query,
+              onChange: e => setQuery(e.target.value),
+              placeholder: 'Scan barcode or search items, SKUs, services…',
+            }),
+            h('span', { className: 'kbd-hint' }, '/')
+          )
+        ),
+
+        query && results.length > 0 && h('div', { className: 'item-results' },
+          results.map(c =>
+            h('div', { key: c.sku, className: 'item-row', onClick: () => addItem(c) },
+              h('div', null,
+                h('div', null, c.name),
+                h('div', { className: 'sku' }, c.sku)
+              ),
+              h('div', { className: 'stock' + (c.low ? ' low' : '') }, c.stock + ' in stock'),
+              h('div', { className: 'price' }, fmt$(c.price))
+            )
+          )
+        ),
+        query && results.length === 0 && h('div', { className: 'item-results' },
+          h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
+            'No results for "' + query + '"')
+        ),
+
+        h('div', { className: 'line-row head' },
+          h('span', null, 'Item'),
+          h('span', null, 'Qty'),
+          h('span', { style: { textAlign: 'right' } }, 'Price'),
+          h('span', { style: { textAlign: 'right' } }, 'Line'),
+          h('span')
+        ),
+
+        items.map(i =>
+          h('div', { key: i.sku, className: 'line-row' },
+            h('div', null,
+              h('div', { className: 'name' }, i.name),
+              h('div', { className: 'sku' }, i.sku)
+            ),
+            h('div', null,
+              h('div', { className: 'qty-stepper' },
+                h('button', { onClick: () => setQty(i.sku, -1) }, '−'),
+                h('input', { value: i.qty, onChange: e => setQtyDirect(i.sku, e.target.value) }),
+                h('button', { onClick: () => setQty(i.sku, +1) }, '+')
               )
+            ),
+            h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
+            h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(i.qty * i.price)),
+            h('button', { className: 'icon-btn', onClick: () => removeItem(i.sku) }, h(Ico.Trash, { size: 13 }))
+          )
+        ),
+
+        items.length === 0 && h('div', {
+          style: { padding: '40px 16px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' },
+        }, 'Cart empty — scan or search to add items'),
+
+        h('div', {
+          className: 'row',
+          style: { padding: '10px 14px', justifyContent: 'space-between', color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: '1px solid var(--line)' },
+        },
+          h('span', null, totalUnits + ' units'),
+          h('button', { className: 'btn ghost', onClick: () => setItems([]), style: { height: 24, padding: '0 8px', fontSize: 11 } }, 'Clear cart')
+        )
+      ),
+
+      // RIGHT — checkout
+      h('div', { className: 'col', style: { gap: 16 } },
+        h('div', { className: 'card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'Customer'), h('span', { className: 'sub' }, 'Optional')),
+          h('div', { style: { padding: 14 } },
+            h('div', { className: 'search-field' },
+              h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+              h('input', {
+                className: 'input',
+                value: customerName,
+                onChange: e => setCustomerName(e.target.value),
+                placeholder: 'Walk-in',
+              })
+            ),
+            h('div', { className: 'row', style: { marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)', letterSpacing: '0.04em' } },
+              h(AvInit, { initials: 'DT', tone: 'am' }),
+              h('div', { style: { display: 'flex', flexDirection: 'column', lineHeight: 1.2 } },
+                h('span', { style: { color: 'var(--text)', fontFamily: 'var(--font-ui)' } }, 'Devon Tran'),
+                h('span', null, '(250) 555-0188 \xb7 11 visits')
+              )
+            )
+          )
+        ),
+
+        h('div', { className: 'card' },
+          h('div', { className: 'card-head' }, h('h3', null, 'Total'), h('span', { className: 'sub' }, 'BC tax')),
+          h('div', { className: 'totals' },
+            h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'Subtotal'),   h('span', { className: 'val' }, fmt$(subtotal))),
+            h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'GST \xb7 5%'), h('span', { className: 'val' }, fmt$(gst))),
+            h('div', { className: 'totals-row' }, h('span', { className: 'label' }, 'PST \xb7 7%'), h('span', { className: 'val' }, fmt$(pst))),
+            h('div', { className: 'totals-row grand' },
+              h('span', { className: 'label' }, 'Total CAD'),
+              h('span', { className: 'val' }, fmt$(total))
+            ),
+            h('div', { className: 'pay-grid' },
+              h('button', { className: 'pay-btn', onClick: () => handlePay('cash') },
+                h(Ico.Cash, { size: 14 }), h('span', null, 'Cash'), h('span', { className: 'kbd' }, 'F2')
+              ),
+              h('button', { className: 'pay-btn primary', onClick: () => handlePay('card') },
+                h(Ico.Card, { size: 14 }), h('span', null, 'Card'), h('span', { className: 'kbd' }, 'F1')
+              ),
+              h('button', { className: 'pay-btn', onClick: () => handlePay('other') },
+                h(Ico.Dots, { size: 14 }), h('span', null, 'Other'), h('span', { className: 'kbd' }, 'F3')
+              )
+            ),
+            h('div', {
+              className: 'row',
+              style: { padding: '10px 14px', justifyContent: 'space-between', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.1em', textTransform: 'uppercase' },
+            },
+              h('span', null, 'Terminal \xb7 MOBY-A920 \xb7 paired'),
+              h('span', { style: { color: 'var(--green)' } }, '● READY')
+            )
+          )
         )
       )
     )
   );
 }
 
-/* ─────────────────────────────────────────────
-   ROOT APP
-───────────────────────────────────────────── */
+/* ─────────────────────────────────────────
+   PLACEHOLDER MODULE
+───────────────────────────────────────── */
+function PlaceholderScreen({ name }) {
+  const titles = { customers: 'Customers', inventory: 'Inventory', bookings: 'Bookings', 'purchase-orders': 'Purchase Orders', reports: 'Reports' };
+  return h(Fragment, null,
+    h(PageHead, { title: titles[name] || name, sub: 'Module' }),
+    h('div', { className: 'placeholder-screen' },
+      h('div', { className: 'label' }, 'Module placeholder — not part of this round'),
+      h('div', { style: { marginTop: 8, color: 'var(--text-3)', fontSize: 12 } },
+        'Scoped screens: Dashboard, Work Orders, New Work Order, Sales Register.'
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   APP ROOT
+───────────────────────────────────────── */
 function App() {
   const [staff, setStaff] = useState(() => {
-    try {
-      const s = sessionStorage.getItem('pos-staff');
-      return s ? JSON.parse(s) : null;
-    } catch { return null; }
+    try { return JSON.parse(sessionStorage.getItem('pos-staff') || 'null'); } catch { return null; }
   });
-  const [page, setPage] = useState('dashboard');
-  const [workOrders, setWorkOrders] = useState(MOCK_WO);
+  const [screen, setScreen] = useState('dashboard');
+  const topbarSearchRef = useRef(null);
 
-  function handleLogin(s) {
-    setStaff(s);
-    setPage('dashboard');
-  }
-
-  function handleLock() {
-    sessionStorage.removeItem('pos-staff');
-    setStaff(null);
-  }
-
-  const overdueCount = workOrders.filter(w => w.daysOverdue > 0).length;
-
-  // Wire POS_ACTIONS so CommandPalette navTo() works
-  React.useEffect(() => {
-    window.POS_ACTIONS = { navTo: setPage };
-    return () => { window.POS_ACTIONS = null; };
-  }, [setPage]);
-
-  // Initialize offline queue
-  React.useEffect(() => {
-    if (window.OfflineQueue) window.OfflineQueue.init(WORKER_URL);
-  }, []);
+  useEffect(() => {
+    function onKey(e) {
+      if (!staff) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        if (topbarSearchRef.current) topbarSearchRef.current.focus();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        setScreen('new-wo');
+        return;
+      }
+      if (e.key === 'n' && screen === 'dashboard' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
+        setScreen('sales');
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [staff, screen]);
 
   if (!staff) {
-    return h('div', null,
-      h(LoginScreen, { onLogin: handleLogin }),
+    return h(Fragment, null,
+      h(LoginScreen, { onLogin: setStaff }),
       h(Toast)
     );
   }
 
-  function renderPage() {
-    switch (page) {
-      case 'dashboard':       return h(Dashboard, { setPage, workOrders });
-      case 'workorders':      return h(WorkOrders, { staff });
-      case 'sales':           return h(Sales, { staff });
-      case 'customers':       return h(Customers);
-      case 'inventory':       return h(Inventory);
-      case 'reports':         return h(ReportsPageWrapper);
-      case 'purchase-orders': return h(PurchaseOrdersWrapper);
-      default:                return h(Dashboard, { setPage, workOrders });
+  const renderScreen = () => {
+    switch (screen) {
+      case 'dashboard':   return h(DashboardScreen,    { setScreen });
+      case 'work-orders': return h(WorkOrdersScreen,   { setScreen });
+      case 'new-wo':      return h(NewWorkOrderScreen, { setScreen });
+      case 'sales':       return h(SalesScreen);
+      default:            return h(PlaceholderScreen,  { name: screen });
     }
-  }
+  };
 
-  return h('div', { id: 'app' },
-    h(Sidebar, { page, setPage, staff, onLock: handleLock, overdueCount }),
-    h('main', { id: 'main' }, renderPage()),
+  return h(Fragment, null,
+    h('div', { className: 'app' },
+      h(Sidebar, { screen, setScreen, staff }),
+      h('main', { className: 'main' },
+        h(Topbar, { screen, topbarSearchRef }),
+        h('div', { className: 'content' }, renderScreen()),
+        h(StatusStrip)
+      )
+    ),
     h(Toast)
   );
 }
 
-/* ── Wrapper components for vanilla JS modules ── */
-function ReportsPageWrapper() {
-  const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (ref.current && window.ReportsPage) {
-      ref.current.innerHTML = '';
-      const el = window.ReportsPage();
-      if (el) ref.current.appendChild(typeof el === 'string' ? (() => { const d = document.createElement('div'); d.innerHTML = el; return d; })() : el);
-    }
-  }, []);
-  return h('div', { ref, style: { padding: 28, overflowY: 'auto', height: '100%' } },
-    !window.ReportsPage && h('p', { style: { color: 'var(--text-dim)', fontFamily: 'monospace' } }, 'Reports module loading...')
-  );
-}
-
-function PurchaseOrdersWrapper() {
-  const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (ref.current && window.PurchaseOrdersPage) {
-      ref.current.innerHTML = '';
-      const el = window.PurchaseOrdersPage();
-      if (el) ref.current.appendChild(typeof el === 'string' ? (() => { const d = document.createElement('div'); d.innerHTML = el; return d; })() : el);
-    }
-  }, []);
-  return h('div', { ref, style: { padding: 28, overflowY: 'auto', height: '100%' } },
-    !window.PurchaseOrdersPage && h('p', { style: { color: 'var(--text-dim)', fontFamily: 'monospace' } }, 'Purchase Orders module loading...')
-  );
-}
-
 /* ── Mount ── */
-const root = createRoot(document.getElementById('root'));
-root.render(h(App));
+createRoot(document.getElementById('root')).render(h(App));
