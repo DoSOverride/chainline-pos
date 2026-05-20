@@ -1,4 +1,4 @@
-/* ChainLine POS v1.0 — 2026-05-20
+/* ChainLine POS v2.1 — 2026-05-20
  * React 18 via CDN. No JSX, no Babel. Pure createElement.
  * Design: design_handoff_chainline_pos/README.md
  * Worker: https://still-term-f1ec.taocaruso77.workers.dev
@@ -633,7 +633,7 @@ function StatusStrip() {
     h('span', { style: { color: 'var(--text3)', margin: '0 4px' } }, '\xb7'),
     h('span', null, 'PRINTER READY'),
     h('span', { className: 'spacer' }),
-    h('span', null, 'CHAINLINE POS \xb7 v1.0 \xb7 MAY 20')
+    h('span', null, 'CHAINLINE POS \xb7 v2.1 \xb7 MAY 20')
   );
 }
 
@@ -1507,8 +1507,26 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   // Wire barcode scanner: rapid keystrokes ending in Enter
   useBarcodeScanner(useCallback(code => {
     const found = MOCK_CATALOG.find(c => c.sku === code || c.sku.replace(/-/g,'') === code.replace(/-/g,''));
-    if (found) { addItem(found); toast('Scanned: ' + found.name, 'success'); }
-    else toast('Barcode not found: ' + code, 'error');
+    if (found) { addItem(found); toast('Scanned: ' + found.name, 'success'); return; }
+    // Fallback: try API
+    apiGet('/api/items-search?q=' + encodeURIComponent(code))
+      .then(data => {
+        if (data && data.items && data.items.length > 0) {
+          const i = data.items[0];
+          const item = {
+            sku: i.systemSku || i.customSku || i.sku,
+            name: i.description || i.name,
+            price: parseFloat(i.Prices?.ItemPrice?.amount || i.price || 0),
+            stock: parseInt(i.qoh || i.stock || 0),
+            taxablePst: !i.taxClass || i.taxClass !== 'Labour',
+          };
+          addItem(item);
+          toast('Scanned: ' + item.name, 'success');
+        } else {
+          toast('Barcode not found: ' + code, 'error');
+        }
+      })
+      .catch(() => toast('Barcode not found: ' + code, 'error'));
   }, []));
 
   useEffect(() => {
@@ -1525,12 +1543,42 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     return () => document.removeEventListener('keydown', onKey);
   });
 
-  const results = query
-    ? MOCK_CATALOG.filter(c =>
-        c.name.toLowerCase().includes(query.toLowerCase()) ||
-        c.sku.toLowerCase().includes(query.toLowerCase())
-      )
-    : [];
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+
+  // Debounced API search
+  useEffect(() => {
+    if (query.trim().length < 2) { setSearchResults([]); return; }
+    const t = setTimeout(() => {
+      setSearching(true);
+      apiGet('/api/items-search?q=' + encodeURIComponent(query.trim()))
+        .then(data => {
+          if (data && data.items && data.items.length > 0) {
+            setSearchResults(data.items.map(i => ({
+              sku: i.systemSku || i.customSku || i.sku,
+              name: i.description || i.name,
+              price: parseFloat(i.Prices?.ItemPrice?.amount || i.price || 0),
+              stock: parseInt(i.qoh || i.stock || 0),
+              taxablePst: !i.taxClass || i.taxClass !== 'Labour',
+            })));
+          } else {
+            // Fallback to MOCK_CATALOG for demo
+            setSearchResults(MOCK_CATALOG.filter(c =>
+              c.name.toLowerCase().includes(query.toLowerCase()) ||
+              c.sku.toLowerCase().includes(query.toLowerCase())
+            ));
+          }
+        })
+        .catch(() => {
+          setSearchResults(MOCK_CATALOG.filter(c =>
+            c.name.toLowerCase().includes(query.toLowerCase()) ||
+            c.sku.toLowerCase().includes(query.toLowerCase())
+          ));
+        })
+        .finally(() => setSearching(false));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [query]);
 
   function addItem(it) {
     const existing = items.find(i => i.sku === it.sku);
