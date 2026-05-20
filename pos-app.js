@@ -1548,17 +1548,708 @@ function SalesScreen({ onBarcodeScan }) {
 }
 
 /* ─────────────────────────────────────────
-   PLACEHOLDER MODULE
+   SCREEN E — CUSTOMERS
+───────────────────────────────────────── */
+const MOCK_CUSTOMER_DETAIL = {
+  1: {
+    bikes: ['Santa Cruz Bronson CC X01 2023', 'Specialized Crux 2022', 'Trek Marlin 7 2019'],
+    orders: [
+      { id: 'S-1180',   date: '2026-04-12', total: 312.50, items: 'Cassette + chain + labour' },
+      { id: 'WO-2210',  date: '2025-11-04', total: 185.00, items: 'Full tune' },
+      { id: 'S-1102',   date: '2025-08-19', total:  68.00, items: 'Tires x2' },
+    ],
+    openWo: ['WO-2388'],
+  },
+  2: {
+    bikes: ['Norco Sight C2 2023 Forest Green', 'Trek Domane AL 3 2021'],
+    orders: [
+      { id: 'S-1188',  date: '2026-05-20', total: 354.00, items: 'Current sale' },
+      { id: 'WO-2391', date: '2026-05-18', total: 312.50, items: 'Drivetrain replace' },
+    ],
+    openWo: ['WO-2391'],
+  },
+};
+
+function CustomerDetail({ customer, onClose, onNewSale, onNewWo }) {
+  const detail = MOCK_CUSTOMER_DETAIL[customer.id] || { bikes: [], orders: [], openWo: [] };
+  const [addBikeMode, setAddBikeMode] = useState(false);
+  const [newBike, setNewBike] = useState('');
+
+  return h('div', { className: 'slide-panel' },
+    h('div', { className: 'panel-head' },
+      h('div', null,
+        h('div', { className: 'page-sub' }, 'Customer #' + customer.id),
+        h('div', { className: 'page-title', style: { fontSize: 18 } }, customer.name)
+      ),
+      h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
+        h('button', { className: 'btn primary', onClick: function() { onNewSale && onNewSale(customer); onClose(); } }, 'New Sale'),
+        h('button', { className: 'btn', onClick: function() { onNewWo && onNewWo(customer); onClose(); } }, 'New WO'),
+        h('button', { className: 'btn ghost', onClick: onClose }, '\xd7')
+      )
+    ),
+    h('div', { className: 'panel-body' },
+      h('div', { className: 'wo-detail-info' },
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Phone'),        h('span', { className: 'v mono' }, customer.phone)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Member since'), h('span', { className: 'v mono' }, customer.memberSince)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Open WOs'),     h('span', { className: 'v mono' }, detail.openWo.join(', ') || 'None'))
+      ),
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+          h('span', null, 'Bikes on File'),
+          h('button', { className: 'btn ghost', style: { height: 22, padding: '0 6px', fontSize: 11 }, onClick: function() { setAddBikeMode(true); } }, h(Ico.Plus, { size: 11 }), ' Add')
+        ),
+        detail.bikes.map(function(b, i) {
+          return h('div', { key: i, style: { padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--text-1)' } }, b);
+        }),
+        addBikeMode && h('div', { style: { display: 'flex', gap: 8, marginTop: 8 } },
+          h('input', { className: 'input', placeholder: 'Make + model + year...', value: newBike, onChange: function(e) { setNewBike(e.target.value); }, style: { flex: 1 } }),
+          h('button', { className: 'btn primary', onClick: function() { toast('Bike added', 'success'); setAddBikeMode(false); setNewBike(''); } }, 'Add'),
+          h('button', { className: 'btn', onClick: function() { setAddBikeMode(false); } }, 'Cancel')
+        )
+      ),
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Purchase History'),
+        h('table', { className: 'tbl' },
+          h('thead', null, h('tr', null, h('th', null, 'ID'), h('th', null, 'Date'), h('th', null, 'Items'), h('th', null, 'Total'))),
+          h('tbody', null,
+            detail.orders.map(function(o) {
+              return h('tr', { key: o.id },
+                h('td', { className: 'num' }, o.id),
+                h('td', { className: 'mono muted' }, o.date),
+                h('td', { className: 'muted' }, o.items),
+                h('td', { className: 'num' }, fmt$(o.total))
+              );
+            })
+          )
+        )
+      )
+    )
+  );
+}
+
+function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(null);
+
+  const filtered = MOCK_CUSTOMERS.filter(function(c) {
+    const q = search.toLowerCase();
+    return !q || c.name.toLowerCase().includes(q) || c.phone.includes(q);
+  });
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Customers', sub: 'CRM',
+      actions: [h('button', { key: 'new', className: 'btn primary' }, h(Ico.Plus, { size: 13 }), ' New Customer')],
+    }),
+    h('div', { className: 'filters', style: { marginBottom: 14 } },
+      h('div', { className: 'search-field', style: { maxWidth: 360, flex: '0 0 360px' } },
+        h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+        h('input', { className: 'input', placeholder: 'Search name or phone...', value: search, onChange: function(e) { setSearch(e.target.value); } })
+      )
+    ),
+    h('div', { className: 'card' },
+      h('table', { className: 'tbl' },
+        h('thead', null, h('tr', null,
+          h('th', null, 'Name'), h('th', null, 'Phone'),
+          h('th', { style: { width: 70 } }, 'Bikes'), h('th', { style: { width: 130 } }, 'Member Since'),
+          h('th', { style: { width: 32 } })
+        )),
+        h('tbody', null,
+          filtered.map(function(c) {
+            return h('tr', { key: c.id, style: { cursor: 'pointer' }, onClick: function() { setSelected(c); } },
+              h('td', null, c.name),
+              h('td', { className: 'mono muted' }, c.phone),
+              h('td', { className: 'num muted' }, c.bikes),
+              h('td', { className: 'mono muted' }, c.memberSince),
+              h('td', { onClick: function(e) { e.stopPropagation(); } },
+                h(OptionsMenu, { items: [
+                  { label: 'View detail',    onClick: function() { setSelected(c); } },
+                  { label: 'New Sale',       onClick: function() { onNewSale && onNewSale(c); } },
+                  { label: 'New Work Order', onClick: function() { onNewWo && onNewWo(c); } },
+                  'divider',
+                  { label: 'Edit',   onClick: function() { toast('Edit coming soon'); } },
+                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                ]})
+              )
+            );
+          })
+        )
+      )
+    ),
+    selected && h('div', { className: 'panel-overlay', onClick: function(e) { if (e.target === e.currentTarget) setSelected(null); } },
+      h(CustomerDetail, { customer: selected, onClose: function() { setSelected(null); }, onNewSale, onNewWo })
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN F — INVENTORY
+───────────────────────────────────────── */
+function ItemDetail({ item, onClose }) {
+  const [price, setPrice]     = useState(item.price.toFixed(2));
+  const [cost, setCost]       = useState((item.price * 0.55).toFixed(2));
+  const [qty, setQty]         = useState(item.stock);
+  const [editing, setEditing] = useState(false);
+
+  const costNum  = parseFloat(cost)  || 0;
+  const priceNum = parseFloat(price) || 1;
+  const margin   = Math.round((1 - costNum / priceNum) * 100);
+
+  function save() {
+    apiPost('/api/inventory/' + item.sku, { price: priceNum, cost: costNum, stock: qty })
+      .then(function() { toast('Saved', 'success'); });
+    setEditing(false);
+  }
+
+  return h('div', { className: 'slide-panel' },
+    h('div', { className: 'panel-head' },
+      h('div', null,
+        h('div', { className: 'page-sub' }, item.sku),
+        h('div', { className: 'page-title', style: { fontSize: 16 } }, item.name)
+      ),
+      h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
+        editing
+          ? h(Fragment, null,
+              h('button', { className: 'btn primary', onClick: save }, 'Save'),
+              h('button', { className: 'btn', onClick: function() { setEditing(false); } }, 'Cancel')
+            )
+          : h('button', { className: 'btn', onClick: function() { setEditing(true); } }, 'Edit'),
+        h('button', { className: 'btn ghost', onClick: onClose }, '\xd7')
+      )
+    ),
+    h('div', { className: 'panel-body' },
+      h('div', { className: 'wo-detail-info' },
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'SKU'),   h('span', { className: 'v mono' }, item.sku)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Price'),
+          editing ? h('input', { className: 'input mono', value: price, onChange: function(e) { setPrice(e.target.value); }, style: { width: 100, height: 26, padding: '2px 6px' } })
+                  : h('span', { className: 'v mono' }, fmt$(priceNum))
+        ),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Cost'),
+          editing ? h('input', { className: 'input mono', value: cost, onChange: function(e) { setCost(e.target.value); }, style: { width: 100, height: 26, padding: '2px 6px' } })
+                  : h('span', { className: 'v mono' }, fmt$(costNum))
+        ),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Margin'),
+          h('span', { className: 'v mono', style: { color: margin > 30 ? 'var(--green)' : margin < 15 ? 'var(--accent)' : 'var(--text)' } }, margin + '%')
+        ),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'In Stock'),
+          editing ? h('input', { className: 'input mono', type: 'number', value: qty, onChange: function(e) { setQty(parseInt(e.target.value,10)||0); }, style: { width: 80, height: 26, padding: '2px 6px' } })
+                  : h('span', { className: 'v mono' }, qty)
+        ),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Low stock'),
+          h('span', { className: 'v', style: { color: item.low ? 'var(--amber)' : 'var(--green)' } }, item.low ? 'Yes' : 'No')
+        )
+      ),
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Actions'),
+        h('div', { style: { display: 'flex', gap: 8, padding: '10px 0' } },
+          h('button', { className: 'btn', onClick: function() { toast('Reorder requested', 'success'); } }, 'Reorder'),
+          h('button', { className: 'btn', onClick: function() { toast('Added to PO', 'success'); } }, 'Add to PO')
+        )
+      ),
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Sales History'),
+        h('div', { style: { padding: '8px 0', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } }, 'No sales history in mock data')
+      )
+    )
+  );
+}
+
+function InventoryScreen() {
+  const [search, setSearch]   = useState('');
+  const [selected, setSelected] = useState(null);
+
+  const filtered = MOCK_CATALOG.filter(function(c) {
+    const q = search.toLowerCase();
+    return !q || c.name.toLowerCase().includes(q) || c.sku.toLowerCase().includes(q);
+  });
+
+  useBarcodeScanner(useCallback(function(code) {
+    const found = MOCK_CATALOG.find(function(c) { return c.sku === code; });
+    if (found) setSelected(found);
+    else toast('Not found: ' + code, 'error');
+  }, []));
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Inventory', sub: 'Stock',
+      actions: [h('button', { key: 'new', className: 'btn primary' }, h(Ico.Plus, { size: 13 }), ' Add Item')],
+    }),
+    h('div', { className: 'filters', style: { marginBottom: 14 } },
+      h('div', { className: 'search-field', style: { maxWidth: 360, flex: '0 0 360px' } },
+        h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+        h('input', { className: 'input', placeholder: 'Search name or SKU...', value: search, onChange: function(e) { setSearch(e.target.value); } })
+      )
+    ),
+    h('div', { className: 'card' },
+      h('table', { className: 'tbl' },
+        h('thead', null, h('tr', null,
+          h('th', null, 'Name'), h('th', { style: { width: 150 } }, 'SKU'),
+          h('th', { style: { width: 90 } }, 'Price'), h('th', { style: { width: 70 } }, 'Stock'),
+          h('th', { style: { width: 80 } }, 'Status'), h('th', { style: { width: 32 } })
+        )),
+        h('tbody', null,
+          filtered.map(function(c) {
+            return h('tr', { key: c.sku, style: { cursor: 'pointer' }, onClick: function() { setSelected(c); } },
+              h('td', null, c.name),
+              h('td', { className: 'num muted' }, c.sku),
+              h('td', { className: 'num' }, fmt$(c.price)),
+              h('td', { className: 'num' }, c.stock),
+              h('td', null, c.low ? h(Badge, { kind: 'booked' }, 'Low') : h(Badge, { kind: 'ready' }, 'OK')),
+              h('td', { onClick: function(e) { e.stopPropagation(); } },
+                h(OptionsMenu, { items: [
+                  { label: 'View detail', onClick: function() { setSelected(c); } },
+                  { label: 'Edit',        onClick: function() { setSelected(c); } },
+                  { label: 'Reorder',     onClick: function() { toast('Reorder requested', 'success'); } },
+                  'divider',
+                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                ]})
+              )
+            );
+          })
+        )
+      )
+    ),
+    selected && h('div', { className: 'panel-overlay', onClick: function(e) { if (e.target === e.currentTarget) setSelected(null); } },
+      h(ItemDetail, { item: selected, onClose: function() { setSelected(null); } })
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN G — PURCHASE ORDERS
+───────────────────────────────────────── */
+const MOCK_POS = [
+  { id: 'PO-0451', vendor: 'Shimano Canada', date: '2026-05-15', status: 'received', lines: [
+    { sku: 'SHIM-XT-CS-12', name: 'Shimano XT M8100 Cassette', qty: 6,  received: 6,  cost: 98.00 },
+    { sku: 'CHAIN-XT-126L', name: 'Shimano XT Chain 126L',     qty: 12, received: 12, cost: 31.00 },
+  ]},
+  { id: 'PO-0449', vendor: 'Maxxis', date: '2026-05-10', status: 'partial', lines: [
+    { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29x2.5', qty: 10, received: 4, cost: 44.00 },
+  ]},
+  { id: 'PO-0447', vendor: 'SRAM', date: '2026-05-08', status: 'ordered', lines: [
+    { sku: 'BRAKE-PAD-CODE', name: 'SRAM Code Brake Pads', qty: 20, received: 0, cost: 19.00 },
+  ]},
+];
+
+function PurchaseOrderDetail({ po, onClose }) {
+  const [lines, setLines] = useState(po.lines.map(function(l) { return Object.assign({}, l); }));
+
+  function receiveItem(i) {
+    setLines(function(ls) {
+      return ls.map(function(l, idx) {
+        return idx === i ? Object.assign({}, l, { received: Math.min(l.qty, l.received + 1) }) : l;
+      });
+    });
+    toast('Received qty updated', 'success');
+  }
+
+  function completeReceiving() {
+    toast('PO ' + po.id + ' marked as Received', 'success');
+    onClose();
+  }
+
+  const allReceived = lines.every(function(l) { return l.received >= l.qty; });
+
+  return h('div', { className: 'slide-panel' },
+    h('div', { className: 'panel-head' },
+      h('div', null,
+        h('div', { className: 'page-sub' }, po.id),
+        h('div', { className: 'page-title', style: { fontSize: 18 } }, po.vendor)
+      ),
+      h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
+        !allReceived && h('button', { className: 'btn primary', onClick: completeReceiving }, 'Complete Receiving'),
+        h('button', { className: 'btn ghost', onClick: onClose }, '\xd7')
+      )
+    ),
+    h('div', { className: 'panel-body' },
+      h('div', { className: 'wo-detail-info' },
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'PO #'),    h('span', { className: 'v mono' }, po.id)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Vendor'),  h('span', { className: 'v' }, po.vendor)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Date'),    h('span', { className: 'v mono' }, po.date)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Status'),  h('span', { className: 'v' }, po.status))
+      ),
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Line Items'),
+        h('table', { className: 'tbl' },
+          h('thead', null, h('tr', null,
+            h('th', null, 'Item'), h('th', { style: { width: 70 } }, 'Ordered'),
+            h('th', { style: { width: 80 } }, 'Received'), h('th', { style: { width: 90 } }, 'Cost'), h('th', { style: { width: 110 } })
+          )),
+          h('tbody', null,
+            lines.map(function(l, i) {
+              return h('tr', { key: l.sku },
+                h('td', null, h('div', null, l.name), h('div', { className: 'num muted', style: { fontSize: 10 } }, l.sku)),
+                h('td', { className: 'num' }, l.qty),
+                h('td', { className: 'num', style: { color: l.received >= l.qty ? 'var(--green)' : l.received > 0 ? 'var(--amber)' : 'var(--text-2)' } }, l.received + '/' + l.qty),
+                h('td', { className: 'num' }, fmt$(l.cost)),
+                h('td', null, l.received < l.qty && h('button', { className: 'btn', style: { height: 26, padding: '0 10px', fontSize: 11 }, onClick: function() { receiveItem(i); } }, '+1 Receive'))
+              );
+            })
+          )
+        )
+      )
+    )
+  );
+}
+
+function PurchaseOrdersScreen() {
+  const [selected, setSelected] = useState(null);
+  const [showNew, setShowNew]   = useState(false);
+  const [vendor, setVendor]     = useState('');
+  const [newLines, setNewLines] = useState([]);
+  const [lineQ, setLineQ]       = useState('');
+
+  const lineResults = lineQ
+    ? MOCK_CATALOG.filter(function(c) { return c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase()); }).slice(0,5)
+    : [];
+
+  function addLine(it) {
+    setNewLines(function(l) { return l.concat([{ sku: it.sku, name: it.name, qty: 1, cost: (it.price * 0.55).toFixed(2) }]); });
+    setLineQ('');
+  }
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Purchase Orders', sub: 'Tools',
+      actions: [h('button', { key: 'new', className: 'btn primary', onClick: function() { setShowNew(true); } }, h(Ico.Plus, { size: 13 }), ' New PO')],
+    }),
+    showNew && h(Modal, { title: 'New Purchase Order', onClose: function() { setShowNew(false); }, width: 560 },
+      h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
+        h(Field, { label: 'Vendor' },
+          h('input', { className: 'input', placeholder: 'Vendor name...', value: vendor, onChange: function(e) { setVendor(e.target.value); } })
+        ),
+        h(Field, { label: 'Add Line Items' },
+          h('div', { className: 'search-field' },
+            h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+            h('input', { className: 'input', placeholder: 'Search items...', value: lineQ, onChange: function(e) { setLineQ(e.target.value); } })
+          ),
+          lineQ && lineResults.length > 0 && h('div', { className: 'item-results', style: { border: '1px solid var(--line)', borderTop: 'none' } },
+            lineResults.map(function(c) {
+              return h('div', { key: c.sku, className: 'item-row', onClick: function() { addLine(c); } },
+                h('div', null, h('div', null, c.name), h('div', { className: 'sku' }, c.sku)),
+                h('div', { className: 'stock' }, c.stock + ' in stock'),
+                h('div', { className: 'price' }, fmt$(c.price))
+              );
+            })
+          )
+        ),
+        newLines.length > 0 && h('table', { className: 'tbl' },
+          h('thead', null, h('tr', null, h('th', null, 'Item'), h('th', null, 'Qty'), h('th', null, 'Cost'), h('th'))),
+          h('tbody', null,
+            newLines.map(function(l, i) {
+              return h('tr', { key: i },
+                h('td', null, l.name),
+                h('td', null, h('input', { className: 'input mono', type: 'number', value: l.qty, style: { width: 60, height: 26, padding: '2px 6px' }, onChange: function(e) { setNewLines(function(ls) { return ls.map(function(x,ii) { return ii===i ? Object.assign({},x,{qty:parseInt(e.target.value)||1}) : x; }); }); } })),
+                h('td', null, h('input', { className: 'input mono', value: l.cost, style: { width: 80, height: 26, padding: '2px 6px' }, onChange: function(e) { setNewLines(function(ls) { return ls.map(function(x,ii) { return ii===i ? Object.assign({},x,{cost:e.target.value}) : x; }); }); } })),
+                h('td', null, h('button', { className: 'icon-btn', onClick: function() { setNewLines(function(ls) { return ls.filter(function(_,ii) { return ii !== i; }); }); } }, h(Ico.Trash, { size: 12 })))
+              );
+            })
+          )
+        ),
+        h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+          h('button', { className: 'btn', onClick: function() { setShowNew(false); } }, 'Cancel'),
+          h('button', { className: 'btn primary', onClick: function() { toast('PO created', 'success'); setShowNew(false); } }, 'Create PO')
+        )
+      )
+    ),
+    h('div', { className: 'card' },
+      h('table', { className: 'tbl' },
+        h('thead', null, h('tr', null, h('th', null, 'PO #'), h('th', null, 'Vendor'), h('th', null, 'Date'), h('th', null, 'Status'), h('th', { style: { width: 32 } }))),
+        h('tbody', null,
+          MOCK_POS.map(function(po) {
+            return h('tr', { key: po.id, style: { cursor: 'pointer' }, onClick: function() { setSelected(po); } },
+              h('td', { className: 'num' }, po.id),
+              h('td', null, po.vendor),
+              h('td', { className: 'mono muted' }, po.date),
+              h('td', null,
+                po.status === 'received' ? h(Badge, { kind: 'ready'  }, 'Received') :
+                po.status === 'partial'  ? h(Badge, { kind: 'booked' }, 'Partial')  :
+                h(Badge, { kind: 'open' }, 'Ordered')
+              ),
+              h('td', { onClick: function(e) { e.stopPropagation(); } },
+                h(OptionsMenu, { items: [
+                  { label: 'View detail',   onClick: function() { setSelected(po); } },
+                  { label: 'Mark Received', onClick: function() { toast('Marked received', 'success'); } },
+                  'divider',
+                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                ]})
+              )
+            );
+          })
+        )
+      )
+    ),
+    selected && h('div', { className: 'panel-overlay', onClick: function(e) { if (e.target === e.currentTarget) setSelected(null); } },
+      h(PurchaseOrderDetail, { po: selected, onClose: function() { setSelected(null); } })
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN H — REPORTS
+───────────────────────────────────────── */
+function ReportsScreen() {
+  const [range, setRange]         = useState('today');
+  const [customStart, setCustomStart] = useState('2026-05-01');
+  const [customEnd, setCustomEnd]     = useState('2026-05-20');
+
+  const REVENUE_DATA = [
+    { day: 'Mon', rev: 2100 }, { day: 'Tue', rev: 3200 }, { day: 'Wed', rev: 1800 },
+    { day: 'Thu', rev: 2900 }, { day: 'Fri', rev: 4100 }, { day: 'Sat', rev: 3842 }, { day: 'Sun', rev: 950 },
+  ];
+  const maxRev = Math.max.apply(null, REVENUE_DATA.map(function(d) { return d.rev; }));
+
+  const TOP_ITEMS = [
+    { name: 'Shimano XT Cassette', sku: 'SHIM-XT-CS-12',    qty: 14, rev: 2646 },
+    { name: 'Labour - Full Tune',  sku: 'SVC-TUNE-S',        qty: 11, rev: 1320 },
+    { name: 'Maxxis Minion DHF',   sku: 'TIRE-MAXX-29-DH',  qty:  9, rev:  756 },
+    { name: 'Shimano XT Chain',    sku: 'CHAIN-XT-126L',    qty:  8, rev:  496 },
+  ];
+
+  const MECH_DATA = [
+    { name: 'A. Miller', open: 3, done: 8, rev: 1240 },
+    { name: 'J. Kovac',  open: 2, done: 6, rev:  870 },
+    { name: 'S. Reyes',  open: 2, done: 5, rev:  725 },
+    { name: 'M. Bell',   open: 1, done: 4, rev:  590 },
+  ];
+
+  function exportCsv() {
+    const rows = [['Day','Revenue']].concat(REVENUE_DATA.map(function(d) { return [d.day, d.rev]; }));
+    const csv = rows.map(function(r) { return r.join(','); }).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'chainline-report-' + range + '.csv';
+    a.click();
+    toast('CSV exported', 'success');
+  }
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Reports', sub: 'Tools',
+      actions: [h('button', { key: 'csv', className: 'btn', onClick: exportCsv }, 'Export CSV')],
+    }),
+    h('div', { className: 'sub-tabs', style: { marginBottom: 16 } },
+      ['today','week','month','custom'].map(function(r) {
+        return h('button', { key: r, className: 'sub-tab' + (range === r ? ' active' : ''), onClick: function() { setRange(r); } },
+          r === 'today' ? 'Today' : r === 'week' ? 'This Week' : r === 'month' ? 'This Month' : 'Custom'
+        );
+      })
+    ),
+    range === 'custom' && h('div', { style: { display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' } },
+      h('input', { className: 'input mono', type: 'date', value: customStart, onChange: function(e) { setCustomStart(e.target.value); }, style: { width: 160 } }),
+      h('span', { style: { color: 'var(--text-2)' } }, 'to'),
+      h('input', { className: 'input mono', type: 'date', value: customEnd, onChange: function(e) { setCustomEnd(e.target.value); }, style: { width: 160 } })
+    ),
+    h('div', { className: 'card mb-22' },
+      h('div', { className: 'card-head' }, h('h3', null, 'Revenue'), h('span', { className: 'sub' }, 'By day')),
+      h('div', { style: { padding: 18 } },
+        h('svg', { viewBox: '0 0 700 160', style: { width: '100%', height: 160 }, xmlns: 'http://www.w3.org/2000/svg' },
+          REVENUE_DATA.map(function(d, i) {
+            const barH = Math.round((d.rev / maxRev) * 120);
+            const x = i * 100 + 20;
+            const y = 140 - barH;
+            return h(Fragment, { key: d.day },
+              h('rect', { x: x, y: y, width: 60, height: barH, fill: 'var(--accent)', opacity: '0.8' }),
+              h('text', { x: x+30, y: 156, textAnchor: 'middle', fill: '#7a7a7a', fontSize: '11', fontFamily: 'JetBrains Mono, monospace' }, d.day),
+              h('text', { x: x+30, y: y-4, textAnchor: 'middle', fill: '#b8b8b8', fontSize: '10', fontFamily: 'JetBrains Mono, monospace' }, '$' + d.rev.toLocaleString())
+            );
+          })
+        )
+      )
+    ),
+    h('div', { className: 'grid-2' },
+      h('div', { className: 'card' },
+        h('div', { className: 'card-head' }, h('h3', null, 'Top Items Sold')),
+        h('table', { className: 'tbl' },
+          h('thead', null, h('tr', null, h('th', null, 'Item'), h('th', { style: { width: 70 } }, 'Qty'), h('th', { style: { width: 90 } }, 'Revenue'))),
+          h('tbody', null,
+            TOP_ITEMS.map(function(it) {
+              return h('tr', { key: it.sku },
+                h('td', null, h('div', null, it.name), h('div', { className: 'num muted', style: { fontSize: 10 } }, it.sku)),
+                h('td', { className: 'num' }, it.qty),
+                h('td', { className: 'num' }, fmt$(it.rev))
+              );
+            })
+          )
+        )
+      ),
+      h('div', { className: 'card' },
+        h('div', { className: 'card-head' }, h('h3', null, 'By Mechanic')),
+        h('table', { className: 'tbl' },
+          h('thead', null, h('tr', null, h('th', null, 'Mechanic'), h('th', { style: { width: 60 } }, 'Open'), h('th', { style: { width: 60 } }, 'Done'), h('th', { style: { width: 90 } }, 'Revenue'))),
+          h('tbody', null,
+            MECH_DATA.map(function(m) {
+              return h('tr', { key: m.name },
+                h('td', null, m.name), h('td', { className: 'num' }, m.open),
+                h('td', { className: 'num' }, m.done), h('td', { className: 'num' }, fmt$(m.rev))
+              );
+            })
+          )
+        )
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN I — SETTINGS
+───────────────────────────────────────── */
+const DEFAULT_SETTINGS = {
+  shopName: 'ChainLine Kelowna',
+  address: '1234 Harvey Ave, Kelowna BC V1Y 6E4',
+  phone: '(250) 555-0100',
+  email: 'kelowna@chainline.ca',
+  receiptHeader: 'Thank you for visiting ChainLine!',
+  receiptFooter: 'chainline.ca | @chainlinecycles',
+  showTaxLine: true,
+  showStaffName: true,
+  scannerDelay: 50,
+  paymentTypes: { cash: true, card: true, giftcard: true, storecredit: true },
+  taxes: [
+    { id: 1, name: 'GST', rate: 5, active: true },
+    { id: 2, name: 'PST', rate: 7, active: true },
+  ],
+  customStatuses: [
+    { id: 1, label: 'Open',        color: '#4d8fd6' },
+    { id: 2, label: 'In Progress', color: '#ededed' },
+    { id: 3, label: 'Ready',       color: '#2f9e5b' },
+    { id: 4, label: 'Done',        color: '#7a7a7a' },
+    { id: 5, label: 'Booked',      color: '#d29a3a' },
+  ],
+};
+
+function SettingsScreen() {
+  const [settings, setSettings] = useState(function() {
+    try { return JSON.parse(localStorage.getItem('pos-settings') || 'null') || DEFAULT_SETTINGS; } catch { return DEFAULT_SETTINGS; }
+  });
+  const [tab, setTab] = useState('general');
+  const [newStatus, setNewStatus] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState('#4d8fd6');
+  const [staffList, setStaffList] = useState(STAFF.map(function(s) { return Object.assign({}, s, { active: true }); }));
+  const [scannerTest, setScannerTest] = useState('');
+  const [testResult, setTestResult]   = useState('');
+
+  function save(updates) {
+    const next = Object.assign({}, settings, updates);
+    setSettings(next);
+    try { localStorage.setItem('pos-settings', JSON.stringify(next)); } catch {}
+    toast('Settings saved', 'success');
+  }
+
+  const STABS = [
+    { id: 'general', label: 'General' }, { id: 'staff', label: 'Staff' },
+    { id: 'payment', label: 'Payment Types' }, { id: 'tax', label: 'Tax Classes' },
+    { id: 'receipt', label: 'Receipt' }, { id: 'services', label: 'Services' }, { id: 'barcode', label: 'Barcode' },
+  ];
+
+  return h(Fragment, null,
+    h(PageHead, { title: 'Settings', sub: 'Configuration' }),
+    h('div', { className: 'sub-tabs', style: { marginBottom: 16 } },
+      STABS.map(function(t) {
+        return h('button', { key: t.id, className: 'sub-tab' + (tab === t.id ? ' active' : ''), onClick: function() { setTab(t.id); } }, t.label);
+      })
+    ),
+    h('div', { className: 'card' },
+      tab === 'general' && h('div', { style: { padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+        h(Field, { label: 'Shop Name' }, h('input', { className: 'input', value: settings.shopName, onChange: function(e) { save({ shopName: e.target.value }); } })),
+        h(Field, { label: 'Phone' },     h('input', { className: 'input mono', value: settings.phone,    onChange: function(e) { save({ phone: e.target.value }); } })),
+        h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Address' }, h('input', { className: 'input', value: settings.address, onChange: function(e) { save({ address: e.target.value }); } }))),
+        h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Email' },   h('input', { className: 'input mono', type: 'email', value: settings.email, onChange: function(e) { save({ email: e.target.value }); } })))
+      ),
+      tab === 'staff' && h('div', { style: { padding: 18 } },
+        staffList.map(function(s, i) {
+          return h('div', { key: s.id, className: 'aside-row', style: { gap: 10 } },
+            h(AvInit, { initials: s.initials, tone: s.tone }),
+            h('span', { style: { flex: 1, marginLeft: 8 } }, s.name),
+            h(Badge, { kind: s.role === 'Owner' ? 'inprogress' : s.role === 'Manager' ? 'booked' : 'open' }, s.role),
+            h(Toggle, { on: s.active, onChange: function(v) { setStaffList(function(ls) { return ls.map(function(x,ii) { return ii===i ? Object.assign({},x,{active:v}) : x; }); }); } }),
+            h('button', { className: 'btn ghost', style: { height: 24, padding: '0 8px', fontSize: 11 }, onClick: function() { toast('PIN change: coming soon'); } }, 'Change PIN')
+          );
+        })
+      ),
+      tab === 'payment' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
+        Object.entries(settings.paymentTypes).map(function(entry) {
+          const k = entry[0], v = entry[1];
+          const label = k === 'cash' ? 'Cash' : k === 'card' ? 'Card / Tap' : k === 'giftcard' ? 'Gift Card' : 'Store Credit';
+          return h(Toggle, { key: k, on: v, onChange: function(val) {
+            const pt = Object.assign({}, settings.paymentTypes);
+            pt[k] = val;
+            save({ paymentTypes: pt });
+          }, label: label });
+        })
+      ),
+      tab === 'tax' && h('div', { style: { padding: 18 } },
+        settings.taxes.map(function(t, i) {
+          return h('div', { key: t.id, className: 'aside-row' },
+            h('span', { style: { flex: 1 } }, t.name + ' ' + t.rate + '%'),
+            h(Toggle, { on: t.active, onChange: function(v) {
+              save({ taxes: settings.taxes.map(function(x,ii) { return ii===i ? Object.assign({},x,{active:v}) : x; }) });
+            }})
+          );
+        })
+      ),
+      tab === 'receipt' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
+        h(Field, { label: 'Header Text' }, h('textarea', { className: 'textarea', rows: 2, value: settings.receiptHeader, onChange: function(e) { save({ receiptHeader: e.target.value }); } })),
+        h(Field, { label: 'Footer Text' }, h('textarea', { className: 'textarea', rows: 2, value: settings.receiptFooter, onChange: function(e) { save({ receiptFooter: e.target.value }); } })),
+        h(Toggle, { on: settings.showTaxLine,   onChange: function(v) { save({ showTaxLine: v }); },   label: 'Show tax breakdown on receipt' }),
+        h(Toggle, { on: settings.showStaffName, onChange: function(v) { save({ showStaffName: v }); }, label: 'Show staff name on receipt' })
+      ),
+      tab === 'services' && h('div', { style: { padding: 18 } },
+        h('div', { className: 'panel-section-head', style: { marginBottom: 8 } }, 'Work Order Statuses'),
+        settings.customStatuses.map(function(s, i) {
+          return h('div', { key: s.id, className: 'aside-row' },
+            h('span', { style: { width: 12, height: 12, background: s.color, borderRadius: 2, marginRight: 8, flexShrink: 0, display: 'inline-block' } }),
+            h('input', { className: 'input', value: s.label, style: { flex: 1, height: 28, padding: '2px 8px' },
+              onChange: function(e) { save({ customStatuses: settings.customStatuses.map(function(x,ii) { return ii===i ? Object.assign({},x,{label:e.target.value}) : x; }) }); } }),
+            h('input', { type: 'color', value: s.color, style: { width: 32, height: 28, border: 'none', cursor: 'pointer', background: 'none', padding: 0 },
+              onChange: function(e) { save({ customStatuses: settings.customStatuses.map(function(x,ii) { return ii===i ? Object.assign({},x,{color:e.target.value}) : x; }) }); } }),
+            h('button', { className: 'icon-btn', onClick: function() { save({ customStatuses: settings.customStatuses.filter(function(_,ii) { return ii !== i; }) }); } }, h(Ico.Trash, { size: 12 }))
+          );
+        }),
+        h('div', { style: { display: 'flex', gap: 8, marginTop: 10 } },
+          h('input', { className: 'input', placeholder: 'New status label...', value: newStatus, onChange: function(e) { setNewStatus(e.target.value); }, style: { flex: 1 } }),
+          h('input', { type: 'color', value: newStatusColor, onChange: function(e) { setNewStatusColor(e.target.value); }, style: { width: 36, height: 36, border: 'none', cursor: 'pointer', background: 'none', padding: 0 } }),
+          h('button', { className: 'btn primary', onClick: function() {
+            if (!newStatus.trim()) return;
+            save({ customStatuses: settings.customStatuses.concat([{ id: Date.now(), label: newStatus.trim(), color: newStatusColor }]) });
+            setNewStatus('');
+          }}, h(Ico.Plus, { size: 12 }))
+        )
+      ),
+      tab === 'barcode' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
+        h(Field, { label: 'Scanner Input Delay (ms)', hint: 'Max time between keystrokes qualifying as a scan. Default: 50ms.' },
+          h('input', { className: 'input mono', type: 'number', value: settings.scannerDelay, onChange: function(e) { save({ scannerDelay: parseInt(e.target.value)||50 }); }, style: { width: 120 } })
+        ),
+        h(Field, { label: 'Test Scanner', hint: 'Type or scan a barcode, press Enter.' },
+          h('input', {
+            className: 'input mono',
+            placeholder: 'Scan a barcode here...',
+            value: scannerTest,
+            onChange: function(e) { setScannerTest(e.target.value); },
+            onKeyDown: function(e) {
+              if (e.key === 'Enter') {
+                const f = MOCK_CATALOG.find(function(c) { return c.sku === scannerTest; });
+                setTestResult(f ? 'Found: ' + f.name + ' - ' + fmt$(f.price) : 'Not found: ' + scannerTest);
+                setScannerTest('');
+              }
+            },
+            'data-barcodeTarget': 'true',
+          })
+        ),
+        testResult && h('div', { style: { padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--line)', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--green)' } }, testResult)
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   PLACEHOLDER MODULE (fallback)
 ───────────────────────────────────────── */
 function PlaceholderScreen({ name }) {
-  const titles = { customers: 'Customers', inventory: 'Inventory', bookings: 'Bookings', 'purchase-orders': 'Purchase Orders', reports: 'Reports' };
   return h(Fragment, null,
-    h(PageHead, { title: titles[name] || name, sub: 'Module' }),
+    h(PageHead, { title: name, sub: 'Module' }),
     h('div', { className: 'placeholder-screen' },
-      h('div', { className: 'label' }, 'Module placeholder — not part of this round'),
-      h('div', { style: { marginTop: 8, color: 'var(--text-3)', fontSize: 12 } },
-        'Scoped screens: Dashboard, Work Orders, New Work Order, Sales Register.'
-      )
+      h('div', { className: 'label' }, 'Coming soon')
     )
   );
 }
@@ -1567,18 +2258,20 @@ function PlaceholderScreen({ name }) {
    APP ROOT
 ───────────────────────────────────────── */
 function App() {
-  const [staff, setStaff] = useState(() => {
+  const [staff, setStaff] = useState(function() {
     try { return JSON.parse(sessionStorage.getItem('pos-staff') || 'null'); } catch { return null; }
   });
-  const [screen, setScreen] = useState('dashboard');
+  const [screen, setScreen]           = useState('dashboard');
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const topbarSearchRef = useRef(null);
 
-  useEffect(() => {
+  // Keyboard shortcuts
+  useEffect(function() {
     function onKey(e) {
       if (!staff) return;
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        if (topbarSearchRef.current) topbarSearchRef.current.focus();
+        setShowGlobalSearch(true);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
@@ -1586,13 +2279,27 @@ function App() {
         setScreen('new-wo');
         return;
       }
-      if (e.key === 'n' && screen === 'dashboard' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)) {
+      if (e.key === 'n' && screen === 'dashboard' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement && document.activeElement.tagName)) {
         setScreen('sales');
       }
     }
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return function() { document.removeEventListener('keydown', onKey); };
   }, [staff, screen]);
+
+  function handleGlobalNavigate(result) {
+    setScreen(result.screen);
+  }
+
+  function handleNewSaleForCustomer(customer) {
+    setScreen('sales');
+    toast('Opening sale for ' + customer.name, 'success');
+  }
+
+  function handleNewWoForCustomer(customer) {
+    setScreen('new-wo');
+    toast('New WO for ' + customer.name, 'success');
+  }
 
   if (!staff) {
     return h(Fragment, null,
@@ -1601,27 +2308,27 @@ function App() {
     );
   }
 
-  const renderScreen = () => {
+  function renderScreen() {
     switch (screen) {
-      case 'dashboard':   return h(DashboardScreen,    { setScreen });
-      case 'work-orders': return h(WorkOrdersScreen,   { setScreen });
-      case 'new-wo':      return h(NewWorkOrderScreen, { setScreen });
-      case 'sales':       return h(SalesScreen);
-      case 'customers':   return h(window.CustomersScreen || PlaceholderScreen, window.CustomersScreen ? {} : { name: 'customers' });
-      case 'inventory':        return h(window.InventoryScreen || PlaceholderScreen, window.InventoryScreen ? { staff, setScreen } : { name: 'inventory' });
-      case 'purchase-orders':  return window.PurchaseOrdersScreen
-                                 ? h(window.PurchaseOrdersScreen)
-                                 : h(PlaceholderScreen, { name: 'purchase-orders' });
-      case 'reports':          return window.ReportsScreen ? h(window.ReportsScreen) : h(PlaceholderScreen, { name: 'reports' });
-      default:                 return h(PlaceholderScreen,  { name: screen });
+      case 'dashboard':      return h(DashboardScreen,       { setScreen });
+      case 'work-orders':    return h(WorkOrdersScreen,      { setScreen });
+      case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen });
+      case 'sales':          return h(SalesScreen);
+      case 'customers':      return h(CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
+      case 'inventory':      return h(InventoryScreen);
+      case 'purchase-orders':return h(PurchaseOrdersScreen);
+      case 'reports':        return h(ReportsScreen);
+      case 'settings':       return h(SettingsScreen);
+      default:               return h(PlaceholderScreen, { name: screen });
     }
-  };
+  }
 
   return h(Fragment, null,
+    showGlobalSearch && h(GlobalSearch, { onNavigate: handleGlobalNavigate, onClose: function() { setShowGlobalSearch(false); } }),
     h('div', { className: 'app' },
       h(Sidebar, { screen, setScreen, staff }),
       h('main', { className: 'main' },
-        h(Topbar, { screen, topbarSearchRef }),
+        h(Topbar, { screen, topbarSearchRef, onOpenSearch: function() { setShowGlobalSearch(true); } }),
         h('div', { className: 'content' }, renderScreen()),
         h(StatusStrip)
       )
