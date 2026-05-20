@@ -95,6 +95,39 @@ async function apiPost(path, body) {
   } catch { return null; }
 }
 
+async function apiPut(path, body) {
+  try {
+    const r = await fetch(WORKER + path, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': '1139' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch { return null; }
+}
+
+async function apiDelete(path) {
+  try {
+    const r = await fetch(WORKER + path, {
+      method: 'DELETE',
+      headers: { 'X-POS-Auth': '1139' },
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } catch { return null; }
+}
+
+/* ── Work Order Statuses (LS R-Series parity) ── */
+const WO_STATUSES = [
+  'READY', 'Scheduled - Parts Arriving', 'READY - S.O. Parts Arrived', 'Finished',
+  'ONLINE BOOKING', 'BOOKED', '!!! ASSESS & ORDER PARTS !!!',
+  'PHIL', 'STEVE', 'MATT', 'DARRIN', 'TAO', 'BECKETT', 'JASON', 'WARRANTY',
+  'Suspension Out For Service', 'RA!', 'PARTS ORDERED - BIKE OFFSITE',
+  'PARTS ORDERED - BIKE HERE', 'Estimate', 'Waiting', 'Open',
+  'Consignment', 'Bike Storage',
+];
+
 /* ── Toast ── */
 let _toastSetter = null;
 function Toast() {
@@ -1561,6 +1594,15 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
 
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [expandedSkus, setExpandedSkus] = useState(new Set());
+  function toggleExpand(sku) {
+    setExpandedSkus(prev => {
+      const next = new Set(prev);
+      if (next.has(sku)) next.delete(sku);
+      else next.add(sku);
+      return next;
+    });
+  }
 
   // Debounced API search
   useEffect(() => {
@@ -1576,6 +1618,11 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
               price: parseFloat(i.Prices?.ItemPrice?.amount || i.price || 0),
               stock: parseInt(i.qoh || i.stock || 0),
               taxablePst: !i.taxClass || i.taxClass !== 'Labour',
+              upc: i.upc || i.customSku,
+              cost: parseFloat(i.defaultCost || 0),
+              dept: i.Department?.name || i.dept || '',
+              brand: i.ItemAttributes?.brand || i.brand || '',
+              description: i.longDescription || i.description || i.name || '',
             })));
           } else {
             // Fallback to MOCK_CATALOG for demo
@@ -1601,7 +1648,19 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     if (existing) {
       setItems(items.map(i => i.sku === it.sku ? { ...i, qty: i.qty + 1 } : i));
     } else {
-      setItems([...items, { sku: it.sku, name: it.name, qty: 1, price: it.price, taxablePst: it.taxablePst !== false }]);
+      setItems([...items, {
+        sku: it.sku,
+        name: it.name,
+        qty: 1,
+        price: it.price,
+        taxablePst: it.taxablePst !== false,
+        upc: it.upc,
+        stock: it.stock,
+        cost: it.cost,
+        dept: it.dept,
+        brand: it.brand,
+        description: it.description,
+      }]);
     }
     setQuery('');
     if (searchRef.current) searchRef.current.focus();
@@ -1750,31 +1809,75 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           h('span')
         ),
 
-        items.map(i =>
-          h('div', { key: i.sku, className: 'line-row' },
-            h('div', null,
-              h('div', { className: 'name' }, i.name,
-                i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT')
+        items.map(i => {
+          const expanded = expandedSkus.has(i.sku);
+          const marginPct = (i.cost && i.price) ? Math.round(((i.price - i.cost) / i.price) * 100) : null;
+          return h(Fragment, { key: i.sku },
+            h('div', { className: 'line-row' },
+              h('div', {
+                onClick: () => toggleExpand(i.sku),
+                style: { cursor: 'pointer', transition: 'background 100ms' },
+                title: expanded ? 'Hide details' : 'Show details',
+              },
+                h('div', { className: 'name' },
+                  h('span', {
+                    style: {
+                      display: 'inline-block',
+                      width: 10,
+                      marginRight: 6,
+                      color: 'var(--text-3)',
+                      transition: 'transform 120ms',
+                      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                      transformOrigin: 'center',
+                    },
+                  }, '▸'),
+                  i.name,
+                  i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT')
+                ),
+                h('div', { className: 'sku' }, i.sku)
               ),
-              h('div', { className: 'sku' }, i.sku)
+              h('div', null,
+                h('div', { className: 'qty-stepper' },
+                  h('button', { onClick: () => setQty(i.sku, -1) }, '−'),
+                  h('input', { value: i.qty, onChange: e => setQtyDirect(i.sku, e.target.value) }),
+                  h('button', { onClick: () => setQty(i.sku, +1) }, '+')
+                )
+              ),
+              h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
+              h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(i.qty * i.price)),
+              h(OptionsMenu, { items: [
+                { label: 'Apply discount', onClick: () => toast('Discount coming soon') },
+                { label: 'Edit price',     onClick: () => toast('Edit price coming soon') },
+                'divider',
+                { label: 'Remove',         onClick: () => removeItem(i.sku), danger: true },
+              ]})
             ),
-            h('div', null,
-              h('div', { className: 'qty-stepper' },
-                h('button', { onClick: () => setQty(i.sku, -1) }, '−'),
-                h('input', { value: i.qty, onChange: e => setQtyDirect(i.sku, e.target.value) }),
-                h('button', { onClick: () => setQty(i.sku, +1) }, '+')
+            expanded && h('div', {
+              style: {
+                padding: '12px 14px',
+                background: 'var(--bg2)',
+                borderBottom: '1px solid var(--line)',
+                fontFamily: 'var(--mono)',
+                fontSize: 11,
+                color: 'var(--text-2)',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '6px 16px',
+              },
+            },
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'UPC: '), i.upc || '—'),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'SKU: '), i.sku),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'STOCK: '), i.stock != null ? i.stock : '—'),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'COST: '), (i.cost != null && i.cost > 0) ? '$' + i.cost.toFixed(2) : '—'),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'MARGIN: '), marginPct != null ? marginPct + '%' : '—'),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'DEPT: '), i.dept || '—'),
+              h('div', null, h('span', { style: { color: 'var(--text-3)' } }, 'BRAND: '), i.brand || '—'),
+              i.description && h('div', { style: { gridColumn: '1 / -1', color: 'var(--text-2)', lineHeight: 1.5, marginTop: 4 } },
+                h('span', { style: { color: 'var(--text-3)' } }, 'DESC: '), i.description
               )
-            ),
-            h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
-            h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(i.qty * i.price)),
-            h(OptionsMenu, { items: [
-              { label: 'Apply discount', onClick: () => toast('Discount coming soon') },
-              { label: 'Edit price',     onClick: () => toast('Edit price coming soon') },
-              'divider',
-              { label: 'Remove',         onClick: () => removeItem(i.sku), danger: true },
-            ]})
-          )
-        ),
+            )
+          );
+        }),
 
         items.length === 0 && h('div', {
           style: { padding: '40px 16px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' },
