@@ -9,7 +9,7 @@
 - Work Orders list (filterable table, mechanic chips, status badges, search)
 - New Work Order form (customer combobox, mechanic chips, keyboard shortcuts)
 - Sales/Register (item search/barcode, cart, GST+PST, F1/F2/F3 payments)
-- Staff PIN login (Jason/1234, Florian/5678, Darrin/9999)
+- Staff PIN login (Jason/1234, Florian/5678, Darrin/7777, Tao/7777)
 - Keyboard shortcuts (cmd+K, cmd+N, N, cmd+Enter, /, F1-F3)
 - Real Lightspeed data via CF Worker API (falls back to mock data offline)
 
