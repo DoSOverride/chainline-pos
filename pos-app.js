@@ -6,7 +6,7 @@
 
 'use strict';
 
-const { createElement: h, useState, useEffect, useRef, Fragment } = React;
+const { createElement: h, useState, useEffect, useRef, useCallback, Fragment } = React;
 const { createRoot } = ReactDOM;
 
 /* ── Constants ── */
@@ -218,6 +218,203 @@ function Toggle({ on, onChange, label, sub }) {
   );
 }
 
+/* ── OptionsMenu (contextual kebab dropdown) ── */
+function OptionsMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  return h('div', { className: 'options-menu-wrap', ref },
+    h('button', {
+      className: 'btn ghost options-btn',
+      style: { height: 24, padding: '0 6px' },
+      onClick: e => { e.stopPropagation(); setOpen(o => !o); },
+    }, h(Ico.Dots, { size: 12 })),
+    open && h('div', { className: 'options-dropdown' },
+      items.map((item, i) =>
+        item === 'divider'
+          ? h('div', { key: 'div'+i, className: 'options-divider' })
+          : h('button', {
+              key: i,
+              className: 'options-item' + (item.danger ? ' danger' : ''),
+              onClick: e => { e.stopPropagation(); setOpen(false); item.onClick && item.onClick(); },
+            }, item.label)
+      )
+    )
+  );
+}
+
+/* ── Modal wrapper ── */
+function Modal({ title, onClose, width, children }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return h('div', { className: 'modal-overlay', onClick: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { className: 'modal-box', style: width ? { width } : null },
+      h('div', { className: 'modal-head' },
+        h('span', { className: 'modal-title' }, title),
+        h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px', marginLeft: 'auto' }, onClick: onClose }, '×')
+      ),
+      children
+    )
+  );
+}
+
+/* ── Confirm modal ── */
+function ConfirmModal({ message, onConfirm, onCancel }) {
+  return h(Modal, { title: 'Confirm', onClose: onCancel, width: 360 },
+    h('div', { style: { padding: 18 } },
+      h('p', { style: { marginBottom: 18, color: 'var(--text-1)' } }, message),
+      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+        h('button', { className: 'btn', onClick: onCancel }, 'Cancel'),
+        h('button', { className: 'btn primary', onClick: onConfirm }, 'Confirm')
+      )
+    )
+  );
+}
+
+/* ── SMS Modal ── */
+function SmsModal({ customer, phone, onClose }) {
+  const [body, setBody] = useState('Your bike is ready for pickup at ChainLine Kelowna!');
+  function send() {
+    toast('SMS queued to ' + (phone || customer), 'success');
+    onClose();
+  }
+  return h(Modal, { title: 'SMS Customer', onClose, width: 440 },
+    h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
+      h(Field, { label: 'To' },
+        h('input', { className: 'input', value: phone || customer, readOnly: true })
+      ),
+      h(Field, { label: 'Message' },
+        h('textarea', { className: 'textarea', rows: 4, value: body, onChange: e => setBody(e.target.value) })
+      ),
+      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
+        h('button', { className: 'btn', onClick: onClose }, 'Cancel'),
+        h('button', { className: 'btn primary', onClick: send }, 'Send SMS')
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   CONNECTION STATUS
+───────────────────────────────────────── */
+function useConnectionStatus() {
+  const [online, setOnline] = useState(true);
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      try {
+        const r = await fetch(WORKER + '/api/ping', { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(4000) });
+        if (mounted) setOnline(r.ok || r.status < 500);
+      } catch { if (mounted) setOnline(false); }
+    }
+    check();
+    const id = setInterval(check, 30000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
+  return online;
+}
+
+/* ─────────────────────────────────────────
+   GLOBAL BARCODE SCANNER HOOK
+───────────────────────────────────────── */
+function useBarcodeScanner(onScan) {
+  const buf = useRef('');
+  const last = useRef(0);
+  useEffect(() => {
+    const DELAY_MS = 50;
+    function onKey(e) {
+      const tag = document.activeElement?.tagName;
+      if (['INPUT','TEXTAREA','SELECT'].includes(tag) && !document.activeElement?.dataset.barcodeTarget) return;
+      const now = Date.now();
+      if (now - last.current > 500) buf.current = '';
+      last.current = now;
+      if (e.key === 'Enter' && buf.current.length >= 3) {
+        onScan(buf.current.trim());
+        buf.current = '';
+        return;
+      }
+      if (e.key.length === 1) buf.current += e.key;
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onScan]);
+}
+
+/* ─────────────────────────────────────────
+   GLOBAL SEARCH (Cmd+K)
+───────────────────────────────────────── */
+function GlobalSearch({ onNavigate, onClose }) {
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+
+  useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
+
+  const results = [];
+  if (q.trim().length > 1) {
+    const ql = q.toLowerCase();
+    MOCK_CUSTOMERS.filter(c => c.name.toLowerCase().includes(ql) || c.phone.includes(ql)).slice(0,3).forEach(c =>
+      results.push({ type: 'customer', label: c.name, sub: c.phone, id: c.id, screen: 'customers' })
+    );
+    MOCK_WO.filter(r => r.id.toLowerCase().includes(ql) || r.cust.toLowerCase().includes(ql) || r.bike.toLowerCase().includes(ql)).slice(0,3).forEach(r =>
+      results.push({ type: 'workorder', label: r.id + ' - ' + r.cust, sub: r.bike, id: r.id, screen: 'work-orders' })
+    );
+    MOCK_CATALOG.filter(it => it.name.toLowerCase().includes(ql) || it.sku.toLowerCase().includes(ql)).slice(0,3).forEach(it =>
+      results.push({ type: 'item', label: it.name, sub: it.sku + ' - ' + fmt$(it.price), id: it.sku, screen: 'inventory' })
+    );
+  }
+
+  function onKey(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s+1, results.length-1)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s-1, 0)); }
+    if (e.key === 'Enter' && results[sel]) { onNavigate(results[sel]); onClose(); }
+    if (e.key === 'Escape') onClose();
+  }
+
+  const typeLabel = { customer: 'Customer', workorder: 'Work Order', item: 'Inventory' };
+
+  return h(Modal, { title: 'Global Search', onClose, width: 560 },
+    h('div', { style: { padding: '12px 18px' } },
+      h('input', {
+        ref: inputRef,
+        className: 'input',
+        placeholder: 'Search customers, work orders, SKUs...',
+        value: q,
+        onChange: e => { setQ(e.target.value); setSel(0); },
+        onKeyDown: onKey,
+        style: { fontSize: 15 },
+      })
+    ),
+    results.length > 0 && h('div', { style: { borderTop: '1px solid var(--line)', maxHeight: 360, overflowY: 'auto' } },
+      results.map((r, i) =>
+        h('div', {
+          key: i,
+          className: 'global-search-result' + (i === sel ? ' selected' : ''),
+          onClick: () => { onNavigate(r); onClose(); },
+        },
+          h('div', { className: 'gs-type' }, typeLabel[r.type] || r.type),
+          h('div', { className: 'gs-label' }, r.label),
+          h('div', { className: 'gs-sub' }, r.sub)
+        )
+      )
+    ),
+    q.length > 1 && results.length === 0 && h('div', {
+      style: { padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' }
+    }, 'NO RESULTS')
+  );
+}
+
 /* ─────────────────────────────────────────
    LOGIN / PIN SCREEN
 ───────────────────────────────────────── */
@@ -306,7 +503,16 @@ const NAV_TOOLS = [
   { id: 'bookings',         label: 'Bookings',        Icon: 'Calendar' },
   { id: 'purchase-orders',  label: 'Purchase Orders', Icon: 'Box'      },
   { id: 'reports',          label: 'Reports',         Icon: 'Clock'    },
+  { id: 'settings',         label: 'Settings',        Icon: 'Dots'     },
 ];
+
+function ConnectionStatus() {
+  const online = useConnectionStatus();
+  return h('div', { className: 'conn-status' },
+    h('span', { className: 'conn-dot ' + (online ? 'conn-green' : 'conn-red') }),
+    h('span', null, online ? 'Worker live' : 'Offline - cached')
+  );
+}
 
 function Sidebar({ screen, setScreen, staff }) {
   const activeNav = screen === 'new-wo' ? 'work-orders' : screen;
@@ -342,7 +548,8 @@ function Sidebar({ screen, setScreen, staff }) {
       h('div', { className: 'user-meta' },
         h('span', { className: 'user-name' }, staff ? staff.name : 'ChainLine'),
         h('span', { className: 'user-role' }, staff ? staff.role : '')
-      )
+      ),
+      h(ConnectionStatus)
     )
   );
 }
@@ -350,7 +557,7 @@ function Sidebar({ screen, setScreen, staff }) {
 /* ─────────────────────────────────────────
    TOPBAR
 ───────────────────────────────────────── */
-function Topbar({ screen, topbarSearchRef }) {
+function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
   const crumbs = {
     'dashboard': ['Shop', 'Dashboard'],
     'work-orders': ['Service', 'Work Orders'],
@@ -361,6 +568,7 @@ function Topbar({ screen, topbarSearchRef }) {
     'bookings': ['Tools', 'Bookings'],
     'purchase-orders': ['Tools', 'Purchase Orders'],
     'reports': ['Tools', 'Reports'],
+    'settings': ['Tools', 'Settings'],
   }[screen] || ['ChainLine'];
 
   return h('div', { className: 'topbar' },
@@ -372,9 +580,9 @@ function Topbar({ screen, topbarSearchRef }) {
       }, [])
     ),
     h('div', { className: 'topbar-spacer' }),
-    h('div', { className: 'topbar-search' },
+    h('div', { className: 'topbar-search', style: { cursor: 'pointer' }, onClick: onOpenSearch },
       h(Ico.Search, { size: 12 }),
-      h('input', { ref: topbarSearchRef, placeholder: 'Search WO, customer, SKU…' }),
+      h('input', { ref: topbarSearchRef, placeholder: 'Search WO, customer, SKU…', readOnly: true, style: { cursor: 'pointer' } }),
       h('span', { className: 'kbd' }, '⌘K')
     ),
     h('div', { className: 'station' }, 'Drawer ', h('b', null, 'open'), ' \xb7 08:14'),
@@ -401,7 +609,65 @@ function StatusStrip() {
 /* ─────────────────────────────────────────
    SCREEN A — DASHBOARD
 ───────────────────────────────────────── */
+/* ─────────────────────────────────────────
+   END OF DAY MODAL
+───────────────────────────────────────── */
+function EndOfDayModal({ onClose }) {
+  const DENOMS = [
+    { label: '$100', val: 100 }, { label: '$50', val: 50 },
+    { label: '$20', val: 20  }, { label: '$10', val: 10  },
+    { label: '$5',  val: 5   }, { label: '$2',  val: 2   },
+    { label: '$1',  val: 1   }, { label: '25¢', val: 0.25 },
+    { label: '10¢', val: 0.10 }, { label: '5¢', val: 0.05 },
+  ];
+  const [counts, setCounts] = useState(() => Object.fromEntries(DENOMS.map(d => [d.label, ''])));
+  const expected = 412.00;
+  const counted = DENOMS.reduce((sum, d) => sum + d.val * (parseFloat(counts[d.label]) || 0), 0);
+  const variance = Math.round((counted - expected) * 100) / 100;
+
+  function print() {
+    toast('Z-report sent to printer', 'success');
+    onClose();
+  }
+
+  return h(Modal, { title: 'End of Day \xb7 Cash Count', onClose, width: 520 },
+    h('div', { style: { padding: 18 } },
+      h('div', { className: 'eod-grid' },
+        DENOMS.map(d =>
+          h('div', { key: d.label, className: 'eod-row' },
+            h('span', { className: 'eod-denom' }, d.label),
+            h('input', {
+              className: 'input mono',
+              type: 'number', min: '0',
+              placeholder: '0',
+              value: counts[d.label],
+              onChange: e => setCounts(c => ({ ...c, [d.label]: e.target.value })),
+              style: { width: 80, textAlign: 'right' },
+            }),
+            h('span', { className: 'eod-sub' }, fmt$(d.val * (parseFloat(counts[d.label]) || 0)))
+          )
+        )
+      ),
+      h('div', { className: 'eod-summary' },
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Expected cash'), h('span', { className: 'v mono' }, fmt$(expected))),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Counted'), h('span', { className: 'v mono' }, fmt$(counted))),
+        h('div', { className: 'aside-row', style: { background: variance < 0 ? 'var(--red-bg)' : variance > 0 ? 'var(--green-bg)' : '' } },
+          h('span', { className: 'k strong' }, 'Variance'),
+          h('span', { className: 'v mono', style: { color: variance < 0 ? 'var(--red)' : variance > 0 ? 'var(--green)' : 'var(--text)' } },
+            (variance >= 0 ? '+' : '') + fmt$(variance)
+          )
+        )
+      ),
+      h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 } },
+        h('button', { className: 'btn', onClick: onClose }, 'Cancel'),
+        h('button', { className: 'btn primary', onClick: print }, 'Print Z-Report')
+      )
+    )
+  );
+}
+
 function DashboardScreen({ setScreen }) {
+  const [showEod, setShowEod] = useState(false);
   const stats = [
     { label: 'Open Work Orders',  value: '23',       foot: '8 in progress',       accentColor: null,            delta: null },
     { label: 'Overdue',           value: '4',         foot: 'Action required',     accentColor: 'var(--accent)',  delta: null },
@@ -419,6 +685,7 @@ function DashboardScreen({ setScreen }) {
   ];
 
   return h(Fragment, null,
+    showEod && h(EndOfDayModal, { onClose: () => setShowEod(false) }),
     h(PageHead, {
       title: 'Dashboard',
       sub: 'MON \xb7 MAY 20',
@@ -467,7 +734,7 @@ function DashboardScreen({ setScreen }) {
               h('span', { className: 'qa-title' }, 'Customer Lookup'),
               h('span', { className: 'qa-sub' }, 'Search profiles')
             ),
-            h('button', { className: 'qa' },
+            h('button', { className: 'qa', onClick: () => setShowEod(true) },
               h('span', { className: 'qa-ico' }, h(Ico.Clock, { size: 18 })),
               h('span', { className: 'qa-title' }, 'End of Day'),
               h('span', { className: 'qa-sub' }, 'Close drawer')
@@ -560,11 +827,159 @@ function DashboardScreen({ setScreen }) {
 }
 
 /* ─────────────────────────────────────────
+   WORK ORDER DETAIL PANEL
+───────────────────────────────────────── */
+function WorkOrderDetail({ wo, onClose }) {
+  const [status, setStatus]   = useState(wo.status);
+  const [tasks, setTasks]     = useState([
+    { id: 1, text: 'Inspect rear shock linkage', done: true  },
+    { id: 2, text: 'Bleed rear shock seals',      done: false },
+    { id: 3, text: 'Check BB creak',               done: false },
+  ]);
+  const [newTask, setNewTask]   = useState('');
+  const [lineQ, setLineQ]       = useState('');
+  const [lines, setLines]       = useState([
+    { sku: 'LAB-SUSPN', name: 'Labour - Suspension service 1.5h', qty: 1, price: 142.50 },
+    { sku: 'SEAL-KIT',  name: 'Rear shock seal kit',               qty: 1, price: 48.00  },
+  ]);
+  const [noteText, setNoteText] = useState(
+    'Rear shock feels harsh on chunder. Customer mentions clicking from BB area under load.'
+  );
+  const [showSms, setShowSms]   = useState(false);
+  const [hookIn, setHookIn]     = useState('08:30');
+  const [hookOut, setHookOut]   = useState('');
+  const [confirm, setConfirm]   = useState(null);
+
+  const lineResults = lineQ
+    ? MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase())).slice(0,5)
+    : [];
+
+  function addTask() {
+    if (!newTask.trim()) return;
+    setTasks(t => [...t, { id: Date.now(), text: newTask.trim(), done: false }]);
+    setNewTask('');
+  }
+  function toggleTask(id) { setTasks(t => t.map(x => x.id === id ? { ...x, done: !x.done } : x)); }
+  function addLine(it) { setLines(l => [...l, { sku: it.sku, name: it.name, qty: 1, price: it.price }]); setLineQ(''); }
+  function saveNotes() { apiPost('/api/workorder/' + wo.id + '/notes', { notes: noteText }).then(() => toast('Notes saved', 'success')); }
+
+  function changeStatus(s) {
+    setConfirm({
+      message: 'Mark work order as ' + s + '?',
+      onConfirm: () => { setStatus(s); setConfirm(null); toast('Status updated to ' + s, 'success'); },
+    });
+  }
+
+  const subtotal = lines.reduce((a, l) => a + l.qty * l.price, 0);
+  const gst = round2(subtotal * 0.05);
+  const pst = round2(subtotal * 0.07);
+  const total = round2(subtotal + gst + pst);
+
+  const today = new Date();
+  const dueDate = new Date(wo.due + ' 2026');
+  const daysOverdue = Math.floor((today - dueDate) / 86400000);
+
+  return h('div', { className: 'slide-panel' },
+    confirm && h(ConfirmModal, { message: confirm.message, onConfirm: confirm.onConfirm, onCancel: () => setConfirm(null) }),
+    showSms && h(SmsModal, { customer: wo.cust, phone: wo.phone, onClose: () => setShowSms(false) }),
+    h('div', { className: 'panel-head' },
+      h('div', null,
+        h('div', { className: 'page-sub' }, wo.id),
+        h('div', { className: 'page-title', style: { fontSize: 18 } }, wo.cust)
+      ),
+      h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
+        h('button', { className: 'btn', onClick: () => { window.printWorkOrder && window.printWorkOrder(wo); toast('Printing...', 'success'); } }, 'Print'),
+        h('button', { className: 'btn', onClick: () => setShowSms(true) }, 'SMS'),
+        h('button', { className: 'btn ghost', onClick: onClose }, '×')
+      )
+    ),
+    h('div', { className: 'panel-body' },
+      // Status row
+      h('div', { className: 'wo-detail-status-row' },
+        h(Badge, { kind: status }, status === 'inprogress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1)),
+        daysOverdue > 0 && h('span', { className: 'overdue-text' }, daysOverdue + 'd overdue'),
+        ['open','inprogress','ready','done','void'].map(s =>
+          s !== status && h('button', { key: s, className: 'btn ghost', style: { height: 24, padding: '0 8px', fontSize: 11 }, onClick: () => changeStatus(s) },
+            s === 'inprogress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)
+          )
+        )
+      ),
+      // Info grid
+      h('div', { className: 'wo-detail-info' },
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Bike'),    h('span', { className: 'v' }, wo.bike)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Service'), h('span', { className: 'v' }, wo.svc)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Phone'),   h('span', { className: 'v mono' }, wo.phone)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Due'),     h('span', { className: 'v mono' }, wo.due)),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Hook in'), h('span', { className: 'v' }, h('input', { className: 'input mono', type: 'time', value: hookIn, onChange: e => setHookIn(e.target.value), style: { height: 26, padding: '2px 6px', width: 90 } }))),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Hook out'), h('span', { className: 'v' }, h('input', { className: 'input mono', type: 'time', value: hookOut, onChange: e => setHookOut(e.target.value), style: { height: 26, padding: '2px 6px', width: 90 } }))),
+        h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Mechanic'), h('span', { className: 'v' }, h(AvInit, { initials: wo.mech, tone: wo.tone })))
+      ),
+      // Checklist
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Checklist'),
+        tasks.map(t =>
+          h('div', { key: t.id, className: 'task-row' },
+            h('button', { className: 'task-check' + (t.done ? ' done' : ''), onClick: () => toggleTask(t.id) },
+              t.done ? h(Ico.Check, { size: 12 }) : null
+            ),
+            h('span', { style: { flex: 1, textDecoration: t.done ? 'line-through' : 'none', color: t.done ? 'var(--text-3)' : 'var(--text-1)' } }, t.text)
+          )
+        ),
+        h('div', { className: 'task-add' },
+          h('input', { className: 'input', placeholder: 'Add task...', value: newTask, onChange: e => setNewTask(e.target.value), onKeyDown: e => e.key === 'Enter' && addTask() }),
+          h('button', { className: 'btn', onClick: addTask }, h(Ico.Plus, { size: 12 }))
+        )
+      ),
+      // Line items
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Line Items'),
+        lines.map((l, i) =>
+          h('div', { key: i, className: 'wo-line-row' },
+            h('span', { style: { flex: 1 } }, l.name),
+            h('span', { className: 'mono', style: { marginRight: 12 } }, 'x' + l.qty),
+            h('span', { className: 'mono' }, fmt$(l.qty * l.price)),
+            h('button', { className: 'icon-btn', onClick: () => setLines(lines.filter((_, ii) => ii !== i)) }, h(Ico.Trash, { size: 12 }))
+          )
+        ),
+        h('div', { className: 'line-add-wrap' },
+          h('div', { className: 'search-field' },
+            h('span', { className: 'ico' }, h(Ico.Search, { size: 13 })),
+            h('input', { className: 'input', placeholder: 'Add part or labour...', value: lineQ, onChange: e => setLineQ(e.target.value) })
+          ),
+          lineQ && lineResults.length > 0 && h('div', { className: 'item-results' },
+            lineResults.map(c =>
+              h('div', { key: c.sku, className: 'item-row', onClick: () => addLine(c) },
+                h('div', null, h('div', null, c.name), h('div', { className: 'sku' }, c.sku)),
+                h('div', { className: 'stock' }, c.stock + ' in stock'),
+                h('div', { className: 'price' }, fmt$(c.price))
+              )
+            )
+          )
+        ),
+        h('div', { className: 'wo-totals' },
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'Subtotal'), h('span', { className: 'v mono' }, fmt$(subtotal))),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'GST 5%'), h('span', { className: 'v mono' }, fmt$(gst))),
+          h('div', { className: 'aside-row' }, h('span', { className: 'k' }, 'PST 7%'), h('span', { className: 'v mono' }, fmt$(pst))),
+          h('div', { className: 'aside-row', style: { background: 'var(--bg-2)' } }, h('span', { className: 'k strong' }, 'Total'), h('span', { className: 'v mono', style: { fontSize: 15, fontWeight: 600 } }, fmt$(total)))
+        )
+      ),
+      // Notes
+      h('div', { className: 'panel-section' },
+        h('div', { className: 'panel-section-head' }, 'Notes'),
+        h('textarea', { className: 'textarea', rows: 4, value: noteText, onChange: e => setNoteText(e.target.value) }),
+        h('button', { className: 'btn', style: { marginTop: 8 }, onClick: saveNotes }, 'Save notes')
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    SCREEN B — WORK ORDERS LIST
 ───────────────────────────────────────── */
 function WorkOrdersScreen({ setScreen }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [selectedWo, setSelectedWo] = useState(null);
 
   const counts = {
     all:        MOCK_WO.length,
@@ -653,7 +1068,7 @@ function WorkOrdersScreen({ setScreen }) {
                 }, 'No work orders match these filters')
               )
             : filtered.map(r =>
-                h('tr', { key: r.id, style: { cursor: 'pointer' } },
+                h('tr', { key: r.id, style: { cursor: 'pointer' }, onClick: () => setSelectedWo(r) },
                   h('td', null,
                     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                       h('span', { className: 'num', style: { fontSize: 12 } }, r.id),
@@ -682,7 +1097,20 @@ function WorkOrdersScreen({ setScreen }) {
                       : h('span', { className: 'num muted', style: { fontSize: 12 } }, r.due)
                   ),
                   h('td', null, h(AvInit, { initials: r.mech, tone: r.tone })),
-                  h('td', null, h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px' } }, h(Ico.Dots, { size: 12 })))
+                  h('td', { onClick: e => e.stopPropagation() },
+                    h(OptionsMenu, { items: [
+                      { label: 'View detail',    onClick: () => setSelectedWo(r) },
+                      { label: 'Mark In Progress', onClick: () => toast('Status updated', 'success') },
+                      { label: 'Mark Ready',     onClick: () => toast('Status updated', 'success') },
+                      { label: 'Mark Done',      onClick: () => toast('Status updated', 'success') },
+                      'divider',
+                      { label: 'Print Work Order', onClick: () => toast('Printing...', 'success') },
+                      { label: 'SMS Customer',   onClick: () => toast('Opening SMS...') },
+                      'divider',
+                      { label: 'Void',           onClick: () => toast('Voided', 'error'), danger: true },
+                      { label: 'Delete',         onClick: () => toast('Deleted', 'error'), danger: true },
+                    ]})
+                  )
                 )
               )
         )
@@ -695,6 +1123,9 @@ function WorkOrdersScreen({ setScreen }) {
     },
       h('span', null, 'Showing ' + filtered.length + ' of ' + MOCK_WO.length),
       h('span', null, 'Page 1 / 1')
+    ),
+    selectedWo && h('div', { className: 'panel-overlay', onClick: e => { if (e.target === e.currentTarget) setSelectedWo(null); } },
+      h(WorkOrderDetail, { wo: selectedWo, onClose: () => setSelectedWo(null) })
     )
   );
 }
@@ -880,7 +1311,7 @@ function NewWorkOrderScreen({ setScreen }) {
 /* ─────────────────────────────────────────
    SCREEN D — SALES REGISTER
 ───────────────────────────────────────── */
-function SalesScreen() {
+function SalesScreen({ onBarcodeScan }) {
   const [items, setItems] = useState([
     { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        qty: 1, price: 189.00 },
     { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip',  qty: 2, price: 84.00  },
@@ -892,6 +1323,13 @@ function SalesScreen() {
   const searchRef = useRef(null);
 
   useEffect(() => { if (searchRef.current) searchRef.current.focus(); }, []);
+
+  // Wire barcode scanner: rapid keystrokes ending in Enter
+  useBarcodeScanner(useCallback(code => {
+    const found = MOCK_CATALOG.find(c => c.sku === code || c.sku.replace(/-/g,'') === code.replace(/-/g,''));
+    if (found) { addItem(found); toast('Scanned: ' + found.name, 'success'); }
+    else toast('Barcode not found: ' + code, 'error');
+  }, []));
 
   useEffect(() => {
     function onKey(e) {
@@ -1028,7 +1466,12 @@ function SalesScreen() {
             ),
             h('div', { className: 'num', style: { textAlign: 'right', color: 'var(--text-1)' } }, fmt$(i.price)),
             h('div', { className: 'num', style: { textAlign: 'right', fontWeight: 500 } }, fmt$(i.qty * i.price)),
-            h('button', { className: 'icon-btn', onClick: () => removeItem(i.sku) }, h(Ico.Trash, { size: 13 }))
+            h(OptionsMenu, { items: [
+              { label: 'Apply discount', onClick: () => toast('Discount coming soon') },
+              { label: 'Edit price',     onClick: () => toast('Edit price coming soon') },
+              'divider',
+              { label: 'Remove',         onClick: () => removeItem(i.sku), danger: true },
+            ]})
           )
         ),
 
