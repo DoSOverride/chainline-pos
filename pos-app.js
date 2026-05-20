@@ -1280,7 +1280,7 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
   return h(Fragment, null,
     h(PageHead, {
       title: 'New Work Order',
-      sub: 'Intake \xb7 WO-2405',
+      sub: 'Intake',
       actions: [
         h('button', { key: 'cancel', className: 'btn', onClick: () => setScreen('work-orders') }, 'Cancel'),
         h('button', { key: 'draft', className: 'btn' }, 'Save draft'),
