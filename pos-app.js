@@ -343,18 +343,34 @@ function SmsModal({ customer, phone, onClose }) {
    CONNECTION STATUS
 ───────────────────────────────────────── */
 function useConnectionStatus() {
-  const [online, setOnline] = useState(true);
+  const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   useEffect(() => {
     let mounted = true;
     async function check() {
+      // Instant fail when browser knows WiFi is dead
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (mounted) setOnline(false);
+        return;
+      }
       try {
         const r = await fetch(WORKER + '/api/ping', { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(4000) });
         if (mounted) setOnline(r.ok || r.status < 500);
       } catch { if (mounted) setOnline(false); }
     }
     check();
+    // Native online/offline events fire on WiFi drop/reconnect — instant
+    function onOnline()  { check(); }
+    function onOffline() { if (mounted) setOnline(false); }
+    window.addEventListener('online',  onOnline);
+    window.addEventListener('offline', onOffline);
+    // Periodic re-check every 30s as a backup
     const id = setInterval(check, 30000);
-    return () => { mounted = false; clearInterval(id); };
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      window.removeEventListener('online',  onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, []);
   return online;
 }
@@ -2559,10 +2575,11 @@ function ReportsScreen() {
    SCREEN I — SETTINGS
 ───────────────────────────────────────── */
 const DEFAULT_SETTINGS = {
-  shopName: 'ChainLine Kelowna',
-  address: '1234 Harvey Ave, Kelowna BC V1Y 6E4',
-  phone: '(250) 555-0100',
-  email: 'kelowna@chainline.ca',
+  shopName: 'ChainLine Cycle',
+  address: '1139 Ellis St, Kelowna BC V1Y 1Z5',
+  phone: '(250) 860-1968',
+  email: 'bikes@chainline.ca',
+  gst: '843590266 RT0001',
   receiptHeader: 'Thank you for visiting ChainLine!',
   receiptFooter: 'chainline.ca | @chainlinecycles',
   showTaxLine: true,
@@ -2584,7 +2601,17 @@ const DEFAULT_SETTINGS = {
 
 function SettingsScreen() {
   const [settings, setSettings] = useState(function() {
-    try { return JSON.parse(localStorage.getItem('pos-settings') || 'null') || DEFAULT_SETTINGS; } catch { return DEFAULT_SETTINGS; }
+    try {
+      const saved = JSON.parse(localStorage.getItem('pos-settings') || 'null');
+      // Merge saved with DEFAULT_SETTINGS so new fields/real address apply on top of stale cache
+      return saved ? Object.assign({}, DEFAULT_SETTINGS, saved, {
+        // Force-overwrite stale placeholder values
+        shopName: (saved.shopName === 'ChainLine Kelowna' || !saved.shopName) ? DEFAULT_SETTINGS.shopName : saved.shopName,
+        address: (saved.address && saved.address.indexOf('Harvey') >= 0) ? DEFAULT_SETTINGS.address : (saved.address || DEFAULT_SETTINGS.address),
+        phone:   (saved.phone === '(250) 555-0100' || !saved.phone) ? DEFAULT_SETTINGS.phone : saved.phone,
+        email:   (saved.email === 'kelowna@chainline.ca' || !saved.email) ? DEFAULT_SETTINGS.email : saved.email,
+      }) : DEFAULT_SETTINGS;
+    } catch { return DEFAULT_SETTINGS; }
   });
   const [tab, setTab] = useState('general');
   const [newStatus, setNewStatus] = useState('');
