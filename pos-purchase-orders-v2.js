@@ -1069,27 +1069,21 @@
       )
     );
 
-    // New PO form overlay
+    // New PO form — full-page, no duplicate page header
     if (newPO) {
-      return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' } },
-        pageHead,
-        h('div', { style: { flex: 1, overflow: 'hidden' } },
-          h(NewPOForm, {
-            defaultVendor: newPOVendor,
-            onClose: () => { setNewPO(false); setNewPOVendor(null); },
-            onCreated: handleCreated,
-          })
-        )
+      return h(Fragment, null,
+        h(NewPOForm, {
+          defaultVendor: newPOVendor,
+          onClose: () => { setNewPO(false); setNewPOVendor(null); },
+          onCreated: handleCreated,
+        })
       );
     }
 
-    // PO detail
+    // PO detail — full-page, no duplicate page header (mirrors WorkOrderDetail pattern)
     if (selectedPO) {
-      return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' } },
-        pageHead,
-        h('div', { style: { flex: 1, overflow: 'hidden' } },
-          h(PODetail, { po: selectedPO, onBack: () => setSelectedPO(null), onUpdate: handleUpdate })
-        )
+      return h(Fragment, null,
+        h(PODetail, { po: selectedPO, onBack: () => setSelectedPO(null), onUpdate: handleUpdate })
       );
     }
 

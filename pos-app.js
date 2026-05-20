@@ -590,7 +590,7 @@ function ConnectionStatus() {
 }
 
 function Sidebar({ screen, setScreen, staff, onLogout }) {
-  const activeNav = (screen === 'new-wo' || screen === 'wo-detail') ? 'work-orders' : screen;
+  const activeNav = (screen === 'new-wo' || screen === 'wo-detail' || screen === 'wo-calendar') ? 'work-orders' : screen;
   const navItem = (n) => {
     const count = n.id === 'work-orders' ? WO_ACTIVE_COUNT : n.count;
     return h('a', {
@@ -657,6 +657,7 @@ function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
     'work-orders': ['Service', 'Work Orders'],
     'new-wo': ['Service', 'Work Orders', 'New'],
     'wo-detail': ['Service', 'Work Orders', 'Detail'],
+    'wo-calendar': ['Service', 'Work Orders', 'Calendar'],
     'sales': ['Retail', 'Sales Register'],
     'customers': ['CRM', 'Customers'],
     'inventory': ['Stock', 'Inventory'],
@@ -1550,9 +1551,9 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const [wos, setWos] = useState(MOCK_WO);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  function fetchWos() {
     setLoading(true);
-    apiGet('/api/workorders')
+    return apiGet('/api/workorders')
       .then(data => {
         if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
           setWos(data.workorders.map(w => {
@@ -1579,6 +1580,20 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+  }
+
+  // Initial load
+  useEffect(() => { fetchWos(); }, []);
+
+  // Refetch when a new WO is created elsewhere (NewWorkOrderScreen dispatches this)
+  useEffect(() => {
+    function onWoCreated() { fetchWos(); }
+    window.addEventListener('wo:created', onWoCreated);
+    window.addEventListener('wo:updated', onWoCreated);
+    return () => {
+      window.removeEventListener('wo:created', onWoCreated);
+      window.removeEventListener('wo:updated', onWoCreated);
+    };
   }, []);
 
   const counts = {
@@ -1615,7 +1630,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       title: 'Work Orders',
       sub: 'Service queue',
       actions: [
-        h('button', { key: 'cal', className: 'btn' }, h(Ico.Calendar, { size: 13 }), ' Calendar view'),
+        h('button', { key: 'cal', className: 'btn', onClick: () => setScreen('wo-calendar') }, h(Ico.Calendar, { size: 13 }), ' Calendar view'),
         h('button', { key: 'new', className: 'btn primary', onClick: () => setScreen('new-wo') },
           h(Ico.Plus, { size: 13 }), ' New Work Order ', h('span', { className: 'kbd' }, '⌘N')
         ),
@@ -1758,6 +1773,235 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
 }
 
 /* ─────────────────────────────────────────
+   SCREEN B2 — WORK ORDER CALENDAR
+   Simple month grid. Each cell shows WO dots coloured by status; click opens WO.
+───────────────────────────────────────── */
+function WorkOrderCalendarScreen({ setScreen, onOpenWo }) {
+  const [wos, setWos] = useState(window.MOCK_WO || []);
+  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+
+  useEffect(() => {
+    apiGet('/api/workorders').then(data => {
+      if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
+        setWos(data.workorders.map(w => {
+          if (w.cust) return w;
+          return {
+            id: w.workOrderID || w.id,
+            cust: [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || 'Unknown',
+            bike: w.itemDescription || '',
+            svc: w.note?.split('\n')[0] || 'Service',
+            due: w.timeDue || w.dateDue || w.timeIn || '',
+            dateDue: w.dateDue || (w.timeIn ? w.timeIn.slice(0,10) : ''),
+            status: (w.workOrderStatus || 'open').toLowerCase().replace(/\s+/g, ''),
+            mech: (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || 'UN',
+            prio: !!w.priority,
+          };
+        }));
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Build month grid: 6 weeks × 7 days
+  const year = cursor.getFullYear();
+  const monthIdx = cursor.getMonth();
+  const monthName = cursor.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+  const firstDay = new Date(year, monthIdx, 1);
+  const startWeekday = firstDay.getDay(); // 0 = Sunday
+  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
+
+  // Group WOs by ISO yyyy-mm-dd
+  const wosByDay = {};
+  wos.forEach(w => {
+    let iso = w.dateDue || w.due || '';
+    if (iso && /^\d{4}-\d{2}-\d{2}/.test(iso)) {
+      const key = iso.slice(0, 10);
+      (wosByDay[key] = wosByDay[key] || []).push(w);
+    }
+  });
+
+  function isoFor(day) {
+    const m = String(monthIdx + 1).padStart(2, '0');
+    const d = String(day).padStart(2, '0');
+    return year + '-' + m + '-' + d;
+  }
+
+  function prevMonth() { setCursor(c => new Date(c.getFullYear(), c.getMonth() - 1, 1)); }
+  function nextMonth() { setCursor(c => new Date(c.getFullYear(), c.getMonth() + 1, 1)); }
+  function thisMonth() { const d = new Date(); d.setDate(1); setCursor(d); }
+
+  const todayISO = new Date().toISOString().slice(0, 10);
+
+  // Build cells: blanks before day 1, then days, padded to multiple of 7
+  const cells = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const STATUS_COLORS = {
+    booked: 'var(--violet-fg)',
+    open: 'var(--amber-fg)',
+    inprogress: 'var(--blue-fg)',
+    'parts-ordered': 'var(--amber-fg)',
+    'so-arrived': 'var(--teal-fg)',
+    ra: 'var(--accent)',
+    ready: 'var(--green-fg)',
+    done: 'var(--text3)',
+    'done-paid': 'var(--text3)',
+    finished: 'var(--text3)',
+    cancelled: 'var(--text3)',
+  };
+
+  const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return h(Fragment, null,
+    h(PageHead, {
+      title: 'Work Order Calendar',
+      sub: monthName,
+      actions: [
+        h('button', { key: 'prev', className: 'btn', onClick: prevMonth }, '←'),
+        h('button', { key: 'today', className: 'btn', onClick: thisMonth }, 'Today'),
+        h('button', { key: 'next', className: 'btn', onClick: nextMonth }, '→'),
+        h('button', { key: 'list', className: 'btn', onClick: () => setScreen('work-orders') },
+          h(Ico.Calendar, { size: 13 }), ' List view'
+        ),
+      ],
+    }),
+
+    h('div', { style: { padding: '0 32px 60px' } },
+      // Weekday header
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, marginBottom: 1 } },
+        WEEKDAYS.map(wd => h('div', {
+          key: wd,
+          style: {
+            padding: '6px 10px',
+            fontFamily: 'var(--mono)',
+            fontSize: 10,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'var(--text3)',
+            background: 'var(--bg2)',
+            borderBottom: '1px solid var(--line2)',
+          }
+        }, wd))
+      ),
+
+      // Day cells
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: 'var(--line2)', border: '1px solid var(--line2)' } },
+        cells.map((day, i) => {
+          if (day === null) {
+            return h('div', { key: 'b-' + i, style: { background: 'var(--bg)', minHeight: 110 } });
+          }
+          const iso = isoFor(day);
+          const isToday = iso === todayISO;
+          const dayWos = wosByDay[iso] || [];
+          return h('div', {
+            key: iso,
+            style: {
+              background: 'var(--bg)',
+              minHeight: 110,
+              padding: '6px 8px',
+              borderTop: isToday ? '2px solid var(--accent)' : 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              cursor: 'default',
+              overflow: 'hidden',
+            }
+          },
+            h('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 2,
+              }
+            },
+              h('span', {
+                style: {
+                  fontFamily: 'var(--mono)',
+                  fontSize: 11,
+                  fontWeight: isToday ? 700 : 500,
+                  color: isToday ? 'var(--accent)' : 'var(--text2)',
+                }
+              }, day),
+              dayWos.length > 0 && h('span', {
+                style: {
+                  fontFamily: 'var(--mono)',
+                  fontSize: 9,
+                  color: 'var(--text3)',
+                  background: 'var(--bg3)',
+                  padding: '0 5px',
+                }
+              }, dayWos.length)
+            ),
+            // WO chips (max 4, then "+N more")
+            dayWos.slice(0, 4).map(w => h('button', {
+              key: w.id,
+              onClick: () => { if (onOpenWo) onOpenWo(w); },
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 5px',
+                background: 'var(--bg2)',
+                border: '1px solid var(--line2)',
+                borderLeft: '3px solid ' + (STATUS_COLORS[w.status] || 'var(--text3)'),
+                color: 'var(--text)',
+                fontSize: 10,
+                fontFamily: 'var(--ui)',
+                textAlign: 'left',
+                cursor: 'pointer',
+                width: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }
+            },
+              h('span', {
+                style: { fontFamily: 'var(--mono)', fontSize: 9, color: 'var(--text2)', flexShrink: 0 }
+              }, (w.id || '').replace(/^WO-?/, '')),
+              h('span', {
+                style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+              }, w.cust || '')
+            )),
+            dayWos.length > 4 && h('span', {
+              style: {
+                fontFamily: 'var(--mono)',
+                fontSize: 9,
+                color: 'var(--text3)',
+                paddingLeft: 5,
+              }
+            }, '+' + (dayWos.length - 4) + ' more')
+          );
+        })
+      ),
+
+      // Legend
+      h('div', {
+        style: {
+          display: 'flex',
+          gap: 18,
+          flexWrap: 'wrap',
+          padding: '14px 0',
+          fontFamily: 'var(--mono)',
+          fontSize: 10,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          color: 'var(--text3)',
+        }
+      },
+        ['booked', 'open', 'inprogress', 'ready', 'ra'].map(s =>
+          h('span', { key: s, style: { display: 'inline-flex', alignItems: 'center', gap: 5 } },
+            h('span', { style: { width: 10, height: 10, background: STATUS_COLORS[s], display: 'inline-block' } }),
+            s
+          )
+        )
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    SCREEN C — NEW WORK ORDER
 ───────────────────────────────────────── */
 function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
@@ -1814,6 +2058,10 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
       .then(res => {
         setSubmitting(false);
         toast(res ? 'Work order created' : 'Saved offline (worker unavailable)', res ? 'success' : '');
+        // Notify WorkOrdersScreen to refetch the list so the new WO shows immediately
+        try {
+          window.dispatchEvent(new CustomEvent('wo:created', { detail: (res && res.workorder) || null }));
+        } catch {}
         setScreen('work-orders');
       })
       .catch(() => { setSubmitting(false); toast('Failed to create work order', 'error'); });
@@ -3478,6 +3726,7 @@ function App() {
                              });
       case 'work-orders':    return h(WorkOrdersScreen,      { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'wo-detail':      return h(WorkOrderDetail,       { wo: activeWo || {}, onClose: () => setScreen('work-orders'), fullPage: true, setScreen: setScreen });
+      case 'wo-calendar':    return h(WorkOrderCalendarScreen, { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
       case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });

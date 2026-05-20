@@ -17,14 +17,69 @@
   --teal-line:   rgba(77, 198, 198, 0.32);
 }
 
-/* ── Expanded badge variants ── */
-.badge.violet,    .badge-violet,
-.badge.estimate,  .badge-estimate,
-.badge.waiting,   .badge-waiting,
-.badge.consignment, .badge-consignment {
+/* ── Expanded badge variants — each status gets a distinct accent ──
+ * Override base (.badge.open=blue, .badge.booked=amber, .badge.inprogress=grey)
+ * to give every status its own colour so the floor + WO list read at a glance.
+ * Mapping (post-Lightspeed parity):
+ *   booked       → violet   (parked / scheduled)
+ *   open         → amber    (intake done, queued)
+ *   inprogress   → blue     (active work)
+ *   ready        → green    (already in base)
+ *   parts-ordered→ amber    (waiting on parts)
+ *   so-arrived   → teal     (special-order arrived)
+ *   ra           → red      (warranty / RA!)
+ *   overdue      → red      (already in base)
+ *   estimate     → yellow   (quote not yet a WO)
+ *   waiting      → violet   (waiting on customer)
+ *   consignment  → teal     (consignment bike)
+ *   done         → muted    (finished work, not yet paid)
+ *   done-paid    → muted    (finished + paid)
+ *   finished     → muted    (closed)
+ *   closed       → muted    (already in base)
+ *   cancelled    → muted strikethrough
+ */
+
+/* booked → violet (override base amber) */
+.badge.booked, .badge-booked {
+  color: var(--violet-fg) !important;
+  background: var(--violet-bg) !important;
+  border-color: var(--violet-line) !important;
+}
+
+/* open → amber (override base blue) */
+.badge.open, .badge-open {
+  color: var(--amber-fg) !important;
+  background: var(--amber-bg) !important;
+  border-color: var(--amber-line) !important;
+}
+
+/* inprogress → blue (override base muted grey) */
+.badge.inprogress, .badge-inprogress,
+.badge.in-progress, .badge-in-progress {
+  color: var(--blue-fg) !important;
+  background: var(--blue-bg) !important;
+  border-color: var(--blue-line) !important;
+}
+
+/* waiting / consignment / violet — kept */
+.badge.violet, .badge-violet,
+.badge.waiting, .badge-waiting {
   color: var(--violet-fg);
   background: var(--violet-bg);
   border-color: var(--violet-line);
+}
+
+.badge.consignment, .badge-consignment {
+  color: var(--teal-fg);
+  background: var(--teal-bg);
+  border-color: var(--teal-line);
+}
+
+/* estimate → yellow (use amber tone) */
+.badge.estimate, .badge-estimate {
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.10);
+  border-color: rgba(250, 204, 21, 0.30);
 }
 
 .badge.parts-ordered, .badge-parts-ordered {
@@ -34,21 +89,36 @@
 }
 
 .badge.so-arrived, .badge-so-arrived {
-  color: var(--green-fg);
-  background: var(--green-bg);
-  border-color: var(--green-line);
+  color: var(--teal-fg);
+  background: var(--teal-bg);
+  border-color: var(--teal-line);
 }
 
 .badge.ra, .badge-ra {
-  color: var(--accent);
+  color: #ff6b5e;
   background: var(--accent-glow);
   border-color: var(--accent-dim);
+}
+
+.badge.done, .badge-done,
+.badge.finished, .badge-finished {
+  color: var(--green-fg);
+  background: var(--green-bg);
+  border-color: var(--green-line);
+  opacity: 0.65;
 }
 
 .badge.done-paid, .badge-done-paid {
   color: var(--text3);
   background: var(--bg3);
   border-color: var(--line2);
+}
+
+.badge.cancelled, .badge-cancelled {
+  color: var(--text3);
+  background: var(--bg3);
+  border-color: var(--line2);
+  text-decoration: line-through;
 }
 
 /* ── Customer type chip (STAFF / WHOLESALE / FRIENDS) ── */
@@ -343,6 +413,30 @@
   border: 1px solid var(--amber-line);
   padding: 1px 5px;
   text-transform: uppercase;
+}
+
+/* ── Kanban drag-and-drop ── */
+.floor-card {
+  user-select: none;
+}
+.floor-card[draggable="true"]:active { cursor: grabbing; }
+.floor-card.is-dragging {
+  opacity: 0.4;
+  transform: rotate(-1deg);
+}
+body.floor-dragging .floor-column {
+  transition: background 80ms, box-shadow 80ms;
+}
+body.floor-dragging .floor-column:not(.drop-target) {
+  background: var(--bg);
+}
+.floor-column.drop-target {
+  background: var(--accent-glow);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.floor-column.drop-target .floor-column-head {
+  background: var(--accent-glow);
+  color: var(--accent);
 }
 
 /* ── Mechanic top filter on floor view ── */

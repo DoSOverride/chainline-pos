@@ -45,6 +45,22 @@
 
       return h('div', {
         className: classes,
+        draggable: true,
+        onDragStart: function(e) {
+          e.dataTransfer.setData('text/wo-id', wo.id);
+          e.dataTransfer.setData('text/wo-status', wo.status || '');
+          e.dataTransfer.effectAllowed = 'move';
+          e.currentTarget.classList.add('is-dragging');
+          document.body.classList.add('floor-dragging');
+        },
+        onDragEnd: function(e) {
+          e.currentTarget.classList.remove('is-dragging');
+          document.body.classList.remove('floor-dragging');
+          // Clear any leftover drop-target classes (defensive)
+          document.querySelectorAll('.floor-column.drop-target').forEach(function(el) {
+            el.classList.remove('drop-target');
+          });
+        },
         onClick: function() { props.onOpen && props.onOpen(wo); }
       },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
@@ -68,7 +84,30 @@
     }
 
     function FloorColumn(props) {
-      return h('div', { className: 'floor-column' },
+      return h('div', {
+        className: 'floor-column',
+        'data-status': props.statusId,
+        onDragOver: function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          e.currentTarget.classList.add('drop-target');
+        },
+        onDragLeave: function(e) {
+          // Only clear if leaving the column itself (not entering child)
+          if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget)) {
+            e.currentTarget.classList.remove('drop-target');
+          }
+        },
+        onDrop: function(e) {
+          e.preventDefault();
+          e.currentTarget.classList.remove('drop-target');
+          const woId = e.dataTransfer.getData('text/wo-id');
+          const fromStatus = e.dataTransfer.getData('text/wo-status');
+          if (!woId || !props.statusId) return;
+          if (fromStatus === props.statusId) return;
+          if (props.onDropWo) props.onDropWo(woId, props.statusId);
+        }
+      },
         h('div', { className: 'floor-column-head' },
           h('span', { className: 'floor-column-title' }, props.label),
           h('span', { className: 'floor-column-count' }, props.wos.length)
@@ -228,16 +267,38 @@
           COLUMNS.map(function(col) {
             return h(FloorColumn, {
               key: col.id,
+              statusId: col.id,
               label: col.label,
               wos: wosByCol[col.id] || [],
               onOpen: function(wo) {
                 if (onOpenWo) onOpenWo(wo);
                 else if (setScreen) setScreen('work-orders');
-              }
+              },
+              onDropWo: handleDropWo
             });
           })
         )
       );
+
+      function handleDropWo(woId, newStatus) {
+        // Optimistic local update
+        setWos(function(prev) {
+          return prev.map(function(w) {
+            return w.id === woId ? Object.assign({}, w, { status: newStatus }) : w;
+          });
+        });
+        if (window.apiPost) {
+          window.apiPost('/api/workorder/' + woId + '/status', { status: newStatus })
+            .then(function() {
+              if (window._posToast) window._posToast('Moved ' + woId + ' to ' + newStatus, 'success');
+            })
+            .catch(function() {
+              if (window._posToast) window._posToast('Failed to update ' + woId, 'error');
+              // Refresh on failure
+              setTick(function(t) { return t + 1; });
+            });
+        }
+      }
     }
 
     window.ShopFloorScreen = ShopFloorScreen;
