@@ -532,7 +532,7 @@ function ConnectionStatus() {
 }
 
 function Sidebar({ screen, setScreen, staff, onLogout }) {
-  const activeNav = screen === 'new-wo' ? 'work-orders' : screen;
+  const activeNav = (screen === 'new-wo' || screen === 'wo-detail') ? 'work-orders' : screen;
   const navItem = (n) => {
     const count = n.id === 'work-orders' ? WO_ACTIVE_COUNT : n.count;
     return h('a', {
@@ -864,7 +864,7 @@ function DashboardScreen({ setScreen }) {
 /* ─────────────────────────────────────────
    WORK ORDER DETAIL PANEL
 ───────────────────────────────────────── */
-function WorkOrderDetail({ wo, onClose }) {
+function WorkOrderDetail({ wo, onClose, fullPage }) {
   const [status, setStatus]   = useState(wo.status);
   const [tasks, setTasks]     = useState([
     { id: 1, text: 'Inspect rear shock linkage', done: true  },
@@ -918,10 +918,22 @@ function WorkOrderDetail({ wo, onClose }) {
   const dueDate = new Date(wo.due + ' 2026');
   const daysOverdue = Math.floor((today - dueDate) / 86400000);
 
-  return h('div', { className: 'slide-panel' },
+  return h(Fragment, null,
     confirm && h(ConfirmModal, { message: confirm.message, onConfirm: confirm.onConfirm, onCancel: () => setConfirm(null) }),
     showSms && h(SmsModal, { customer: wo.cust, phone: wo.phone, onClose: () => setShowSms(false) }),
-    h('div', { className: 'panel-head' },
+    fullPage && h(PageHead, {
+      title: wo.cust || 'Work Order',
+      sub: wo.id || 'Detail',
+      actions: [
+        h('button', { key: 'back', className: 'btn', onClick: onClose },
+          h(Ico.ChevronRight, { size: 13, style: { transform: 'rotate(180deg)' } }), ' Back'
+        ),
+        h('button', { key: 'print', className: 'btn', onClick: () => { window.printWorkOrder && window.printWorkOrder(wo); toast('Printing...', 'success'); } }, 'Print'),
+        h('button', { key: 'sms', className: 'btn', onClick: () => setShowSms(true) }, 'SMS'),
+      ],
+    }),
+    h('div', { className: fullPage ? null : 'slide-panel' },
+    !fullPage && h('div', { className: 'panel-head' },
       h('div', null,
         h('div', { className: 'page-sub' }, wo.id),
         h('div', { className: 'page-title', style: { fontSize: 18 } }, wo.cust)
@@ -1008,7 +1020,8 @@ function WorkOrderDetail({ wo, onClose }) {
         h('textarea', { className: 'textarea', rows: 4, value: noteText, onChange: e => setNoteText(e.target.value) }),
         h('button', { className: 'btn', style: { marginTop: 8 }, onClick: saveNotes }, 'Save notes')
       )
-    )
+    ) // end panel-body
+    ) // end slide-panel div wrapper
   );
 }
 
@@ -1018,10 +1031,10 @@ const WorkOrderDetailPanel = WorkOrderDetail;
 /* ─────────────────────────────────────────
    SCREEN B — WORK ORDERS LIST
 ───────────────────────────────────────── */
-function WorkOrdersScreen({ setScreen }) {
+function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
-  const [selectedWo, setSelectedWo] = useState(null);
+  const openWo = onOpenWo || (() => {});
   const [wos, setWos] = useState(MOCK_WO);
   const [loading, setLoading] = useState(false);
 
@@ -1164,7 +1177,7 @@ function WorkOrdersScreen({ setScreen }) {
                 )
               )
             : filtered.map(r =>
-                h('tr', { key: r.id, style: { cursor: 'pointer' }, onClick: () => setSelectedWo(r) },
+                h('tr', { key: r.id, style: { cursor: 'pointer' }, onClick: () => openWo(r) },
                   h('td', null,
                     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                       h('span', { className: 'num', style: { fontSize: 12 } }, r.id),
@@ -1195,7 +1208,7 @@ function WorkOrdersScreen({ setScreen }) {
                   h('td', null, h(AvInit, { initials: r.mech, tone: r.tone })),
                   h('td', { onClick: e => e.stopPropagation() },
                     h(OptionsMenu, { items: [
-                      { label: 'View detail',    onClick: () => setSelectedWo(r) },
+                      { label: 'View detail',    onClick: () => openWo(r) },
                       { label: 'Mark In Progress', onClick: () => toast('Status updated', 'success') },
                       { label: 'Mark Ready',     onClick: () => toast('Status updated', 'success') },
                       { label: 'Mark Done',      onClick: () => toast('Status updated', 'success') },
@@ -1220,9 +1233,7 @@ function WorkOrdersScreen({ setScreen }) {
       h('span', null, 'Showing ' + filtered.length + ' of ' + wos.length),
       h('span', null, 'Page 1 / 1')
     ),
-    selectedWo && h('div', { className: 'panel-overlay', onClick: e => { if (e.target === e.currentTarget) setSelectedWo(null); } },
-      h(WorkOrderDetailPanel, { wo: selectedWo, onClose: () => setSelectedWo(null) })
-    )
+
   );
 }
 
@@ -2581,6 +2592,7 @@ function App() {
     try { return JSON.parse(sessionStorage.getItem('pos-staff') || 'null'); } catch { return null; }
   });
   const [screen, setScreen]           = useState('dashboard');
+  const [activeWo, setActiveWo]       = useState(null);
   const [pendingCustomer, setPendingCustomer] = useState(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [saleCount, setSaleCount]     = useState(0);
@@ -2653,7 +2665,8 @@ function App() {
   function renderScreen() {
     switch (screen) {
       case 'dashboard':      return h(DashboardScreen,       { setScreen });
-      case 'work-orders':    return h(WorkOrdersScreen,      { setScreen });
+      case 'work-orders':    return h(WorkOrdersScreen,      { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
+      case 'wo-detail':      return h(WorkOrderDetail,       { wo: activeWo || {}, onClose: () => setScreen('work-orders'), fullPage: true });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
       case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer });
