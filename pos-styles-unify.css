@@ -1,0 +1,614 @@
+/* ChainLine POS — Design system unification (Round 4 patch)
+ * Loads AFTER pos-styles-v3.css.
+ *
+ * Purpose:
+ *   Resolves the v1/v2/v3 cascade conflict identified in audit Round 4.
+ *   - Strips border-radius > 0 from every modal / toast / palette / skeleton / stat-card / kbd
+ *   - Strips box-shadow from same
+ *   - Strips backdrop-filter
+ *   - Maps pos-status-* + pos-toast-* to v1 color tokens (single palette)
+ *   - Makes pos-avatar square + tone-palette-driven
+ *   - Replaces accent focus ring with neutral, accent on actionable buttons only
+ *   - Drops red wash on sidebar active state
+ *   - Adds prefers-reduced-motion support
+ *   - Adds light-theme variants for v3 tokens
+ *   - Adds safe-area-inset handling on mobile bottom nav
+ *
+ * Apply by adding to index.html AFTER all other stylesheets:
+ *   <link rel="stylesheet" href="/pos-styles-unify.css?v=1">
+ *
+ * Bump the v=1 on each iteration. Once visual parity is confirmed,
+ * merge these rules into pos-styles.css and delete this file.
+ */
+
+
+/* ════════════════════════════════════════════════════════════════════
+   1 · KILL ROUNDED CORNERS ON OVERLAYS / CARDS / SKELETONS / KBD
+   Spec: 0 radius everywhere except .badge (999px) — already enforced
+   by v1 but v2 reintroduced radii. Resetting them here.
+   ════════════════════════════════════════════════════════════════════ */
+
+.pos-modal,
+.pos-modal-x,
+.pos-modal-backdrop > .pos-modal,
+.pos-toast,
+.pos-toast-icon,
+.pos-toast-close,
+.pos-btn,
+.pos-command-palette,
+.pos-cp-input,
+.pos-cp-item,
+.pos-shortcut-help,
+.pos-shortcut-help-overlay > .pos-shortcut-help,
+.pos-skeleton-shimmer-bg,
+.pos-skeleton-line,
+.pos-skeleton-avatar,
+.pos-skeleton-card,
+.pos-stat-card,
+.pos-kbd {
+  border-radius: 0 !important;
+}
+
+/* Mobile bottom-sheet modal corner: pre-existing override `border-radius: 14px 14px 0 0` */
+@media (max-width: 768px) {
+  .pos-modal,
+  .pos-modal-backdrop > .pos-modal {
+    border-radius: 0 !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   2 · KILL DROP SHADOWS ON OVERLAYS / CARDS
+   ════════════════════════════════════════════════════════════════════ */
+
+.pos-modal,
+.pos-toast,
+.pos-command-palette,
+.pos-shortcut-help,
+.pos-kbd,
+.options-dropdown {
+  box-shadow: none !important;
+}
+
+/* pos-kbd had border-bottom-width: 2px for skeumorphic effect — flatten */
+.pos-kbd {
+  border-bottom-width: 1px !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   3 · KILL BACKDROP-FILTER ON OVERLAYS
+   Spec voice is "darkroom instrument" — backdrop blur is iOS aesthetic,
+   not match.
+   ════════════════════════════════════════════════════════════════════ */
+
+.pos-modal-backdrop,
+.pos-command-palette-backdrop,
+.pos-shortcut-help-overlay {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   4 · UNIFY STATUS BADGE + TOAST COLOR PALETTE
+   v2 had a second palette (#4ade80 / #60a5fa / #fbbf24). Reset to v1 tokens.
+   ════════════════════════════════════════════════════════════════════ */
+
+.pos-status-READY,
+.pos-status-Ready,
+.pos-status-ready {
+  background: var(--green-bg) !important;
+  color: var(--green-fg) !important;
+  border-color: var(--green-line) !important;
+}
+
+.pos-status-Open,
+.pos-status-OPEN,
+.pos-status-open {
+  /* In v3 we remap open → amber to free blue for inprogress */
+  background: var(--amber-bg) !important;
+  color: var(--amber-fg) !important;
+  border-color: var(--amber-line) !important;
+}
+
+.pos-status-BOOKED,
+.pos-status-Booked,
+.pos-status-booked {
+  background: var(--violet-bg) !important;
+  color: var(--violet-fg) !important;
+  border-color: var(--violet-line) !important;
+}
+
+.pos-status-Overdue,
+.pos-status-OVERDUE,
+.pos-status-overdue {
+  background: var(--red-bg) !important;
+  color: var(--red-fg) !important;
+  border-color: rgba(214, 70, 58, 0.32) !important;
+}
+
+.pos-status-Finished,
+.pos-status-Done,
+.pos-status-done {
+  background: var(--green-bg) !important;
+  color: var(--green-fg) !important;
+  border-color: var(--green-line) !important;
+  opacity: 0.65 !important;
+}
+
+.pos-status-WAITING,
+.pos-status-Waiting,
+.pos-status-waiting {
+  background: var(--violet-bg) !important;
+  color: var(--violet-fg) !important;
+  border-color: var(--violet-line) !important;
+}
+
+.pos-status-Cancelled,
+.pos-status-cancelled {
+  background: var(--bg3) !important;
+  color: var(--text3) !important;
+  border-color: var(--line2) !important;
+  text-decoration: line-through;
+}
+
+.pos-status-initials {
+  border-radius: 999px;
+  background: var(--bg3);
+}
+
+/* Toasts — single palette */
+.pos-toast-success {
+  background: var(--green-bg) !important;
+  color: var(--green-fg) !important;
+  border-color: var(--green-line) !important;
+}
+.pos-toast-error {
+  background: var(--red-bg) !important;
+  color: var(--red-fg) !important;
+  border-color: rgba(214, 70, 58, 0.32) !important;
+}
+.pos-toast-info {
+  background: var(--blue-bg) !important;
+  color: var(--blue-fg) !important;
+  border-color: var(--blue-line) !important;
+}
+
+/* Toast icon — drop the emoji circle. If markup still has the glyph,
+   render it as a small left-stripe instead of a colored disc. */
+.pos-toast-icon {
+  width: 3px !important;
+  height: 14px !important;
+  border-radius: 0 !important;
+  background: currentColor !important;
+  color: currentColor !important;
+  font-size: 0 !important; /* hide the ✓ / ✕ / i glyphs in pos-design.js */
+  align-self: stretch;
+  flex-shrink: 0;
+  padding: 0 !important;
+  margin: -2px 6px -2px 0;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   5 · AVATAR: square, tone-palette-driven, no text-shadow
+   v2 made avatars circles with color-hashed backgrounds + text-shadow.
+   v1 has square .av-init with tinted backgrounds. Unify on v1 style.
+   ════════════════════════════════════════════════════════════════════ */
+
+.pos-avatar {
+  border-radius: 0 !important;
+  text-shadow: none !important;
+  font-family: var(--mono) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  background: var(--bg3) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line2) !important;
+}
+
+.pos-avatar-sm { width: 22px; height: 22px; font-size: 9px; }
+.pos-avatar-md { width: 28px; height: 28px; font-size: 10px; }
+.pos-avatar-lg { width: 40px; height: 40px; font-size: 13px; }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   6 · FOCUS RING: neutral by default, accent only on actionable elements
+   ════════════════════════════════════════════════════════════════════ */
+
+*:focus-visible {
+  outline: 1px solid var(--line3) !important;
+  outline-offset: 1px !important;
+}
+
+/* Inputs handle their own focus through border-color (already in v1) */
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none !important;
+}
+
+/* Actionable elements get the accent ring */
+.btn:focus-visible,
+.pos-btn:focus-visible,
+.pay-btn:focus-visible,
+.nav-item:focus-visible,
+.preset-btn:focus-visible,
+.pin-key:focus-visible,
+.cash-denom-btn:focus-visible,
+.floor-mech-pill:focus-visible,
+.chip:focus-visible,
+.wo-preset-cat:focus-visible {
+  outline-color: var(--accent) !important;
+  outline-width: 2px !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   7 · SIDEBAR ACTIVE STATE — drop the red wash, keep the red border
+   The 2px left accent border is the active signal. The 6% red wash
+   was redundant and muddied small-screen rendering.
+   ════════════════════════════════════════════════════════════════════ */
+
+.nav-item.active {
+  background: var(--bg2) !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   8 · SUB-TABS: unify active indicator to accent
+   v1 set this to var(--text). Inconsistent with detail-top-tab which
+   uses accent. Pick one — accent — for both.
+   ════════════════════════════════════════════════════════════════════ */
+
+.sub-tab.active {
+  border-bottom-color: var(--accent) !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   9 · TABLE HOVER: replace border with inset shadow (no layout shift)
+   ════════════════════════════════════════════════════════════════════ */
+
+.data-table tr:hover td:first-child,
+.tbl tbody tr:hover td:first-child {
+  border-left: 0 !important;
+  padding-left: 12px !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   10 · PAGE TITLE: bump to 26px to hold against 30px stat values
+   ════════════════════════════════════════════════════════════════════ */
+
+.page-title {
+  font-size: 26px !important;
+  letter-spacing: -0.02em;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   11 · TABLE CELL DEFAULT: truncate-with-ellipsis on overflow
+   ════════════════════════════════════════════════════════════════════ */
+
+.data-table td,
+.tbl td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table td.wrap,
+.tbl td.wrap,
+.data-table td.cell-customer,
+.tbl td.cell-customer {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   12 · ICON BUTTONS — bigger hit target
+   ════════════════════════════════════════════════════════════════════ */
+
+.icon-btn {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+@media (max-width: 768px) {
+  .icon-btn {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .pos-modal-x,
+  .pos-toast-close {
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 18px;
+  }
+  .qty-stepper button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  .options-item {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   13 · MOBILE SAFE-AREA INSET FOR BOTTOM NAV + STICKY ACTION BARS
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  #sidebar, .sidebar {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(56px + env(safe-area-inset-bottom)) !important;
+  }
+  #main, .main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+  .new-wo-mobile-foot {
+    bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+  }
+  .status-strip {
+    /* If your status strip sits above the bottom nav on mobile, push it up */
+    bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   14 · FLOOR CARDS: touch-action: pan-y instead of none
+   Preserves vertical scroll within columns on touch, still allows
+   longpress-drag for kanban moves.
+   ════════════════════════════════════════════════════════════════════ */
+
+.floor-card {
+  touch-action: pan-y !important;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   15 · LIGHT THEME — add variants for v3 tokens
+   v3 declared --violet-fg + --teal-fg + customer-chip colors at :root
+   only. Light theme has no overrides → washed-out colors on light.
+   ════════════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] {
+  --violet-fg:   #7c3aed;
+  --violet-bg:   rgba(124, 58, 237, 0.10);
+  --violet-line: rgba(124, 58, 237, 0.30);
+
+  --teal-fg:     #0891b2;
+  --teal-bg:     rgba(8, 145, 178, 0.08);
+  --teal-line:   rgba(8, 145, 178, 0.30);
+}
+
+[data-theme="light"] .customer-chip {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text2);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+[data-theme="light"] .customer-chip-staff       { color: #b45309; border-color: rgba(180, 83, 9, 0.30); }
+[data-theme="light"] .customer-chip-wholesale   { color: #1e40af; border-color: rgba(30, 64, 175, 0.30); }
+[data-theme="light"] .customer-chip-friends     { color: #6b21a8; border-color: rgba(107, 33, 168, 0.30); }
+
+
+/* ════════════════════════════════════════════════════════════════════
+   16 · PREFERS-REDUCED-MOTION
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  .dot-live,
+  .status-dot,
+  .conn-dot,
+  .wo-timer.is-running .wo-timer-dot {
+    box-shadow: none !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   17 · PRESET BAR CATEGORY COLOR PER BIKE TYPE
+   Tints the Mountain / Road category buttons so the bar reads at a
+   glance even from peripheral vision.
+   ════════════════════════════════════════════════════════════════════ */
+
+.wo-preset-cat[data-cat="mountain"],
+.wo-preset-cat-accent + .wo-preset-cat-accent[data-cat="mountain"] {
+  background: rgba(167, 139, 250, 0.08);
+  color: var(--violet-fg);
+  border-color: var(--violet-line);
+}
+.wo-preset-cat[data-cat="mountain"]:hover {
+  background: rgba(167, 139, 250, 0.16);
+  color: var(--text);
+}
+.wo-preset-cat[data-cat="mountain"].is-active {
+  background: var(--violet-fg);
+  border-color: var(--violet-fg);
+  color: #fff;
+}
+
+.wo-preset-cat[data-cat="road"] {
+  background: rgba(77, 198, 198, 0.08);
+  color: var(--teal-fg);
+  border-color: var(--teal-line);
+}
+.wo-preset-cat[data-cat="road"]:hover {
+  background: rgba(77, 198, 198, 0.16);
+  color: var(--text);
+}
+.wo-preset-cat[data-cat="road"].is-active {
+  background: var(--teal-fg);
+  border-color: var(--teal-fg);
+  color: #0a0a0a;
+}
+
+/* For this to take effect, in pos-workorder-presets.js:
+   add `data-cat={cat.id}` to each category button render. */
+
+
+/* ════════════════════════════════════════════════════════════════════
+   18 · COUNT BADGE: cap display at "99+"
+   Custom-detail tabs (and others) can overflow with large counts.
+   ════════════════════════════════════════════════════════════════════ */
+
+.detail-top-tab-count,
+.sub-tab .count,
+.nav-count {
+  max-width: 36px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   19 · STAT GRID — keep 2-col at <480, drop the 1-col rule
+   The 1-col rule meant 4 stats × 110px = 440px of scrolling on phones
+   just to read the dashboard summary. Two columns reads better.
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .stat-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   20 · MOBILE — CART LINE ROW stacks at narrow widths
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .line-row:not(.head) {
+    grid-template-columns: 1fr auto !important;
+    grid-template-areas:
+      "name name"
+      "qty price"
+      "qty trash";
+    gap: 6px !important;
+    padding: 12px 14px !important;
+  }
+  .line-row:not(.head) > *:nth-child(1) { grid-area: name; }
+  .line-row:not(.head) > *:nth-child(2) { grid-area: qty; align-self: center; }
+  .line-row:not(.head) > *:nth-child(3) { display: none; }  /* hide unit price; line total is enough */
+  .line-row:not(.head) > *:nth-child(4) { grid-area: price; justify-self: end; font-size: 14px; font-weight: 600; }
+  .line-row:not(.head) > *:nth-child(5) { grid-area: trash; justify-self: end; }
+  .line-row.head { display: none; }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   21 · MOBILE — INVENTORY ROW stacks
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .item-row {
+    grid-template-columns: 1fr auto !important;
+    grid-template-areas:
+      "name price"
+      "sku stock";
+    gap: 4px 8px !important;
+    padding: 12px 14px !important;
+  }
+  .item-row > *:nth-child(1) { grid-area: name; }
+  .item-row .sku { grid-area: sku; }
+  .item-row .stock { grid-area: stock; justify-self: end; }
+  .item-row .price { grid-area: price; justify-self: end; font-size: 14px; font-weight: 600; }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   22 · LOGIN — 3-col staff grid on small phones (M8)
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .staff-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto 20px !important;
+    gap: 8px !important;
+  }
+  .staff-btn {
+    min-width: 0 !important;
+    padding: 10px 8px !important;
+  }
+  .staff-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 11px !important;
+  }
+  .staff-role { display: none !important; }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   23 · MOBILE TOPBAR — add a search icon (M2)
+   The mobile media query already hides .topbar-search.
+   When a search icon button is added (see pos-app.js patch), surface it.
+   ════════════════════════════════════════════════════════════════════ */
+
+.mobile-only { display: none; }
+@media (max-width: 768px) {
+  .mobile-only { display: inline-flex; }
+  .desktop-only { display: none !important; }
+}
+
+.topbar .mobile-search-btn {
+  width: 36px; height: 36px;
+  margin-left: auto;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line2);
+  background: var(--bg2);
+  color: var(--text);
+}
+.topbar .mobile-search-btn:hover { background: var(--bg3); }
+@media (max-width: 768px) {
+  .topbar .mobile-search-btn { display: flex; }
+  .topbar .topbar-spacer { display: none; }
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   24 · BOTTOM NAV PINNED PROMINENT 5 + MORE (M1)
+   Requires Sidebar JSX change — see pos-app.js patch below.
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  /* Hide overflow nav items; only first 5 + "More" remain visible */
+  .nav-item.mobile-overflow {
+    display: none;
+  }
+  .nav-item.mobile-more {
+    display: flex;
+  }
+}
+.nav-item.mobile-more {
+  /* Only meaningful on mobile; hidden on desktop */
+  display: none;
+}
