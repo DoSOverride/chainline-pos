@@ -2181,7 +2181,7 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
       ],
     }),
 
-    h('div', { className: 'grid-2', style: { gridTemplateColumns: '1fr 360px' } },
+    h('div', { className: 'new-wo-2col' },
       // Left — form
       h('div', { className: 'card' },
         h('div', { className: 'card-head' }, h('h3', null, 'Intake'), h('span', { className: 'sub' }, 'Required marked *')),
@@ -2452,7 +2452,7 @@ function LineEditModal({ line, onSave, onRemove, onClose }) {
         ),
         h('button', { className:'btn ghost', onClick: onClose }, '×')
       ),
-      h('div', { style: { padding:18, display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 } },
+      h('div', { className: 'wo-notes-2col', style: { padding:18 } },
         h('div', { style: { gridColumn:'1 / -1', fontFamily:'var(--mono)', fontSize:11, color:'var(--text-2)', display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'4px 16px', padding:'10px 12px', background:'var(--bg3)' } },
           h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'SKU: '), line.sku),
           h('div', null, h('span',{style:{color:'var(--text-3)'}}, 'UPC: '), line.upc || '—'),
@@ -2803,7 +2803,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
       )
     ),
 
-    h('div', { style: { display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, alignItems: 'flex-start' } },
+    h('div', { className: 'sales-2col' },
       // LEFT — cart
       h('div', { className: 'card' },
         h('div', { className: 'card-head' },

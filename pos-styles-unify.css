@@ -612,3 +612,11 @@ textarea:focus-visible {
   /* Only meaningful on mobile; hidden on desktop */
   display: none;
 }
+
+/* ── Round 4 audit C5/C6 + M13: Class-handle grids ─────────────── */
+.sales-2col   { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: flex-start; }
+.new-wo-2col  { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: flex-start; }
+.wo-notes-2col{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 768px) {
+  .sales-2col, .new-wo-2col, .wo-notes-2col { grid-template-columns: 1fr !important; }
+}
