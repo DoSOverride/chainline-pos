@@ -1307,6 +1307,19 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
           // Row 1: Status + Customer Item
           h('div', null,
             h('label', { style: S.fieldLabel }, 'Status'),
+            // M9: Mobile-only quick-status chips above the 24-option select.
+            // Five most-used statuses surface as 44px-tall pills so users don't
+            // have to scroll the native iOS picker for common transitions.
+            h('div', { className: 'status-quick-row mobile-only' },
+              ['Open','In Progress','Ready','BOOKED','RA!'].map(s =>
+                h('button', {
+                  key: s,
+                  type: 'button',
+                  className: 'status-quick-chip' + (status === s ? ' active' : ''),
+                  onClick: () => changeStatus(s),
+                }, s)
+              )
+            ),
             h('select', {
               className: 'input',
               value: status,

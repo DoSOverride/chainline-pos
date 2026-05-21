@@ -687,3 +687,38 @@ textarea:focus-visible {
   font-family: var(--ui); font-size: 11px; font-weight: 500;
   line-height: 1.25;
 }
+
+/* ── Round 4 audit M9/M11/M14: WO status quick chips + input padding + tab count overflow ── */
+@media (max-width: 768px) {
+  /* M9: Status quick-chip row */
+  .status-quick-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 8px;
+  }
+  .status-quick-chip {
+    min-height: 36px; padding: 6px 12px;
+    background: var(--bg2); color: var(--text);
+    border: 1px solid var(--line2);
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .08em; text-transform: uppercase;
+    cursor: pointer;
+  }
+  .status-quick-chip.active {
+    background: var(--bg3);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  /* M11: Date/time + input padding bump to match 48px min-height */
+  .input, input.input, select.input, textarea.input,
+  input[type="date"], input[type="time"], input[type="datetime-local"],
+  input[type="tel"], input[type="number"], input[type="email"], input[type="text"] {
+    padding: 12px 14px !important;
+  }
+  /* M14: Customer detail tab counts — clamp width + ellipsis */
+  .detail-top-tab-count {
+    max-width: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

@@ -87,3 +87,14 @@ Darrin=Owner | Tao/Matt=Manager | Phil/Steve/Beckett/Curren/Danny=Mechanic | Jas
 
 ## Cost
 Lightspeed ~$900/mo vs this system: $0/mo (CF Workers free tier + 2.7%/tap Stripe)
+
+## Round 4 — Design audit (2026-05-20)
+
+Applied design_audit_v4 in 4 sequential commits to main:
+- **Step 1** (`0035ccc`) — pos-styles-unify.css dropped in after v3. Resolves C1-C9: square modals/toasts/command-palette, drop heavy shadows + backdrop blur, avatars all radius:0, status/toast palettes mapped to v1 tokens, focus ring → neutral, sidebar active drops red wash, light-theme overrides + prefers-reduced-motion + safe-area handling + mobile cart/inventory/login.
+- **Step 2** (`963a447`) — C5/C6/M13 className handles: `div[style*="1.5fr 1fr"]` → `.sales-2col`, `grid-2 + 1fr 360px` → `.new-wo-2col`, WO notes 1fr|1fr → `.wo-notes-2col`. All collapse to single col below 768px.
+- **Step 3** (`8655577`) — M1 mobile bottom-nav pins 4 most-used (Sales · WOs · My Queue · Floor) + "More" bottom-sheet for the rest; M2 mobile-only 44×44 topbar search button.
+- **Step 4** — M9 WO detail mobile status quick-chips above the 24-option select; M11 input padding bump to match 48px min-height; M14 customer detail tab count clamp to 36px max-width with ellipsis.
+
+Live: https://chainline-pos.pages.dev (auto-deploys after each push).
+
