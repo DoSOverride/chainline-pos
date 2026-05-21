@@ -620,3 +620,70 @@ textarea:focus-visible {
 @media (max-width: 768px) {
   .sales-2col, .new-wo-2col, .wo-notes-2col { grid-template-columns: 1fr !important; }
 }
+
+/* ── Round 4 audit M1/M2: Mobile bottom-nav 5+More + mobile topbar search ── */
+.mobile-only { display: none; }
+@media (max-width: 768px) {
+  .mobile-only { display: inline-flex; }
+  /* Hide overflow nav items on mobile so only the 4 pins + More show */
+  .nav-item.mobile-hidden { display: none !important; }
+  /* More item only visible on mobile */
+  .nav-item-more { display: flex !important; }
+  /* Topbar mobile search button */
+  .topbar-search-mobile {
+    width: 44px; height: 44px; min-width: 44px; padding: 0;
+    align-items: center; justify-content: center;
+    margin-right: 4px;
+  }
+}
+@media (min-width: 769px) {
+  .nav-item-more { display: none !important; }
+  .topbar-search-mobile { display: none !important; }
+}
+
+/* Mobile "More" bottom-sheet */
+.mobile-more-sheet {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 250;
+  display: flex; align-items: flex-end;
+}
+.mobile-more-content {
+  background: var(--bg);
+  border-top: 1px solid var(--line2);
+  width: 100%;
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height: 70vh; overflow-y: auto;
+}
+.mobile-more-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text2);
+  padding-bottom: 12px; border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+.mobile-more-head button {
+  width: 32px; height: 32px;
+  background: transparent; border: 1px solid var(--line2);
+  color: var(--text2); cursor: pointer; font-size: 20px;
+}
+.mobile-more-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.mobile-more-item {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 14px 8px; min-height: 76px;
+  background: var(--bg2); border: 1px solid var(--line);
+  color: var(--text); text-decoration: none; cursor: pointer;
+  text-align: center;
+}
+.mobile-more-item.active {
+  background: var(--bg3);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.mobile-more-icon { display: flex; align-items: center; justify-content: center; }
+.mobile-more-label {
+  font-family: var(--ui); font-size: 11px; font-weight: 500;
+  line-height: 1.25;
+}

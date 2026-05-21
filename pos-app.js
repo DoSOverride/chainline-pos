@@ -591,12 +591,13 @@ function ConnectionStatus() {
 
 function Sidebar({ screen, setScreen, staff, onLogout }) {
   const activeNav = (screen === 'new-wo' || screen === 'wo-detail' || screen === 'wo-calendar') ? 'work-orders' : screen;
+  const [moreOpen, setMoreOpen] = useState(false);
   const navItem = (n) => {
     const count = n.id === 'work-orders' ? WO_ACTIVE_COUNT : n.count;
     return h('a', {
       key: n.id,
-      className: 'nav-item' + (activeNav === n.id ? ' active' : ''),
-      onClick: () => setScreen(n.id),
+      className: 'nav-item' + (activeNav === n.id ? ' active' : '') + (n.mobileHidden ? ' mobile-hidden' : ''),
+      onClick: () => { setScreen(n.id); setMoreOpen(false); },
     },
       h('span', { className: 'nav-icon' }, h(Ico[n.Icon], { size: 14 })),
       h('span', { className: 'nav-item-label' }, n.label),
@@ -604,6 +605,21 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
       count ? h('span', { className: 'nav-count' }, count) : null
     );
   };
+
+  // Mobile bottom-nav: pin 5 most-used + "More" sheet for the rest. Order:
+  // Sales · WOs · My Queue · Floor · More. Items beyond top 4 hidden on mobile.
+  const MOBILE_PIN_IDS = new Set(['sales','work-orders','my-queue','floor']);
+  const annotatedMain = NAV_MAIN.map(n => ({ ...n, mobileHidden: !MOBILE_PIN_IDS.has(n.id) }));
+  const annotatedTools = NAV_TOOLS.map(n => ({ ...n, mobileHidden: true }));
+  const overflowItems = [...NAV_MAIN, ...NAV_TOOLS].filter(n => !MOBILE_PIN_IDS.has(n.id));
+  const moreItem = h('a', {
+    key: '__more',
+    className: 'nav-item nav-item-more mobile-only',
+    onClick: () => setMoreOpen(o => !o),
+  },
+    h('span', { className: 'nav-icon' }, h(Ico.Dots, { size: 14 })),
+    h('span', { className: 'nav-item-label-mobile' }, 'More')
+  );
 
   return h('aside', { className: 'sidebar' },
     h('div', { className: 'sidebar-brand' },
@@ -615,11 +631,36 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
     ),
     h('div', { className: 'nav-section' },
       h('div', { className: 'nav-label' }, 'Workspace'),
-      NAV_MAIN.map(navItem)
+      annotatedMain.map(navItem),
+      moreItem
     ),
     h('div', { className: 'nav-section nav-grow' },
       h('div', { className: 'nav-label' }, 'Tools'),
-      NAV_TOOLS.map(navItem)
+      annotatedTools.map(navItem)
+    ),
+    // Mobile "More" bottom-sheet — opens from the More tab
+    moreOpen && h('div', {
+      className: 'mobile-more-sheet',
+      onClick: (e) => { if (e.target === e.currentTarget) setMoreOpen(false); }
+    },
+      h('div', { className: 'mobile-more-content' },
+        h('div', { className: 'mobile-more-head' },
+          h('span', null, 'More'),
+          h('button', { onClick: () => setMoreOpen(false), 'aria-label': 'Close' }, '×')
+        ),
+        h('div', { className: 'mobile-more-grid' },
+          overflowItems.map(n =>
+            h('a', {
+              key: n.id,
+              className: 'mobile-more-item' + (activeNav === n.id ? ' active' : ''),
+              onClick: () => { setScreen(n.id); setMoreOpen(false); }
+            },
+              h('span', { className: 'mobile-more-icon' }, h(Ico[n.Icon], { size: 18 })),
+              h('span', { className: 'mobile-more-label' }, n.label)
+            )
+          )
+        )
+      )
     ),
     h('div', { className: 'sidebar-foot' },
       h(AvInit, { initials: staff ? staff.initials : 'CL', tone: staff ? staff.tone : 'am' }),
@@ -681,6 +722,13 @@ function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
       h('input', { ref: topbarSearchRef, placeholder: 'Search WO, customer, SKU…', readOnly: true, style: { cursor: 'pointer' } }),
       h('span', { className: 'kbd' }, '⌘K')
     ),
+    // Mobile-only search button — replaces the desktop topbar-search bar when
+    // viewport hides it. Opens the same global command palette / search sheet.
+    h('button', {
+      className: 'btn ghost topbar-search-mobile mobile-only',
+      onClick: onOpenSearch,
+      'aria-label': 'Search'
+    }, h(Ico.Search, { size: 18 })),
     h('div', { className: 'station' }, 'Drawer ', h('b', null, 'open'), ' \xb7 08:14'),
     h('button', { className: 'btn ghost' }, h(Ico.Dots, { size: 14 }))
   );
