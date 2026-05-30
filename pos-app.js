@@ -1405,6 +1405,37 @@ function DashboardScreen({ setScreen, staff }) {
           })
     ),
 
+    /* ─── Overdue alert banner ─── */
+    !statsLoading && overdueCount > 0 && h('div', { className: 'dashboard-alert-banner' },
+      h('div', { className: 'dab-icon' }, '\u26a0\ufe0f'),
+      h('div', { style: { flex: 1 } },
+        h('div', { style: { fontWeight: 600, fontSize: 13 } }, overdueCount + ' overdue work order' + (overdueCount === 1 ? '' : 's')),
+        h('div', { style: { fontSize: 11, color: 'var(--text2)', marginTop: 2 } }, 'Customers are waiting — action required')
+      ),
+      h('button', { className: 'btn', style: { height: 28, fontSize: 11 }, onClick: function() { setScreen('work-orders'); } }, 'View all overdue')
+    ),
+
+    /* ─── Ready for pickup strip ─── */
+    (function() {
+      const readyList = lsWorkOrders.filter(function(w) {
+        const s = (w.status || '').toLowerCase().replace(/\s+/g, '');
+        return s === 'ready' || s.includes('ready');
+      }).slice(0, 4);
+      if (!readyList.length) return null;
+      return h('div', { className: 'dashboard-ready-strip' },
+        h('div', { style: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 8 } }, '\u2705 Ready for pickup (' + readyList.length + ')'),
+        h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+          readyList.map(function(w) {
+            return h('div', { key: w.id, className: 'ready-wo-chip', onClick: function() { setScreen('work-orders'); } },
+              h('span', { className: 'rwc-id' }, w.id || ''),
+              h('span', { className: 'rwc-name' }, w.cust || ''),
+              h('span', { className: 'rwc-bike' }, w.bike ? w.bike.slice(0, 20) : '')
+            );
+          })
+        )
+      );
+    })(),
+
     h('div', { className: 'grid-2' },
       // Left column
       h('div', { className: 'col', style: { gap: 16 } },
@@ -1551,7 +1582,7 @@ function AddTagModal({ woId, currentTags, onSave, onClose }) {
     const next = has ? tags.filter(t => t !== tag) : [...tags, tag];
     setTags(next);
     if (woId) {
-      apiPost('/api/workorder/' + woId + '/tag', { tag, remove: has });
+      apiPost('/api/workorder/' + woId + '/tag', { tag, remove: has }).catch(() => toast('Failed to save tag', 'error'));
     }
     onSave && onSave(next);
   }
@@ -1561,7 +1592,7 @@ function AddTagModal({ woId, currentTags, onSave, onClose }) {
     if (!t || tags.includes(t)) { setCustom(''); return; }
     const next = [...tags, t];
     setTags(next);
-    if (woId) apiPost('/api/workorder/' + woId + '/tag', { tag: t });
+    if (woId) apiPost('/api/workorder/' + woId + '/tag', { tag: t }).catch(() => toast('Failed to save tag', 'error'));
     onSave && onSave(next);
     setCustom('');
   }
@@ -1839,7 +1870,7 @@ function AuditLogModal({ woId, onClose }) {
     apiGet('/api/workorder/' + woId + '/audit').then(r => {
       setLog((r && r.auditLog) ? r.auditLog : []);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [woId]);
 
   const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 480, maxWidth: '94vw', padding: 20, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, scroll: { overflowY: 'auto', flex: 1, paddingRight: 4 }, entry: { display: 'flex', gap: 10, paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid var(--line)' }, dot: { width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginTop: 4, flexShrink: 0 }, footer: { display: 'flex', justifyContent: 'flex-end', marginTop: 14 } };
@@ -2036,8 +2067,10 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
 
   function changeStatus(s) {
     setStatus(s);
-    toast('Status updated to ' + s, 'success');
-    if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: s });
+    if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: s })
+      .then(() => toast('Status updated to ' + s, 'success'))
+      .catch(() => { setStatus(wo.status || 'open'); toast('Failed to update status', 'error'); });
+    else toast('Status updated to ' + s, 'success');
   }
 
   // Auto-save (full PUT) on field changes
@@ -2143,9 +2176,10 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       message: 'Archive this work order? It can be restored later.',
       onConfirm: () => {
         setConfirm(null);
-        if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: 'Archived' });
-        toast('Archived', 'success');
-        onClose && onClose();
+        if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: 'Archived' })
+          .then(() => { toast('Archived', 'success'); onClose && onClose(); })
+          .catch(() => toast('Failed to archive work order', 'error'));
+        else { toast('Archived', 'success'); onClose && onClose(); }
       },
     });
   }
@@ -2782,6 +2816,73 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
               ))
             )
           )
+        ),
+
+        /* ─── WO Timeline ─── */
+        h('div', { className: 'wo-timeline', style: { marginTop: 20 } },
+          h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 } },
+            h('div', { style: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)' } }, 'Work Order Timeline'),
+            h('button', { className: 'btn ghost', style: { height: 26, padding: '0 8px', fontSize: 11 }, onClick: () => setShowAuditModal(true) }, 'Full audit log')
+          ),
+          h('div', { className: 'wo-timeline-track' },
+            (function() {
+              // Build timeline milestones from WO data
+              const milestones = [
+                {
+                  key: 'created',
+                  label: 'Created',
+                  icon: '\u2b55',
+                  date: wo.dateIn || wo.created || '',
+                  done: true,
+                  color: '#3b82f6',
+                },
+                {
+                  key: 'assigned',
+                  label: 'Assigned',
+                  icon: '\u{1f527}',
+                  date: employee ? 'To ' + employee : '',
+                  done: !!employee,
+                  color: '#8b5cf6',
+                },
+                {
+                  key: 'inprogress',
+                  label: 'In Progress',
+                  icon: '\u26a1',
+                  date: totalHoursLogged > 0 ? totalHoursLogged + 'h logged' : '',
+                  done: ['inprogress','ready','done','finished'].includes((status || '').toLowerCase().replace(/\s+/g,'')),
+                  color: '#f59e0b',
+                },
+                {
+                  key: 'ready',
+                  label: 'Ready',
+                  icon: '\u2705',
+                  date: wo.hookOut || '',
+                  done: ['ready','done','finished','pickedup'].includes((status || '').toLowerCase().replace(/\s+/g,'')),
+                  color: '#10b981',
+                },
+                {
+                  key: 'pickedup',
+                  label: 'Picked Up',
+                  icon: '\ud83c\udfc1',
+                  date: '',
+                  done: ['done','finished','pickedup','closed'].includes((status || '').toLowerCase().replace(/\s+/g,'')),
+                  color: '#22c55e',
+                },
+              ];
+              return milestones.map(function(m, i) {
+                return h('div', { key: m.key, className: 'wo-tl-step' + (m.done ? ' done' : '') + (i === milestones.length - 1 ? ' last' : '') },
+                  h('div', { className: 'wo-tl-dot', style: { background: m.done ? m.color : 'var(--bg3)', borderColor: m.done ? m.color : 'var(--line2)' } },
+                    m.done && h('span', { style: { fontSize: 8 } }, '\u2713')
+                  ),
+                  i < milestones.length - 1 && h('div', { className: 'wo-tl-line', style: { background: m.done ? m.color : 'var(--line)' } }),
+                  h('div', { className: 'wo-tl-label' },
+                    h('div', { style: { fontWeight: 600, fontSize: 11, color: m.done ? 'var(--text)' : 'var(--text3)' } }, m.label),
+                    m.date && h('div', { style: { fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', marginTop: 1 } }, m.date)
+                  )
+                );
+              });
+            })()
+          )
         )
       )
     )
@@ -2797,6 +2898,7 @@ const WorkOrderDetailPanel = WorkOrderDetail;
 function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const [tab, setTab] = useState('all');
   const [search, setSearch] = useState('');
+  const [visibleCount, setVisibleCount] = useState(50);
   const openWo = onOpenWo || (() => {});
   const [wos, setWos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2934,7 +3036,84 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       h('button', { className: 'btn ghost' }, h(Ico.Dots, { size: 14 }))
     ),
 
-    h('div', { className: 'card' },
+    // ── Mobile card list (swipe right = Ready, swipe left = SMS) ──
+    IS_MOBILE && h('div', Object.assign({ className: 'wo-card-list' }, ptr.handlers),
+      loading
+        ? h(SkeletonCard, { count: 5 })
+        : sorted.length === 0
+        ? h('div', { className: 'wo-card-empty' },
+            h('div', { style: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 } }, 'No work orders match'),
+            h('button', { className: 'btn', onClick: () => { setTab('all'); setSearch(''); } }, 'Clear filters')
+          )
+        : sorted.map(function(r) {
+            function smsWo() {
+              const ph = r.phone || '';
+              if (!ph) { toast('No phone number on file', 'error'); return; }
+              const fn = (r.cust || '').split(' ')[0] || 'there';
+              const m = 'Hi ' + fn + ", your bike is ready for pickup at ChainLine Cycle! We're open Mon–Sat 10am–6pm, Sun 11am–5pm.";
+              apiPost('/api/send-sms', { to: ph, message: m }).then(function(res) {
+                if (res && !res.error) toast('SMS sent to ' + ph, 'success');
+                else toast('SMS failed', 'error');
+              });
+            }
+            function readyWo() {
+              apiPost('/api/workorder/' + r.id + '/status', { status: 'ready' })
+                .then(function(res) {
+                  if (res && !res.error) { toast('Marked Ready', 'success'); fetchWos(); }
+                  else toast('Failed', 'error');
+                });
+            }
+            const swipeProps = useSwipe(smsWo, readyWo);
+            return h('div', Object.assign({ key: r.id, className: 'wo-card-mobile', onClick: function() { openWo(r); } }, swipeProps),
+              h('div', { className: 'wo-card-mobile-top' },
+                h('div', { className: 'wo-card-mobile-id' },
+                  h('span', { className: 'num' }, r.id),
+                  r.prio && h('span', { className: 'prio-flag', title: 'Priority', style: { marginLeft: 6 } }, h(Ico.Flag, { size: 11 }))
+                ),
+                r.status === 'ready'      ? h(Badge, { kind: 'ready' }, 'Ready') :
+                r.status === 'open'       ? h(Badge, { kind: 'open' }, 'Open') :
+                r.status === 'inprogress' ? h(Badge, { kind: 'inprogress' }, 'In Progress') :
+                r.status === 'booked'     ? h(Badge, { kind: 'booked' }, 'Booked') :
+                r.status ? h(Badge, { kind: 'closed' }, r.status.charAt(0).toUpperCase() + r.status.slice(1)) : null
+              ),
+              h('div', { className: 'wo-card-mobile-cust' }, r.cust),
+              r.phone && h('div', { className: 'mono muted', style: { fontSize: 11, padding: '1px 0' } }, r.phone),
+              h('div', { className: 'muted', style: { fontSize: 12 } }, r.bike || r.svc || '—'),
+              h('div', { className: 'wo-card-mobile-meta' },
+                h('span', { className: 'mono' }, r.mech),
+                (r.hookIn || r.hookOut) && h('span', { className: 'mono' }, 'Hook ' + (r.hookOut || r.hookIn)),
+                r.dueState === 'overdue'
+                  ? h('span', { className: 'due-chip due-overdue' }, r.overdueBy || 'Overdue')
+                  : r.dueState === 'today'
+                  ? h('span', { className: 'due-chip due-today' }, 'Today')
+                  : r.due && h('span', { className: 'mono muted' }, r.due)
+              ),
+              h('div', { className: 'wo-card-mobile-actions', onClick: function(e) { e.stopPropagation(); } },
+                r.phone && h('a', {
+                  href: 'tel:' + r.phone,
+                  className: 'btn btn-icon',
+                  style: { textDecoration: 'none' },
+                }, h(Ico.Phone, { size: 14 })),
+                r.status !== 'ready' && r.status !== 'finished' && h('button', {
+                  className: 'btn btn-icon', title: 'Mark Ready', onClick: readyWo,
+                }, h(Ico.Check, { size: 14 })),
+                h(WONotifyButton, { wo: r }),
+                h(OptionsMenu, { items: [
+                  { label: 'View detail',      onClick: function() { openWo(r); } },
+                  { label: 'Mark In Progress', onClick: function() { apiPost('/api/workorder/' + r.id + '/status', { status: 'inprogress' }).then(function(res) { if (res && !res.error) { toast('Marked In Progress', 'success'); fetchWos(); } else toast('Failed', 'error'); }); } },
+                  { label: 'Mark Ready',       onClick: readyWo },
+                  { label: 'SMS Customer',     onClick: smsWo },
+                  'divider',
+                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                ]})
+              ),
+              h('div', { className: 'wo-card-swipe-hint' }, '← SMS  \xb7  Ready →')
+            );
+          })
+    ),
+
+    // ── Desktop table ──
+    !IS_MOBILE && h('div', { className: 'card' },
       h('table', { className: 'tbl' },
         h('thead', null,
           h('tr', null,
@@ -4121,18 +4300,42 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           )
         ),
 
-        !query && lsCatalog.length > 0 && h('div', { className: 'quick-items' },
-          h('span', { className: 'quick-items-label' }, 'Quick add'),
-          lsCatalog.slice(0, 8).map(function(it) {
-            return h('button', {
-              key: it.sku,
-              className: 'quick-item-chip',
-              onClick: function() { addItem(it); }
-            },
-              h('span', { className: 'quick-item-name' }, it.name.length > 22 ? it.name.slice(0, 22) + '…' : it.name),
-              h('span', { className: 'quick-item-price' }, fmt$(it.price))
-            );
-          })
+        !query && h('div', { className: 'quick-items-grid-section' },
+          h('div', { className: 'quick-items-grid-label' }, 'Quick Add'),
+          h('div', { className: 'quick-items-grid' },
+            (function() {
+              const FIXED = [
+                { sku: 'TUBE-700-PRESTA',  name: 'Tube 700c Presta',      price: 12 },
+                { sku: 'TUBE-26-SCHRADER', name: 'Tube 26" Schrader',      price: 10 },
+                { sku: 'LUBE-DRY',         name: 'Dry Chain Lube',         price: 18 },
+                { sku: 'LUBE-WET',         name: 'Wet Chain Lube',         price: 18 },
+                { sku: 'LAB-BASIC-TUNE',   name: 'Labour \xb7 Basic Tune', price: 55, taxablePst: false },
+                { sku: 'LAB-BRAKE-BLD',    name: 'Labour \xb7 Brake Bleed', price: 45, taxablePst: false },
+                { sku: 'BARTAPE-BLK',      name: 'Bar Tape',               price: 24 },
+                { sku: 'CABLE-BRAKE',      name: 'Brake Cable Kit',        price: 16 },
+              ];
+              const enriched = FIXED.map(function(fi) {
+                const live = lsCatalog.find(function(c) { return c.sku === fi.sku; });
+                return live ? Object.assign({}, fi, { price: live.price, stock: live.stock, low: live.low }) : fi;
+              });
+              const liveExtras = lsCatalog.filter(function(c) { return !FIXED.find(function(f) { return f.sku === c.sku; }); }).slice(0, Math.max(0, 12 - enriched.length));
+              return enriched.concat(liveExtras);
+            })().map(function(it) {
+              const inStock = it.stock == null || it.stock > 0;
+              return h('button', {
+                key: it.sku,
+                className: 'quick-item-btn' + (!inStock ? ' oos' : ''),
+                onClick: function() { if (inStock) addItem(it); else toast(it.name + ' is out of stock', 'error'); },
+                title: it.sku + (it.stock != null ? ' \xb7 ' + it.stock + ' in stock' : ''),
+              },
+                h('span', { className: 'qi-name' }, it.name.length > 28 ? it.name.slice(0, 28) + '\u2026' : it.name),
+                h('div', { className: 'qi-footer' },
+                  h('span', { className: 'qi-price' }, fmt$(it.price)),
+                  it.stock != null && h('span', { className: 'qi-stock' + (it.low ? ' low' : '') }, it.stock > 0 ? it.stock + ' stk' : 'OOS')
+                )
+              );
+            })
+          )
         ),
 
         query && searching && h('div', { className: 'item-results' },
@@ -4437,6 +4640,7 @@ function CustomersScreen({ setScreen, onNewSale, onNewWo, onMessage }) {
                   { label: 'View detail',    onClick: function() { setSelected(c); } },
                   { label: 'New Sale',       onClick: function() { onNewSale && onNewSale(c); } },
                   { label: 'New Work Order', onClick: function() { onNewWo && onNewWo(c); } },
+                  { label: 'Message',        onClick: function() { onMessage && onMessage(c); } },
                   'divider',
                   { label: 'Edit',   onClick: function() { toast('Edit coming soon'); } },
                   { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
@@ -5389,19 +5593,77 @@ function MessagesScreen({ initialPhone }) {
 }
 
 /* ─────────────────────────────────────────
+   URL ROUTING
+───────────────────────────────────────── */
+const PATH_TO_SCREEN = {
+  '/workorders': 'work-orders',
+  '/service':    'work-orders',
+  '/sales':      'sales',
+  '/customers':  'customers',
+  '/inventory':  'inventory',
+  '/floor':      'floor',
+  '/reports':    'reports',
+  '/settings':   'settings',
+  '/messages':   'messages',
+  '/vendors':    'vendor-catalog',
+  '/queue':      'my-queue',
+  '/orders':     'purchase-orders',
+};
+
+const SCREEN_TO_PATH = {
+  'work-orders':     '/workorders',
+  'sales':           '/sales',
+  'customers':       '/customers',
+  'inventory':       '/inventory',
+  'floor':           '/floor',
+  'reports':         '/reports',
+  'settings':        '/settings',
+  'messages':        '/messages',
+  'vendor-catalog':  '/vendors',
+  'my-queue':        '/queue',
+  'purchase-orders': '/orders',
+  'dashboard':       '/',
+};
+
+function screenFromPath() {
+  return PATH_TO_SCREEN[window.location.pathname] || null;
+}
+
+/* ─────────────────────────────────────────
    APP ROOT
 ───────────────────────────────────────── */
 function App() {
   const [staff, setStaff] = useState(function() {
     try { return JSON.parse(sessionStorage.getItem('pos-staff') || 'null'); } catch { return null; }
   });
-  const [screen, setScreen]           = useState('dashboard');
+  const [screen, setScreenRaw] = useState(function() {
+    return screenFromPath() || 'dashboard';
+  });
   const [activeWo, setActiveWo]       = useState(null);
   const [pendingCustomer, setPendingCustomer] = useState(null);
   const [pendingMsgPhone, setPendingMsgPhone]   = useState(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [saleCount, setSaleCount]     = useState(0);
   const topbarSearchRef = useRef(null);
+
+  // URL-aware setScreen: updates history + state together.
+  // Sub-screens (new-wo, wo-detail, wo-calendar) share /workorders URL.
+  function setScreen(id) {
+    var canonicalId = (id === 'new-wo' || id === 'wo-detail' || id === 'wo-calendar') ? 'work-orders' : id;
+    var path = SCREEN_TO_PATH[canonicalId] || '/';
+    try { window.history.pushState(null, '', path); } catch (_) {}
+    setScreenRaw(id);
+  }
+
+  // Handle browser back/forward.
+  useEffect(function() {
+    function onPopState() {
+      var s = screenFromPath();
+      setScreenRaw(s || 'dashboard');
+    }
+    window.addEventListener('popstate', onPopState);
+    return function() { window.removeEventListener('popstate', onPopState); };
+  }, []);
 
   // Bootstrap live data (WOs, customers, catalog) on first mount.
   // Runs once; async — components see data fill in as fetches complete.
