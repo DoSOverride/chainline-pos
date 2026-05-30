@@ -352,6 +352,93 @@ function SmsModal({ customer, phone, onClose }) {
   );
 }
 
+/* ── WO Inline Notify Button ── */
+function WONotifyButton({ wo }) {
+  const [open, setOpen]       = useState(false);
+  const [msg, setMsg]         = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent]       = useState(false);
+  const phone = wo.phone || (wo.customer && wo.customer.phone) || '';
+  const firstName = (wo.cust || '').split(' ')[0] || 'there';
+
+  function defaultMsg() {
+    return 'Hi ' + firstName + ', your bike is ready for pickup at ChainLine Cycle! We’re open Mon–Sat 10am–6pm, Sun 11am–5pm.';
+  }
+
+  function handleOpen(e) {
+    e.stopPropagation();
+    if (!phone) { toast('No phone number on file', 'error'); return; }
+    setMsg(defaultMsg());
+    setOpen(true);
+    setSent(false);
+  }
+
+  async function handleSend(e) {
+    e.stopPropagation();
+    setSending(true);
+    const res = await apiPost('/api/send-sms', { to: phone, message: msg });
+    setSending(false);
+    if (res && !res.error) {
+      setSent(true);
+      setOpen(false);
+      setTimeout(() => setSent(false), 3000);
+    } else {
+      toast('SMS failed: ' + ((res && res.error) || 'worker error'), 'error');
+    }
+  }
+
+  function handleClose(e) { if (e) e.stopPropagation(); setOpen(false); }
+
+  return h('div', { style: { position: 'relative', display: 'inline-block' }, onClick: e => e.stopPropagation() },
+    sent
+      ? h('span', {
+          style: { fontSize: 11, color: 'var(--green, #16a34a)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', padding: '2px 4px' },
+        }, '✅ Sent')
+      : h('button', {
+          className: 'btn ghost',
+          title: phone ? 'Text customer' : 'No phone on file',
+          style: { fontSize: 11, padding: '2px 7px', opacity: phone ? 1 : 0.4 },
+          onClick: handleOpen,
+        }, '📱'),
+
+    open && h('div', {
+      style: {
+        position: 'absolute', right: 0, top: '100%', zIndex: 999,
+        background: 'var(--bg2, #1e1e2e)', border: '1px solid var(--border, #333)',
+        borderRadius: 8, padding: 14, width: 320,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+      },
+    },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+        h('span', { style: { fontSize: 12, fontWeight: 600, color: 'var(--text-1)' } }, '📱 Notify ' + firstName),
+        h('button', { className: 'btn ghost', style: { padding: '1px 6px', fontSize: 12 }, onClick: handleClose }, '×')
+      ),
+      h('div', { style: { fontSize: 11, color: 'var(--text-3)', marginBottom: 8, fontFamily: 'var(--font-mono)' } }, phone),
+      h('textarea', {
+        style: {
+          width: '100%', boxSizing: 'border-box',
+          background: 'var(--bg3, #2a2a3a)', border: '1px solid var(--border, #333)',
+          color: 'var(--text-1)', borderRadius: 6, padding: 8, fontSize: 12,
+          resize: 'vertical', minHeight: 72,
+        },
+        rows: 4,
+        value: msg,
+        onChange: e => setMsg(e.target.value),
+        onClick: e => e.stopPropagation(),
+      }),
+      h('div', { style: { display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' } },
+        h('button', { className: 'btn', style: { fontSize: 11 }, onClick: handleClose }, 'Cancel'),
+        h('button', {
+          className: 'btn primary',
+          style: { fontSize: 11 },
+          disabled: sending || !msg.trim(),
+          onClick: handleSend,
+        }, sending ? 'Sending…' : 'Send')
+      )
+    )
+  );
+}
+
 /* ─────────────────────────────────────────
    CONNECTION STATUS
 ───────────────────────────────────────── */
@@ -1834,7 +1921,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
             h('th', { style: { width: 80 } }, 'Hook'),
             h('th', { style: { width: 120 } }, 'Due'),
             h('th', { style: { width: 70 } }, 'Mech'),
-            h('th', { style: { width: 32 } })
+            h('th', { style: { width: 72 } })
           )
         ),
         h('tbody', null,
@@ -1901,19 +1988,32 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                       : h('span', { className: 'num muted', style: { fontSize: 12 } }, r.due)
                   ),
                   h('td', null, h(AvInit, { initials: r.mech, tone: r.tone })),
-                  h('td', { onClick: e => e.stopPropagation() },
-                    h(OptionsMenu, { items: [
-                      { label: 'View detail',    onClick: () => openWo(r) },
-                      { label: 'Mark In Progress', onClick: () => toast('Status updated', 'success') },
-                      { label: 'Mark Ready',     onClick: () => toast('Status updated', 'success') },
-                      { label: 'Mark Done',      onClick: () => toast('Status updated', 'success') },
-                      'divider',
-                      { label: 'Print Work Order', onClick: () => toast('Printing...', 'success') },
-                      { label: 'SMS Customer',   onClick: () => toast('Opening SMS...') },
-                      'divider',
-                      { label: 'Void',           onClick: () => toast('Voided', 'error'), danger: true },
-                      { label: 'Delete',         onClick: () => toast('Deleted', 'error'), danger: true },
-                    ]})
+                  h('td', { onClick: e => e.stopPropagation(), style: { whiteSpace: 'nowrap' } },
+                    h('div', { style: { display: 'flex', alignItems: 'center', gap: 4 } },
+                      h(WONotifyButton, { wo: r }),
+                      h(OptionsMenu, { items: [
+                        { label: 'View detail',    onClick: () => openWo(r) },
+                        { label: 'Mark In Progress', onClick: () => toast('Status updated', 'success') },
+                        { label: 'Mark Ready',     onClick: () => toast('Status updated', 'success') },
+                        { label: 'Mark Done',      onClick: () => toast('Status updated', 'success') },
+                        'divider',
+                        { label: 'Print Work Order', onClick: () => toast('Printing...', 'success') },
+                        { label: 'SMS Customer',   onClick: () => {
+                            const ph = r.phone || '';
+                            if (!ph) { toast('No phone number on file', 'error'); return; }
+                            const fn = (r.cust || '').split(' ')[0] || 'there';
+                            const m = 'Hi ' + fn + ', your bike is ready for pickup at ChainLine Cycle! We’re open Mon–Sat 10am–6pm, Sun 11am–5pm.';
+                            apiPost('/api/send-sms', { to: ph, message: m }).then(res => {
+                              if (res && !res.error) toast('SMS sent to ' + ph, 'success');
+                              else toast('SMS failed', 'error');
+                            });
+                          }
+                        },
+                        'divider',
+                        { label: 'Void',           onClick: () => toast('Voided', 'error'), danger: true },
+                        { label: 'Delete',         onClick: () => toast('Deleted', 'error'), danger: true },
+                      ]})
+                    )
                   )
                 )
               )
