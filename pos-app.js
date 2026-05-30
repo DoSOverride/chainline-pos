@@ -998,6 +998,7 @@ const NAV_TOOLS = [
   { id: 'purchase-orders',  label: 'Purchase Orders', mobileLabel: 'POs',     Icon: 'Box'      },
   { id: 'vendor-catalog',   label: 'Vendor Catalog',  mobileLabel: 'Vendors', Icon: 'Search'   },
   { id: 'reports',          label: 'Reports',         mobileLabel: 'Reports', Icon: 'Clock'    },
+  { id: 'csv-import',       label: 'Import Data',     mobileLabel: 'Import',  Icon: 'Plus'     },
   { id: 'settings',         label: 'Settings',        mobileLabel: 'Settings', Icon: 'Dots'    },
 ];
 
@@ -1204,6 +1205,7 @@ function Topbar({ screen, topbarSearchRef, onOpenSearch }) {
     'bookings': ['Tools', 'Bookings'],
     'purchase-orders': ['Tools', 'Purchase Orders'],
     'reports': ['Tools', 'Reports'],
+    'csv-import': ['Tools', 'Import Data'],
     'settings': ['Tools', 'Settings'],
   }[screen] || ['ChainLine'];
 
@@ -5870,6 +5872,91 @@ function BookingsScreen({ setScreen }) {
 }
 
 /* ─────────────────────────────────────────
+   SCREEN — CSV IMPORT
+───────────────────────────────────────── */
+function CsvImportScreen() {
+  const [file, setFile] = useState(null);
+  const [type, setType] = useState('customers');
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const types = [
+    { id: 'customers',   label: 'Customers CSV',    desc: 'customer_listings_customers.csv' },
+    { id: 'sales',       label: 'Sales Lines CSV',  desc: 'reports_sales_listings_transaction_line.csv' },
+    { id: 'serials',     label: 'Serial Numbers CSV', desc: 'item_listings_item_serial_search.csv' },
+    { id: 'workorders',  label: 'Work Orders CSV',  desc: 'workbench_listings_workorders.csv' },
+  ];
+
+  async function handleImport() {
+    if (!file) return;
+    setImporting(true);
+    setResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('type', type);
+    try {
+      const r = await fetch(`${WORKER}/api/pos-csv-import`, {
+        method: 'POST',
+        headers: { 'X-POS-Auth': getApiPin() },
+        body: fd,
+      });
+      const d = await r.json();
+      setResult(d);
+    } catch(e) {
+      setResult({ error: e.message });
+    }
+    setImporting(false);
+  }
+
+  return h('div', { className: 'screen' },
+    h(PageHead, { title: 'Import Data', sub: 'Tools' }),
+
+    h('div', { className: 'import-type-grid' },
+      types.map(t => h('div', {
+        key: t.id,
+        className: 'import-type-card' + (type === t.id ? ' active' : ''),
+        onClick: () => { setType(t.id); setFile(null); setResult(null); },
+      },
+        h('div', { className: 'import-type-label' }, t.label),
+        h('div', { className: 'import-type-desc mono' }, t.desc)
+      ))
+    ),
+
+    h('div', {
+      className: 'import-drop-zone',
+      onDragOver: e => e.preventDefault(),
+      onDrop: e => { e.preventDefault(); setFile(e.dataTransfer.files[0]); setResult(null); },
+    },
+      file
+        ? h('div', null, '📄 ', file.name, ` (${(file.size / 1024).toFixed(0)} KB)`)
+        : h('div', null, 'Drop CSV here or ', h('label', { style: { cursor: 'pointer', textDecoration: 'underline' } },
+            'browse',
+            h('input', {
+              type: 'file', accept: '.csv', style: { display: 'none' },
+              onChange: e => { setFile(e.target.files[0]); setResult(null); },
+            })
+          ))
+    ),
+
+    file && h('button', {
+      onClick: handleImport,
+      disabled: importing,
+      className: 'btn primary',
+      style: { marginTop: 12 },
+    }, importing ? 'Importing…' : `Import ${type}`),
+
+    result && h('div', {
+      className: 'alert ' + (result.error ? 'error' : 'success'),
+      style: { marginTop: 12 },
+    },
+      result.error
+        ? `Error: ${result.error}`
+        : `✓ Imported ${result.count} records${result.index ? ' — customer index updated' : ''}`
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    SCREEN — VENDOR CATALOG
 ───────────────────────────────────────── */
 function VendorCatalogScreen() {
@@ -6165,6 +6252,7 @@ const PATH_TO_SCREEN = {
   '/vendors':    'vendor-catalog',
   '/queue':      'my-queue',
   '/orders':     'purchase-orders',
+  '/import':     'csv-import',
 };
 
 const SCREEN_TO_PATH = {
@@ -6179,6 +6267,7 @@ const SCREEN_TO_PATH = {
   'vendor-catalog':  '/vendors',
   'my-queue':        '/queue',
   'purchase-orders': '/orders',
+  'csv-import':      '/import',
   'dashboard':       '/',
 };
 
@@ -6318,6 +6407,7 @@ function App() {
       case 'reports':        return h(window.ReportsScreen        || ReportsScreen);
       case 'settings':       return h(SettingsScreen);
       case 'bookings':       return h(BookingsScreen,        { setScreen });
+      case 'csv-import':     return h(CsvImportScreen);
       case 'messages':       return h(MessagesScreen,       { initialPhone: pendingMsgPhone });
       default:               return h(PlaceholderScreen, { name: screen });
     }

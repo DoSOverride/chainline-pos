@@ -1063,3 +1063,53 @@ body.floor-dragging { cursor: grabbing; user-select: none; }
 .rwc-id { font-family: var(--mono); font-size: 10px; color: #10b981; font-weight: 600; }
 .rwc-name { color: var(--text); font-weight: 500; }
 .rwc-bike { color: var(--text3); font-size: 11px; }
+
+/* ── CSV Import Screen ── */
+.import-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.import-type-card {
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.import-type-card:hover { border-color: var(--accent); }
+.import-type-card.active { border-color: var(--accent); background: rgba(var(--accent-rgb,59,130,246),0.08); }
+.import-type-label { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.import-type-desc { font-family: var(--mono); font-size: 10px; color: var(--text-2); word-break: break-all; }
+
+.import-drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  padding: 32px 20px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-2);
+  background: var(--surface);
+  transition: border-color 0.12s;
+  margin-bottom: 4px;
+}
+.import-drop-zone:hover { border-color: var(--accent); }
+
+.alert {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.alert.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+.alert.error {
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: #ef4444;
+}
