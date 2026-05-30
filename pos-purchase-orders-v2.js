@@ -229,9 +229,11 @@
 
   /* ── PO List row ── */
   function PORow({ po, onSelect }) {
-    const total = poTotal(po);
-    const ordered = poOrdered(po);
-    const received = poReceived(po);
+    // Use line-level totals when available; fall back to top-level fields (imported POs have no lines)
+    const hasLines = po.lines && po.lines.length > 0;
+    const total    = hasLines ? poTotal(po)    : (po.total    || 0);
+    const ordered  = hasLines ? poOrdered(po)  : (po.qtyOrdered  || 0);
+    const received = hasLines ? poReceived(po) : (po.qtyReceived || 0);
     return h('tr', {
       style: { cursor: 'pointer' },
       onClick: () => onSelect(po),
@@ -1002,20 +1004,27 @@
         .then(r => r.json())
         .then(data => {
           if (cancelled) return;
-          const raw = data?.purchaseorders;
+          // Worker returns { purchaseOrders: [...] } for both R2 snapshot and LS live
+          const raw = data?.purchaseOrders;
           if (!Array.isArray(raw) || raw.length === 0) return;
+          // Worker already normalises shape; pass through with POList-expected field aliases
           const mapped = raw.map(po => ({
-            id: 'PO-' + po.orderID,
-            vendor: po.Vendor?.name || 'Unknown',
-            vendorId: '',
-            ref: po.vendorOrderNumber || '',
-            date: po.orderDate?.slice(0, 10) || '',
-            created: po.orderDate?.slice(0, 10) || '',
-            expected: po.expectedDate?.slice(0, 10) || '',
-            status: po.status === 'Open' ? 'Open' : po.status === 'Closed' ? 'Finished' : 'Open',
-            total: parseFloat(po.total?.amount || 0),
-            notes: po.notes || '',
-            lines: [],
+            id:       po.id || ('PO-' + (po.lsId || po.orderID || '')),
+            lsId:     po.lsId || '',
+            vendor:   po.vendor || po.Vendor?.name || 'Unknown',
+            vendorId: po.vendorID || '',
+            ref:      po.ref || po.referenceNum || po.vendorOrderNumber || '',
+            date:     po.created || po.ordered || po.orderDate?.slice(0, 10) || '',
+            created:  po.created || po.ordered || po.orderDate?.slice(0, 10) || '',
+            expected: po.expected || po.expectedDate?.slice(0, 10) || '',
+            received: po.received || po.receivedDate || '',
+            status:   po.status || 'Open',
+            total:    parseFloat(po.total || po.total?.amount || 0),
+            qtyOrdered:  po.qtyOrdered  || 0,
+            qtyReceived: po.qtyReceived || 0,
+            notes:    po.notes || '',
+            source:   po.source || '',
+            lines:    po.lines || [],
           }));
           setPOs(mapped);
         })
