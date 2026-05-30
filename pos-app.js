@@ -1113,6 +1113,341 @@ function DashboardScreen({ setScreen }) {
 }
 
 /* ─────────────────────────────────────────
+   WO DETAIL MODALS (Tag / Time / Discount / Fee / Reserve / Audit)
+───────────────────────────────────────── */
+const PRESET_TAGS = ['Ready', 'Waiting on Parts', 'Customer Contacted', 'Rush', 'Warranty', 'Insurance'];
+
+function AddTagModal({ woId, currentTags, onSave, onClose }) {
+  const [tags, setTags] = useState(currentTags || []);
+  const [custom, setCustom] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  function toggle(tag) {
+    const has = tags.includes(tag);
+    const next = has ? tags.filter(t => t !== tag) : [...tags, tag];
+    setTags(next);
+    if (woId) {
+      apiPost('/api/workorder/' + woId + '/tag', { tag, remove: has });
+    }
+    onSave && onSave(next);
+  }
+
+  function addCustom() {
+    const t = custom.trim();
+    if (!t || tags.includes(t)) { setCustom(''); return; }
+    const next = [...tags, t];
+    setTags(next);
+    if (woId) apiPost('/api/workorder/' + woId + '/tag', { tag: t });
+    onSave && onSave(next);
+    setCustom('');
+  }
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 380, maxWidth: '94vw', padding: 20 }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, chips: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }, chip: { padding: '4px 10px', fontSize: 12, border: '1px solid var(--line2)', cursor: 'pointer', background: 'var(--bg3)', color: 'var(--text)' }, chipOn: { background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff' }, row: { display: 'flex', gap: 6, marginBottom: 14 }, footer: { display: 'flex', justifyContent: 'flex-end', gap: 6 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Add Tag / Label'),
+      h('div', { style: M.chips },
+        PRESET_TAGS.map(tag =>
+          h('button', { key: tag, style: Object.assign({}, M.chip, tags.includes(tag) ? M.chipOn : {}), onClick: () => toggle(tag) }, tag)
+        )
+      ),
+      h('div', { style: M.row },
+        h('input', { className: 'input', placeholder: 'Custom tag...', value: custom, onChange: e => setCustom(e.target.value), onKeyDown: e => e.key === 'Enter' && addCustom(), style: { flex: 1, height: 30 } }),
+        h('button', { className: 'btn', style: { height: 30 }, onClick: addCustom }, '+ Add')
+      ),
+      h('div', { style: M.footer },
+        h('button', { className: 'btn', onClick: onClose }, 'Done')
+      )
+    )
+  );
+}
+
+function AddTimeModal({ woId, currentTech, onSave, onClose }) {
+  const [technician, setTechnician] = useState(currentTech || '');
+  const [hours, setHours] = useState('');
+  const [desc, setDesc] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [totalHours, setTotalHours] = useState(null);
+
+  async function submit() {
+    if (!technician || !hours) { toast('Technician and hours required', 'error'); return; }
+    setSaving(true);
+    const r = await apiPost('/api/workorder/' + woId + '/time', { technician, hours: parseFloat(hours), description: desc });
+    setSaving(false);
+    if (r && r.ok) {
+      setTotalHours(r.totalHours);
+      toast('Time logged: ' + hours + 'h', 'success');
+      onSave && onSave(r);
+      setHours(''); setDesc('');
+    } else {
+      toast('Failed to log time', 'error');
+    }
+  }
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 400, maxWidth: '94vw', padding: 20 }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, field: { marginBottom: 12 }, label: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 4, display: 'block' }, footer: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Log Time'),
+      totalHours !== null && h('div', { style: { marginBottom: 10, fontSize: 12, color: 'var(--accent)' } }, 'Running total: ' + totalHours + ' hrs'),
+      h('div', { style: M.field },
+        h('label', { style: M.label }, 'Technician'),
+        h('select', { className: 'input', value: technician, onChange: e => setTechnician(e.target.value), style: { width: '100%' } },
+          h('option', { value: '' }, '-- Select --'),
+          STAFF.map(s => h('option', { key: s.id, value: s.name }, s.name))
+        )
+      ),
+      h('div', { style: M.field },
+        h('label', { style: M.label }, 'Hours'),
+        h('input', { className: 'input mono', type: 'number', step: '0.25', min: '0', placeholder: '1.5', value: hours, onChange: e => setHours(e.target.value), style: { width: '100%' } })
+      ),
+      h('div', { style: M.field },
+        h('label', { style: M.label }, 'Description'),
+        h('input', { className: 'input', placeholder: 'What was done...', value: desc, onChange: e => setDesc(e.target.value), style: { width: '100%' } })
+      ),
+      h('div', { style: M.footer },
+        h('button', { className: 'btn', onClick: onClose }, 'Cancel'),
+        h('button', { className: 'btn primary', onClick: submit, disabled: saving }, saving ? 'Saving...' : 'Log Time')
+      )
+    )
+  );
+}
+
+function AddDiscountModal({ woId, currentDiscount, onSave, onClose }) {
+  const [type, setType] = useState(currentDiscount ? currentDiscount.type : 'pct');
+  const [value, setValue] = useState(currentDiscount ? String(currentDiscount.value) : '');
+  const [reason, setReason] = useState(currentDiscount ? currentDiscount.reason : '');
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!value || parseFloat(value) <= 0) { toast('Enter a valid discount value', 'error'); return; }
+    setSaving(true);
+    const r = await apiPost('/api/workorder/' + woId + '/discount', { type, value: parseFloat(value), reason });
+    setSaving(false);
+    if (r && r.ok) {
+      toast('Discount applied', 'success');
+      onSave && onSave(r.discount);
+      onClose();
+    } else {
+      toast('Failed to apply discount', 'error');
+    }
+  }
+
+  async function remove() {
+    setSaving(true);
+    const r = await apiPost('/api/workorder/' + woId + '/discount', { remove: true });
+    setSaving(false);
+    if (r && r.ok) { toast('Discount removed', 'success'); onSave && onSave(null); onClose(); }
+  }
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 380, maxWidth: '94vw', padding: 20 }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, field: { marginBottom: 12 }, label: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 4, display: 'block' }, toggle: { display: 'flex', gap: 6, marginBottom: 12 }, toggleBtn: { flex: 1, height: 32, fontSize: 12 }, footer: { display: 'flex', justifyContent: 'space-between', gap: 6, marginTop: 16 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Add Discount'),
+      h('div', { style: M.toggle },
+        h('button', { className: 'btn' + (type === 'pct' ? ' primary' : ''), style: M.toggleBtn, onClick: () => setType('pct') }, '% Percent'),
+        h('button', { className: 'btn' + (type === 'flat' ? ' primary' : ''), style: M.toggleBtn, onClick: () => setType('flat') }, '$ Flat')
+      ),
+      h('div', { style: M.field },
+        h('label', { style: M.label }, type === 'pct' ? 'Percentage (%)' : 'Amount ($)'),
+        h('input', { className: 'input mono', type: 'number', step: type === 'pct' ? '1' : '0.01', min: '0', placeholder: type === 'pct' ? '10' : '25.00', value, onChange: e => setValue(e.target.value), style: { width: '100%' } })
+      ),
+      h('div', { style: M.field },
+        h('label', { style: M.label }, 'Reason'),
+        h('input', { className: 'input', placeholder: 'Staff discount, damage, etc.', value: reason, onChange: e => setReason(e.target.value), style: { width: '100%' } })
+      ),
+      h('div', { style: M.footer },
+        h('div', { style: { display: 'flex', gap: 6 } },
+          currentDiscount && h('button', { className: 'btn', style: { color: '#d04a3a', borderColor: '#d04a3a' }, onClick: remove, disabled: saving }, 'Remove'),
+          h('button', { className: 'btn', onClick: onClose }, 'Cancel')
+        ),
+        h('button', { className: 'btn primary', onClick: submit, disabled: saving }, saving ? 'Saving...' : 'Apply')
+      )
+    )
+  );
+}
+
+function AddFeeModal({ woId, currentFees, onSave, onClose }) {
+  const [fees, setFees] = useState(currentFees || []);
+  const [desc, setDesc] = useState('');
+  const [amount, setAmount] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function addFee() {
+    if (!desc.trim() || !amount || parseFloat(amount) <= 0) { toast('Enter description and amount', 'error'); return; }
+    setSaving(true);
+    const r = await apiPost('/api/workorder/' + woId + '/fee', { description: desc.trim(), amount: parseFloat(amount) });
+    setSaving(false);
+    if (r && r.ok) {
+      const next = r.fees || [...fees, r.fee];
+      setFees(next);
+      onSave && onSave(next);
+      toast('Fee added', 'success');
+      setDesc(''); setAmount('');
+    } else {
+      toast('Failed to add fee', 'error');
+    }
+  }
+
+  async function removeFee(id) {
+    const r = await apiPost('/api/workorder/' + woId + '/fee', { removeId: id });
+    if (r && r.ok) {
+      const next = fees.filter(f => f.id !== id);
+      setFees(next);
+      onSave && onSave(next);
+    }
+  }
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 400, maxWidth: '94vw', padding: 20 }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, row: { display: 'flex', gap: 6, marginBottom: 12, alignItems: 'flex-end' }, label: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 4, display: 'block' }, feeRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }, footer: { display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 16 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Add Fee'),
+      fees.length > 0 && h('div', { style: { marginBottom: 12 } },
+        fees.map(f => h('div', { key: f.id, style: M.feeRow },
+          h('span', null, f.description),
+          h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+            h('span', { className: 'mono' }, '$' + (f.amount || 0).toFixed(2)),
+            h('button', { className: 'btn ghost', style: { padding: '2px 6px', fontSize: 11, color: '#d04a3a' }, onClick: () => removeFee(f.id) }, '\xd7')
+          )
+        ))
+      ),
+      h('div', { style: M.row },
+        h('div', { style: { flex: 1 } },
+          h('label', { style: M.label }, 'Description'),
+          h('input', { className: 'input', placeholder: 'Shop supplies', value: desc, onChange: e => setDesc(e.target.value), style: { width: '100%', height: 30 } })
+        ),
+        h('div', { style: { width: 90 } },
+          h('label', { style: M.label }, 'Amount $'),
+          h('input', { className: 'input mono', type: 'number', step: '0.01', min: '0', placeholder: '5.00', value: amount, onChange: e => setAmount(e.target.value), onKeyDown: e => e.key === 'Enter' && addFee(), style: { width: '100%', height: 30 } })
+        ),
+        h('button', { className: 'btn', style: { height: 30, alignSelf: 'flex-end' }, onClick: addFee, disabled: saving }, '+ Add')
+      ),
+      h('div', { style: M.footer },
+        h('button', { className: 'btn', onClick: onClose }, 'Done')
+      )
+    )
+  );
+}
+
+function ReserveItemModal({ woId, currentItems, onSave, onClose }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [reserved, setReserved] = useState(currentItems || []);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef(null);
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return; }
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      const r = await apiGet('/api/items-search?q=' + encodeURIComponent(query));
+      setSearching(false);
+      setResults((r && r.items) ? r.items.slice(0, 8) : []);
+    }, 350);
+    return () => clearTimeout(searchTimer.current);
+  }, [query]);
+
+  async function reserve(item) {
+    const r = await apiPost('/api/workorder/' + woId + '/reserve', { itemId: item.id, name: item.name, sku: item.sku, qty: 1 });
+    if (r && r.ok) {
+      const next = r.reservedItems || [...reserved, r.item];
+      setReserved(next);
+      onSave && onSave(next);
+      toast('Reserved: ' + item.name, 'success');
+      setQuery(''); setResults([]);
+    } else {
+      toast('Failed to reserve', 'error');
+    }
+  }
+
+  async function unreserve(id) {
+    const r = await apiPost('/api/workorder/' + woId + '/reserve', { removeId: id });
+    if (r && r.ok) {
+      const next = reserved.filter(i => i.id !== id);
+      setReserved(next);
+      onSave && onSave(next);
+    }
+  }
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 440, maxWidth: '94vw', padding: 20 }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, resultRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12, cursor: 'pointer' }, reservedRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--line)', fontSize: 12 }, footer: { display: 'flex', justifyContent: 'flex-end', marginTop: 16 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Reserve Item for WO'),
+      reserved.length > 0 && h('div', { style: { marginBottom: 12 } },
+        h('div', { style: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 6 } }, 'Reserved'),
+        reserved.map(i => h('div', { key: i.id, style: M.reservedRow },
+          h('span', null, i.name),
+          h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+            h('span', { className: 'mono', style: { fontSize: 11, color: 'var(--text3)' } }, i.sku),
+            h('button', { className: 'btn ghost', style: { padding: '2px 6px', fontSize: 11, color: '#d04a3a' }, onClick: () => unreserve(i.id) }, '\xd7')
+          )
+        ))
+      ),
+      h('input', { className: 'input', placeholder: 'Search inventory...', value: query, onChange: e => setQuery(e.target.value), style: { width: '100%', marginBottom: 4 } }),
+      searching && h('div', { style: { fontSize: 11, color: 'var(--text3)', padding: '4px 0' } }, 'Searching...'),
+      results.length > 0 && h('div', { style: { border: '1px solid var(--line)', marginBottom: 8 } },
+        results.map(item => h('div', { key: item.id, style: M.resultRow, onClick: () => reserve(item) },
+          h('div', null,
+            h('div', null, item.name),
+            h('div', { className: 'mono', style: { fontSize: 10, color: 'var(--text3)' } }, item.sku + (item.qty > 0 ? ' — ' + item.qty + ' in stock' : ' — OUT'))
+          ),
+          h('button', { className: 'btn', style: { height: 26, fontSize: 11 } }, 'Reserve')
+        ))
+      ),
+      h('div', { style: M.footer },
+        h('button', { className: 'btn', onClick: onClose }, 'Done')
+      )
+    )
+  );
+}
+
+function AuditLogModal({ woId, onClose }) {
+  const [log, setLog] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    apiGet('/api/workorder/' + woId + '/audit').then(r => {
+      setLog((r && r.auditLog) ? r.auditLog : []);
+      setLoading(false);
+    });
+  }, [woId]);
+
+  const M = { overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }, box: { background: 'var(--bg2)', border: '1px solid var(--line)', width: 480, maxWidth: '94vw', padding: 20, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }, title: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: 14 }, scroll: { overflowY: 'auto', flex: 1, paddingRight: 4 }, entry: { display: 'flex', gap: 10, paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid var(--line)' }, dot: { width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginTop: 4, flexShrink: 0 }, footer: { display: 'flex', justifyContent: 'flex-end', marginTop: 14 } };
+
+  return h('div', { style: M.overlay, onMouseDown: e => { if (e.target === e.currentTarget) onClose(); } },
+    h('div', { style: M.box },
+      h('div', { style: M.title }, 'Audit Log — ' + woId),
+      loading
+        ? h('div', { style: { fontSize: 12, color: 'var(--text3)' } }, 'Loading...')
+        : log.length === 0
+          ? h('div', { style: { fontSize: 12, color: 'var(--text3)', padding: '16px 0' } }, 'No audit entries yet.')
+          : h('div', { style: M.scroll },
+              log.map((entry, i) => h('div', { key: i, style: M.entry },
+                h('div', { style: M.dot }),
+                h('div', { style: { flex: 1 } },
+                  h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: 2 } },
+                    h('span', { style: { fontWeight: 600, fontSize: 12 } }, entry.action),
+                    h('span', { style: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' } }, entry.user)
+                  ),
+                  entry.detail && h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 2 } }, entry.detail),
+                  h('div', { style: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text3)' } }, new Date(entry.timestamp).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }))
+                )
+              ))
+            ),
+      h('div', { style: M.footer },
+        h('button', { className: 'btn', onClick: onClose }, 'Close')
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
    WORK ORDER DETAIL PANEL
 ───────────────────────────────────────── */
 function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
@@ -1150,6 +1485,20 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const notesDebounce = useRef(null);
+
+  // ── WO extras state ─────────────────────────────────────
+  const [tags, setTags]                   = useState(wo.tags || []);
+  const [timeEntries, setTimeEntries]     = useState(wo.timeEntries || []);
+  const [discount, setDiscount]           = useState(wo.discount || null);
+  const [extraFees, setExtraFees]         = useState(wo.fees || []);
+  const [reservedItems, setReservedItems] = useState(wo.reservedItems || []);
+
+  const [showTagModal, setShowTagModal]         = useState(false);
+  const [showTimeModal, setShowTimeModal]       = useState(false);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [showFeeModal, setShowFeeModal]         = useState(false);
+  const [showReserveModal, setShowReserveModal] = useState(false);
+  const [showAuditModal, setShowAuditModal]     = useState(false);
 
   // ── Click-outside for 3-dot menu ────────────────────────
   useEffect(() => {
@@ -1215,8 +1564,15 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const laborGross = round2(lines.filter(l => /^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
   const labor = warranty ? 0 : laborGross;
   const parts = round2(lines.filter(l => !/^lab|labor|labour|svc/i.test(l.sku || '')).reduce((a, l) => a + l.qty * l.price, 0));
-  const fees     = 0;
-  const subtotal = round2(labor + parts + fees);
+  const extraFeesTotal = round2(extraFees.reduce((a, f) => a + (f.amount || 0), 0));
+  const fees     = extraFeesTotal;
+  const subtotalPreDiscount = round2(labor + parts + fees);
+  const discountAmt = discount
+    ? discount.type === 'flat'
+      ? round2(Math.min(discount.value, subtotalPreDiscount))
+      : round2(subtotalPreDiscount * discount.value / 100)
+    : 0;
+  const subtotal = round2(subtotalPreDiscount - discountAmt);
   const pstSubtotal = lines.reduce((a, l) => {
     if (l.taxablePst === false) return a;
     if (warranty && /^lab|labor|labour|svc/i.test(l.sku || '')) return a;
@@ -1224,6 +1580,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   }, 0);
   const tax   = round2(subtotal * 0.05 + pstSubtotal * 0.07);
   const total = round2(subtotal + tax);
+  const totalHoursLogged = round2(timeEntries.reduce((a, e) => a + (e.hours || 0), 0));
 
   // ── Action button handlers ──────────────────────────────
   function handlePrintTag() {
@@ -1309,16 +1666,16 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
 
   // ── 3-dot menu items ────────────────────────────────────
   const menuItems = [
-    { label: 'Add Tag/Label',    onClick: () => toast('Add tag - TODO', '') },
-    { label: 'Add Time',         onClick: () => toast('Add time - TODO', '') },
-    { label: 'Add Discount',     onClick: () => toast('Add discount - TODO', '') },
-    { label: 'Add Fee',          onClick: () => toast('Add fee - TODO', '') },
-    { label: 'Reserve Item',     onClick: () => toast('Reserve item - TODO', '') },
+    { label: 'Add Tag/Label',    onClick: () => setShowTagModal(true) },
+    { label: 'Add Time',         onClick: () => setShowTimeModal(true) },
+    { label: 'Add Discount',     onClick: () => setShowDiscountModal(true) },
+    { label: 'Add Fee',          onClick: () => setShowFeeModal(true) },
+    { label: 'Reserve Item',     onClick: () => setShowReserveModal(true) },
     'divider',
     { label: 'Convert to Quote', onClick: () => changeStatus('Estimate') },
     { label: 'Convert to Sale',  onClick: handleCheckout },
     'divider',
-    { label: 'View Audit Log',   onClick: () => toast('Audit log - TODO', '') },
+    { label: 'View Audit Log',   onClick: () => setShowAuditModal(true) },
     { label: 'Archive',          onClick: handleDelete, danger: true },
   ];
 
@@ -1372,6 +1729,13 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       onSuccess: () => { setShowRequestPay(false); toast('Payment received', 'success'); },
       onClose: () => setShowRequestPay(false),
     }),
+
+    showTagModal && h(AddTagModal, { woId: wo.id, currentTags: tags, onSave: setTags, onClose: () => setShowTagModal(false) }),
+    showTimeModal && h(AddTimeModal, { woId: wo.id, currentTech: employee, onSave: r => { if (r && r.entry) setTimeEntries(prev => [...prev, r.entry]); }, onClose: () => setShowTimeModal(false) }),
+    showDiscountModal && h(AddDiscountModal, { woId: wo.id, currentDiscount: discount, onSave: setDiscount, onClose: () => setShowDiscountModal(false) }),
+    showFeeModal && h(AddFeeModal, { woId: wo.id, currentFees: extraFees, onSave: setExtraFees, onClose: () => setShowFeeModal(false) }),
+    showReserveModal && h(ReserveItemModal, { woId: wo.id, currentItems: reservedItems, onSave: setReservedItems, onClose: () => setShowReserveModal(false) }),
+    showAuditModal && h(AuditLogModal, { woId: wo.id, onClose: () => setShowAuditModal(false) }),
 
     h('div', { style: S.page },
       // ── Top back / breadcrumb ──
@@ -1428,6 +1792,14 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
             h('span', { style: S.pillBadge }, wo.staffCustomer ? 'Staff' : 'Customer'),
             wo.phone && h('span', { className: 'mono', style: { fontSize: 12, color: 'var(--text2)' } }, 'Mobile: ' + wo.phone),
             wo.email && h('a', { href: 'mailto:' + wo.email, style: { fontSize: 12, color: 'var(--accent)' } }, wo.email)
+          ),
+          tags.length > 0 && h('div', { style: { display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 } },
+            tags.map(tag => h('span', {
+              key: tag,
+              style: { padding: '2px 8px', fontSize: 10, fontFamily: 'var(--mono)', letterSpacing: '0.08em', textTransform: 'uppercase', background: 'var(--accent)', color: '#fff', cursor: 'pointer' },
+              onClick: () => setShowTagModal(true),
+              title: 'Click to manage tags',
+            }, tag))
           )
         ),
         h('div', { style: { display: 'flex', gap: 6 } },
@@ -1631,9 +2003,15 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
               h('span', { style: { color: 'var(--text2)' } }, 'Parts'),
               h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(parts))
             ),
-            h('div', { style: S.totalRow },
-              h('span', { style: { color: 'var(--text2)' } }, 'Fees'),
+            fees > 0 && h('div', { style: S.totalRow },
+              h('span', { style: { color: 'var(--text2)', cursor: 'pointer' }, onClick: () => setShowFeeModal(true), title: 'Edit fees' }, 'Fees'),
               h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(fees))
+            ),
+            discountAmt > 0 && h('div', { style: S.totalRow },
+              h('span', { style: { color: '#3fa34e', cursor: 'pointer' }, onClick: () => setShowDiscountModal(true), title: 'Edit discount' },
+                'Discount' + (discount ? (discount.type === 'pct' ? ' (' + discount.value + '%)' : '') : '')
+              ),
+              h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums', color: '#3fa34e' } }, '−' + fmt$(discountAmt))
             ),
             h('div', { style: S.totalRow },
               h('span', { style: { color: 'var(--text2)' } }, 'Tax'),
@@ -1642,6 +2020,10 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
             h('div', { style: S.totalGrand },
               h('span', null, 'Total'),
               h('span', { className: 'mono', style: { fontVariantNumeric: 'tabular-nums' } }, fmt$(total))
+            ),
+            totalHoursLogged > 0 && h('div', { style: Object.assign({}, S.totalRow, { marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--line)' }) },
+              h('span', { style: { color: 'var(--text3)', fontSize: 11 }, title: 'Total technician time logged' }, 'Time logged'),
+              h('span', { className: 'mono', style: { fontSize: 11, color: 'var(--text3)' } }, totalHoursLogged + ' hrs')
             )
           )
         )
@@ -1822,6 +2204,40 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
                     )
                   )
                 )
+          )
+        ),
+
+        // ── Reserved Items section ──
+        reservedItems.length > 0 && h('div', { style: Object.assign({}, S.linesBox, { marginTop: 12 }) },
+          h('div', { style: S.linesHead },
+            h('span', { style: { fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text3)' } }, 'Reserved Items'),
+            h('button', { className: 'btn', style: { height: 30, marginLeft: 'auto' }, onClick: () => setShowReserveModal(true) }, '+ Reserve')
+          ),
+          h('table', { style: S.linesTable },
+            h('thead', null,
+              h('tr', null,
+                h('th', { style: S.th }, 'Item'),
+                h('th', { style: S.th }, 'SKU'),
+                h('th', { style: Object.assign({}, S.th, { textAlign: 'right' }) }, 'Qty'),
+                h('th', { style: Object.assign({}, S.th, { width: 36 }) }, '')
+              )
+            ),
+            h('tbody', null,
+              reservedItems.map(item => h('tr', { key: item.id },
+                h('td', { style: S.td }, item.name),
+                h('td', { style: S.td, className: 'mono' }, item.sku),
+                h('td', { style: Object.assign({}, S.td, { textAlign: 'right' }), className: 'mono' }, item.qty || 1),
+                h('td', { style: S.td },
+                  h('button', {
+                    className: 'btn ghost', style: { padding: '2px 6px' },
+                    onClick: async () => {
+                      const r = await apiPost('/api/workorder/' + wo.id + '/reserve', { removeId: item.id });
+                      if (r && r.ok) setReservedItems(prev => prev.filter(i => i.id !== item.id));
+                    },
+                  }, h(Ico.Trash, { size: 12 }))
+                )
+              ))
+            )
           )
         )
       )
