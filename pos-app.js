@@ -672,6 +672,80 @@ function SmsModal({ customer, phone, onClose }) {
   );
 }
 
+/* ── Mark Ready Modal (with optional SMS) ── */
+function MarkReadyModal({ wo, onConfirm, onCancel }) {
+  const firstName = (wo.cust || '').split(' ')[0] || 'there';
+  const DEFAULT_MSG = 'Hi ' + firstName + ', your bike is ready for pickup at ChainLine Cycle! We’re open Mon–Sat 10am–6pm, Sun 11am–5pm.';
+  const [msg, setMsg] = useState(DEFAULT_MSG);
+  const [sending, setSending] = useState(false);
+  const hasPhone = !!(wo.phone);
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !sending) onCancel(); }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel, sending]);
+
+  async function handleMarkReady(withSms) {
+    setSending(true);
+    try {
+      const res = await apiPost('/api/workorder/' + wo.id + '/status', { status: 'ready' });
+      if (res && res.error) { toast('Failed to update status', 'error'); setSending(false); return; }
+      if (withSms && hasPhone) {
+        const raw = (wo.phone || '').replace(/\D/g, '');
+        const e164 = raw.replace(/^1?(\d{10})$/, '+1$1');
+        try {
+          const smsRes = await apiPost('/api/send-sms', { to: e164, message: msg });
+          if (smsRes && !smsRes.error) toast('SMS sent!', 'success');
+          else toast('Status updated — SMS failed', 'error');
+        } catch (_) { toast('Status updated — SMS failed', 'error'); }
+      }
+      onConfirm();
+    } catch (_) {
+      toast('Failed to update status', 'error');
+    }
+    setSending(false);
+  }
+
+  return h('div', { className: 'modal-overlay', onClick: e => { if (e.target === e.currentTarget && !sending) onCancel(); } },
+    h('div', { className: 'modal-box', style: { width: 440 }, onClick: e => e.stopPropagation() },
+      h('div', { className: 'modal-head' },
+        h('span', { className: 'modal-title' }, 'Mark as Ready?'),
+        h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px', marginLeft: 'auto' }, onClick: onCancel, disabled: sending }, '\xd7')
+      ),
+      h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 14 } },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+          h('div', { style: { fontWeight: 600, fontSize: 14 } }, wo.cust || 'Unknown'),
+          wo.bike && h('div', { style: { color: 'var(--text3)', fontSize: 13 } }, wo.bike),
+          wo.phone && h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text2)' } }, wo.phone)
+        ),
+        hasPhone
+          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+              h('label', { style: { fontSize: 12, fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.06em' } }, '📱 Text customer?'),
+              h('textarea', {
+                className: 'textarea',
+                value: msg,
+                onChange: e => setMsg(e.target.value),
+                rows: 3,
+                style: { fontSize: 13, resize: 'vertical' },
+                disabled: sending,
+              })
+            )
+          : h('div', { style: { fontSize: 13, color: 'var(--text3)' } }, 'No phone number on file'),
+        h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 } },
+          h('button', { className: 'btn ghost', onClick: onCancel, disabled: sending }, 'Cancel'),
+          h('button', { className: 'btn', onClick: () => handleMarkReady(false), disabled: sending },
+            sending ? 'Updating…' : hasPhone ? 'Mark Ready Only' : 'Mark Ready'
+          ),
+          hasPhone && h('button', { className: 'btn primary', onClick: () => handleMarkReady(true), disabled: sending },
+            sending ? 'Sending…' : 'Mark Ready + Text'
+          )
+        )
+      )
+    )
+  );
+}
+
 /* ── WO Inline Notify Button ── */
 function WONotifyButton({ wo }) {
   const [open, setOpen]       = useState(false);
@@ -2045,6 +2119,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [showFeeModal, setShowFeeModal]         = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showAuditModal, setShowAuditModal]     = useState(false);
+  const [showMarkReadyModal, setShowMarkReadyModal] = useState(false);
 
   // ── Click-outside for 3-dot menu ────────────────────────
   useEffect(() => {
@@ -2154,6 +2229,11 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   function updateLine(i, patch) { setLines(l => l.map((row, ii) => ii === i ? Object.assign({}, row, patch) : row)); }
 
   function changeStatus(s) {
+    const norm = s.toLowerCase().replace(/\s+/g, '');
+    if (norm === 'ready') {
+      setShowMarkReadyModal(true);
+      return;
+    }
     setStatus(s);
     if (wo.id) apiPost('/api/workorder/' + wo.id + '/status', { status: s })
       .then(() => toast('Status updated to ' + s, 'success'))
@@ -2358,6 +2438,16 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
     showFeeModal && h(AddFeeModal, { woId: wo.id, currentFees: extraFees, onSave: setExtraFees, onClose: () => setShowFeeModal(false) }),
     showReserveModal && h(ReserveItemModal, { woId: wo.id, currentItems: reservedItems, onSave: setReservedItems, onClose: () => setShowReserveModal(false) }),
     showAuditModal && h(AuditLogModal, { woId: wo.id, onClose: () => setShowAuditModal(false) }),
+    showMarkReadyModal && h(MarkReadyModal, {
+      wo: Object.assign({}, wo, { bike: customerItem || wo.bike }),
+      onConfirm: () => {
+        setShowMarkReadyModal(false);
+        setStatus('ready');
+        toast('Marked Ready', 'success');
+        window.dispatchEvent(new Event('wo:updated'));
+      },
+      onCancel: () => setShowMarkReadyModal(false),
+    }),
 
     h('div', { style: S.page },
       // ── Top back / breadcrumb ──
@@ -3003,6 +3093,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const openWo = onOpenWo || (() => {});
   const [wos, setWos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [markReadyWo, setMarkReadyWo] = useState(null);
 
   function fetchWos() {
     setLoading(true);
@@ -3096,6 +3187,11 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   ];
 
   return h(Fragment, null,
+    markReadyWo && h(MarkReadyModal, {
+      wo: markReadyWo,
+      onConfirm: () => { setMarkReadyWo(null); fetchWos(); toast('Marked Ready', 'success'); },
+      onCancel: () => setMarkReadyWo(null),
+    }),
     slow && loading && h('div', { className: 'slow-conn-banner' },
       h('span', null, '⚠️ Connection slow—still loading work orders…'),
       h('button', { className: 'btn', style: { marginLeft: 12 }, onClick: fetchWos }, 'Retry')
@@ -3160,11 +3256,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
               });
             }
             function readyWo() {
-              apiPost('/api/workorder/' + r.id + '/status', { status: 'ready' })
-                .then(function(res) {
-                  if (res && !res.error) { toast('Marked Ready', 'success'); fetchWos(); }
-                  else toast('Failed', 'error');
-                });
+              setMarkReadyWo(r);
             }
             const swipeProps = useSwipe(smsWo, readyWo);
             return h('div', Object.assign({ key: r.id, className: 'wo-card-mobile', onClick: function() { openWo(r); } }, swipeProps),
@@ -3299,11 +3391,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                         title: 'Mark Ready',
                         onClick: e => {
                           e.stopPropagation();
-                          apiPost('/api/workorder/' + r.id + '/status', { status: 'ready' })
-                            .then(res => {
-                              if (res && !res.error) { toast('Marked Ready', 'success'); fetchWos(); }
-                              else toast('Failed', 'error');
-                            });
+                          setMarkReadyWo(r);
                         },
                       }, h(Ico.Check, { size: 13 })),
                       h(WONotifyButton, { wo: r }),
@@ -3317,14 +3405,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                               });
                           }
                         },
-                        { label: 'Mark Ready',     onClick: () => {
-                            apiPost('/api/workorder/' + r.id + '/status', { status: 'ready' })
-                              .then(res => {
-                                if (res && !res.error) { toast('Marked Ready', 'success'); fetchWos(); }
-                                else toast('Failed to update status', 'error');
-                              });
-                          }
-                        },
+                        { label: 'Mark Ready',     onClick: () => setMarkReadyWo(r) },
                         { label: 'Mark Done',      onClick: () => {
                             apiPost('/api/workorder/' + r.id + '/status', { status: 'finished' })
                               .then(res => {
