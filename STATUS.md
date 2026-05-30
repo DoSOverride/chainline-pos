@@ -1,10 +1,36 @@
-# ChainLine POS — Round 3 Complete
+# ChainLine POS — Round 5 Complete
 
-**Live:** https://chainline-pos.pages.dev (pos-app.js?v=21)
+**Live:** https://chainline-pos.pages.dev (pos-app.js?v=32)
 **GitHub:** https://github.com/DoSOverride/chainline-pos
-**Built:** 2026-05-20 | 4 wakeup rounds, ~80 commits
+**Built:** 2026-05-30 | 5 wakeup rounds, ~120 commits
 **Worker:** still-term-f1ec.taocaruso77.workers.dev
 **LS:** Live OAuth — 7766 items, 5 categories, 100+ customers. WorkOrders backed by CF KV (LS Workbench add-on not enabled).
+
+## Round 5 — Overnight 2026-05-30 (18 commits)
+
+### New features
+- **Global Search (Cmd+K v2)**: live API enrichment (customers + parts), keyboard nav, stock indicator, overdue dates, "searching…" indicator
+- **Dashboard overhaul**: overdue alert banner, ready-for-pickup strip with clickable chips, WO completed/created counts passed to EOD
+- **Sales quick-items grid**: 4-col big-button grid replacing chip row (8 bestsellers + live catalog padding), live stock + OOS state
+- **WO Timeline**: visual 5-milestone timeline below reserved items (Created → Assigned → In Progress → Ready → Picked Up)
+- **EOD report**: wosCompleted/wosCreated props, email report button (mailto:bikes@chainline.ca)
+- **Complete mobile optimization**: touch targets, swipe gestures, safe areas, skeleton loaders, responsive layouts
+- **Touch drag-drop floor view**: kanban drag on mobile
+- **Clean URL routing**: `/workorders`, `/sales`, `/customers`, `/floor`, `/reports`, `/settings`, `/messages`, `/vendors`, `/queue` — SPA routes with browser back/forward support
+- **URL routing wired**: `_redirects` for Cloudflare Pages + `pos-app.js` `pushState`/`popState` handling
+- **RingCentral SMS inbox**: Messages screen with thread list, reply, unread badge
+- **Vendor catalog screen**: browse all LS vendors + full item search
+- **HLC/OGC distributor catalog**: added to parts search
+- **Deep LS integration**: customer history, serial lookup, item images, sync status
+- **Shopify POS-inspired UI polish**: loading states, error handling, offline recovery
+- **PIN fix**: added PIN 1139 to all staff members (login was broken — pin field was missing)
+- **All mock data replaced**: live Lightspeed data throughout
+
+### Still pending (require network / manual steps)
+- LS historical WO import: run `R2_UPLOAD_SECRET=chainline-r2-1780125279 node chainline-website/scripts/import-ls-workorders.js`
+- Custom domain: CF Pages → chainline-pos → Custom domains → `pos.chainline.ca`
+- Twilio (SMS): `npx wrangler secret put TWILIO_SID --name still-term-f1ec` + `TWILIO_TOKEN` + `TWILIO_FROM`
+- Stripe (real payments): `npx wrangler secret put STRIPE_SECRET_KEY --name still-term-f1ec`
 
 ## Login — All staff PIN: 1139
 Darrin=Owner | Tao/Matt=Manager | Phil/Steve/Beckett/Curren/Danny=Mechanic | Jason=Warranty
