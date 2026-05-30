@@ -63,9 +63,57 @@ const MOCK_WO        = lsWorkOrders;
 const MOCK_CUSTOMERS = lsCustomers;
 const MOCK_CATALOG   = lsCatalog;
 
+// ── LS custom status → POS normalized status ──────────────────────────────
+const LS_STATUS_MAP = {
+  // Standard
+  'open':                           'open',
+  'waiting':                        'waitingpart',
+  'booked':                         'booked',
+  'online booking':                 'booked',
+  'scheduled - parts arriving':     'waitingpart',
+  'ready':                          'ready',
+  'ready - s.o. parts arrived':     'ready',
+  'finished':                       'finished',
+  'done & paid':                    'pickedup',
+  'estimate':                       'estimate',
+  // Parts/waiting variants
+  '!!! assess & order parts !!!':   'waitingpart',
+  'parts ordered - bike offsite':   'waitingpart',
+  'parts ordered - bike here':      'waitingpart',
+  'suspension out for service':     'waitingpart',
+  // Special
+  'warranty':                       'warranty',
+  'ra!':                            'warranty',
+  'consignment':                    'special',
+  'bike storage':                   'storage',
+  // Mechanic assigned → inprogress
+  'phil':                           'inprogress',
+  'steve':                          'inprogress',
+  'matt':                           'inprogress',
+  'darrin':                         'inprogress',
+  'tao':                            'inprogress',
+  'jason':                          'inprogress',
+  'curren':                         'inprogress',
+  'danny':                          'inprogress',
+  'beckett':                        'inprogress',
+};
+
+// Mechanic-name statuses for auto-filling mech field
+const LS_MECH_STATUSES = new Set(['phil','steve','matt','darrin','tao','jason','curren','danny','beckett']);
+
+function normalizeWoStatus(raw) {
+  if (!raw) return 'open';
+  const lower = raw.toLowerCase().trim();
+  return LS_STATUS_MAP[lower] || 'open';
+}
+
 // Normalise a raw KV workorder into the flat shape used throughout the POS
 function normaliseWo(w) {
   if (w.cust) return w; // already flat
+  const rawStatus = w.workOrderStatus || w.status || 'open';
+  const normStatus = normalizeWoStatus(rawStatus);
+  // Auto-set mech from mechanic-assigned statuses if not already set
+  const rawMechFromStatus = LS_MECH_STATUSES.has(rawStatus.toLowerCase().trim()) ? rawStatus.trim() : null;
   return {
     id:       w.workOrderID || w.id,
     cust:     [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || w.customerName || 'Unknown',
@@ -75,8 +123,8 @@ function normaliseWo(w) {
     due:      w.dateDue || (w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'TBD'),
     dateDue:  w.dateDue || (w.timeIn ? w.timeIn.slice(0, 10) : ''),
     dueState: null,
-    status:   (w.workOrderStatus || w.status || 'open').toLowerCase().replace(/\s+/g, ''),
-    mech:     (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || w.mech || 'UN',
+    status:   normStatus,
+    mech:     (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || w.mech || rawMechFromStatus || 'UN',
     tone:     w.tone || 'am',
     prio:     !!w.priority || !!w.prio,
     total:    parseFloat(w.total || 0),
@@ -224,9 +272,9 @@ async function apiDelete(path) {
 const WO_STATUSES = [
   'READY', 'Scheduled - Parts Arriving', 'READY - S.O. Parts Arrived', 'Finished',
   'ONLINE BOOKING', 'BOOKED', '!!! ASSESS & ORDER PARTS !!!',
-  'PHIL', 'STEVE', 'MATT', 'DARRIN', 'TAO', 'BECKETT', 'JASON', 'WARRANTY',
+  'PHIL', 'STEVE', 'MATT', 'DARRIN', 'TAO', 'JASON', 'CURREN', 'DANNY', 'BECKETT', 'WARRANTY',
   'Suspension Out For Service', 'RA!', 'PARTS ORDERED - BIKE OFFSITE',
-  'PARTS ORDERED - BIKE HERE', 'Estimate', 'Waiting', 'Open',
+  'PARTS ORDERED - BIKE HERE', 'Estimate', 'Waiting', 'Open', 'Done & Paid',
   'Consignment', 'Bike Storage',
 ];
 
@@ -471,6 +519,26 @@ const Ico = {
     h('svg',{viewBox:'0 0 16 16',width:size,height:size,fill:'none',stroke:'currentColor',strokeWidth:'1.2',strokeLinecap:'round',strokeLinejoin:'round'},
       h('path',{d:'M3 2.5c0 0 1 0 2 2s.5 3.5.5 3.5L4 9.5c.7 1.3 2.2 2.8 3.5 3.5l1.5-1.5s1.5-.5 3.5.5 2 2 2 2v1c0 .8-.8 1.5-2 1.5C5.2 16.5 0 11.3 0 4c0-1.2.7-1.5 1.5-1.5h1.5Z'})),
 };
+
+/* ── Status label lookup ── */
+const STATUS_LABELS = {
+  'open':        'Open',
+  'booked':      'Booked',
+  'inprogress':  'In Progress',
+  'waitingpart': 'Parts',
+  'ready':       'Ready',
+  'finished':    'Finished',
+  'pickedup':    'Picked Up',
+  'cancelled':   'Cancelled',
+  'estimate':    'Estimate',
+  'warranty':    'Warranty',
+  'storage':     'Storage',
+  'special':     'Consignment',
+};
+
+function statusLabel(s) {
+  return STATUS_LABELS[s] || (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Open');
+}
 
 /* ── Atoms ── */
 function Badge({ kind, children }) {
@@ -1511,7 +1579,7 @@ function DashboardScreen({ setScreen, staff }) {
                       h('td', { className: 'num' }, wo.id),
                       h('td', null, wo.cust),
                       h('td', { className: 'muted' }, wo.bike),
-                      h('td', null, h(Badge, { kind: wo.status }, wo.status === 'inprogress' ? 'In Progress' : (wo.status || '').charAt(0).toUpperCase() + (wo.status || '').slice(1))),
+                      h('td', null, h(Badge, { kind: wo.status }, statusLabel(wo.status))),
                       h('td', null, wo.dueState === 'overdue'
                         ? h('span', { className: 'overdue-text' }, 'Overdue')
                         : h('span', { className: 'num muted' }, wo.due || 'TBD')
@@ -1530,7 +1598,7 @@ function DashboardScreen({ setScreen, staff }) {
                       h('td', { className: 'num' }, id),
                       h('td', null, cust),
                       h('td', { className: 'muted' }, bike),
-                      h('td', null, h(Badge, { kind: status }, status === 'inprogress' ? 'In Progress' : status.charAt(0).toUpperCase() + status.slice(1))),
+                      h('td', null, h(Badge, { kind: status }, statusLabel(status))),
                       h('td', null, overdue ? h('span', { className: 'overdue-text' }, overdue) : h('span', { className: 'num muted' }, due)),
                       h('td', null, h(AvInit, { initials: mech, tone }))
                     );
@@ -2944,22 +3012,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
         // Treat any successful response as authoritative — do NOT keep MOCK_WO if API succeeds.
         if (data && Array.isArray(data.workorders)) {
           setWos(data.workorders.map(w => {
-            if (w.cust) return w; // KV-native flat format
-            return {
-              id: w.workOrderID || w.id,
-              cust: [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || w.customerName || 'Unknown',
-              phone: w.Contact?.mobile || w.Contact?.phone || '',
-              bike: w.itemDescription || w.bikeDescription || '',
-              svc: w.note?.split('\n')[0] || w.serviceType || 'Service',
-              due: w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', {month:'short', day:'numeric'}) : 'TBD',
-              dueState: null,
-              status: (w.workOrderStatus || 'open').toLowerCase().replace(/\s+/g, ''),
-              mech: (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || 'UN',
-              tone: 'am',
-              prio: !!w.priority,
-              total: parseFloat(w.total || 0),
-              notes: w.notes || '',
-            };
+            if (w.cust) return w; // KV-native flat format — already normalized by normaliseWo
+            return normaliseWo(w);
           }));
         }
         // data === null only when fetch failed entirely — keep current wos (mock fallback)
@@ -2985,18 +3039,27 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
     };
   }, []);
 
+  // Tab membership sets
+  const TAB_STATUSES = {
+    open:       new Set(['open', 'booked', 'estimate']),
+    inprogress: new Set(['inprogress', 'waitingpart']),
+    ready:      new Set(['ready', 'warranty']),
+    done:       new Set(['finished', 'pickedup', 'storage', 'special']),
+  };
+
   const counts = {
     all:        wos.length,
-    open:       wos.filter(r => r.status === 'open').length,
-    inprogress: wos.filter(r => r.status === 'inprogress').length,
-    ready:      wos.filter(r => r.status === 'ready').length,
-    booked:     wos.filter(r => r.status === 'booked').length,
+    open:       wos.filter(r => TAB_STATUSES.open.has(r.status)).length,
+    inprogress: wos.filter(r => TAB_STATUSES.inprogress.has(r.status)).length,
+    ready:      wos.filter(r => TAB_STATUSES.ready.has(r.status)).length,
+    done:       wos.filter(r => TAB_STATUSES.done.has(r.status)).length,
     overdue:    wos.filter(r => r.dueState === 'overdue').length,
   };
 
   const filtered = wos.filter(r => {
     const matchTab = tab === 'all' ? true
       : tab === 'overdue' ? r.dueState === 'overdue'
+      : TAB_STATUSES[tab] ? TAB_STATUSES[tab].has(r.status)
       : r.status === tab;
     const q = search.toLowerCase();
     const matchSearch = !q
@@ -3028,8 +3091,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const ptr = usePullToRefresh(fetchWos);
 
   const TABS = [
-    ['all','All'],['open','Open'],['inprogress','In progress'],
-    ['ready','Ready'],['booked','Booked'],['overdue','Overdue'],
+    ['all','All'],['open','Open'],['inprogress','In Progress'],
+    ['ready','Ready'],['done','Done'],['overdue','Overdue'],
   ];
 
   return h(Fragment, null,
@@ -3110,11 +3173,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                   h('span', { className: 'num' }, r.id),
                   r.prio && h('span', { className: 'prio-flag', title: 'Priority', style: { marginLeft: 6 } }, h(Ico.Flag, { size: 11 }))
                 ),
-                r.status === 'ready'      ? h(Badge, { kind: 'ready' }, 'Ready') :
-                r.status === 'open'       ? h(Badge, { kind: 'open' }, 'Open') :
-                r.status === 'inprogress' ? h(Badge, { kind: 'inprogress' }, 'In Progress') :
-                r.status === 'booked'     ? h(Badge, { kind: 'booked' }, 'Booked') :
-                r.status ? h(Badge, { kind: 'closed' }, r.status.charAt(0).toUpperCase() + r.status.slice(1)) : null
+                h(Badge, { kind: r.status || 'open' }, statusLabel(r.status))
               ),
               h('div', { className: 'wo-card-mobile-cust' }, r.cust),
               r.phone && h('div', { className: 'mono muted', style: { fontSize: 11, padding: '1px 0' } }, r.phone),
@@ -3212,15 +3271,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                   ),
                   h('td', { className: 'muted' }, r.bike),
                   h('td', null, r.svc),
-                  h('td', null,
-                    r.status === 'ready'      ? h(Badge, { kind: 'ready' }, 'Ready') :
-                    r.status === 'open'       ? h(Badge, { kind: 'open' }, 'Open') :
-                    r.status === 'inprogress' ? h(Badge, { kind: 'inprogress' }, 'In Progress') :
-                    r.status === 'booked'     ? h(Badge, { kind: 'booked' }, 'Booked') :
-                    r.status === 'finished'   ? h(Badge, { kind: 'finished' }, 'Done') :
-                    r.status === 'pickedup'   ? h(Badge, { kind: 'pickedup' }, 'Picked Up') :
-                    r.status ? h(Badge, { kind: 'closed' }, r.status.charAt(0).toUpperCase() + r.status.slice(1)) : null
-                  ),
+                  h('td', null, h(Badge, { kind: r.status || 'open' }, statusLabel(r.status))),
                   h('td', null,
                     (r.hookIn || r.hookOut)
                       ? h('span', { className: 'cell-hook mono' }, r.hookOut || r.hookIn)
@@ -3763,9 +3814,7 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
             h('div', { key: w.id, className: 'aside-row', style: { flexDirection: 'column', alignItems: 'flex-start', gap: 2, padding: '8px 14px', borderBottom: '1px solid var(--line)' } },
               h('div', { style: { display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' } },
                 h('span', { className: 'mono', style: { fontSize: 11, color: 'var(--text3)' } }, w.id),
-                h(Badge, { kind: w.status }, w.status === 'inprogress' ? 'In Progress' :
-                  w.status === 'ready' ? 'Ready' : w.status === 'open' ? 'Open' :
-                  w.status === 'finished' ? 'Done' : w.status)
+                h(Badge, { kind: w.status }, statusLabel(w.status))
               ),
               h('span', { style: { fontSize: 12 } }, w.bike || 'No bike listed'),
               h('div', { style: { display: 'flex', gap: 8, fontSize: 11, color: 'var(--text3)' } },

@@ -473,6 +473,36 @@ ul, ol { list-style: none; }
   color: var(--text3);
   border-color: var(--line2);
 }
+/* Waiting for parts = orange-red (urgent) */
+.badge.waitingpart, .badge-waitingpart {
+  background: #fff4ed;
+  color: #c2410c;
+  border-color: rgba(194,65,12,0.28);
+}
+/* Estimate = neutral gray-blue */
+.badge.estimate, .badge-estimate {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: rgba(107,114,128,0.25);
+}
+/* Warranty = amber-yellow */
+.badge.warranty, .badge-warranty {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: rgba(146,64,14,0.25);
+}
+/* Storage = violet */
+.badge.storage, .badge-storage {
+  background: #ede9fe;
+  color: #7c3aed;
+  border-color: rgba(124,58,237,0.25);
+}
+/* Consignment/Special = pink */
+.badge.special, .badge-special {
+  background: #fce7f3;
+  color: #9d174d;
+  border-color: rgba(157,23,77,0.25);
+}
 
 /* Quick-action icon buttons on WO rows */
 .btn-icon {
