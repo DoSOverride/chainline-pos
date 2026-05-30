@@ -260,6 +260,79 @@ function toast(msg, type, opts) {
   if (_toastSetter) _toastSetter(function(p) { return p.concat([{ id: ++_toastIdSeq, message: msg, type: type || '', persistent: !!(opts && opts.persistent) }]); });
 }
 
+/* ── Mobile helpers ── */
+
+// Detect touch device once at module level
+const IS_MOBILE = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+
+// Swipe hook: returns touch event props to spread onto an element
+function useSwipe(onSwipeLeft, onSwipeRight, threshold) {
+  const startX = useRef(0);
+  const startY = useRef(0);
+  return {
+    onTouchStart: function(e) {
+      startX.current = e.touches[0].clientX;
+      startY.current = e.touches[0].clientY;
+    },
+    onTouchEnd: function(e) {
+      const dx = e.changedTouches[0].clientX - startX.current;
+      const dy = e.changedTouches[0].clientY - startY.current;
+      // Ignore vertical swipes (scrolling)
+      if (Math.abs(dy) > Math.abs(dx)) return;
+      const min = threshold || 60;
+      if (Math.abs(dx) < min) return;
+      if (dx > 0) { onSwipeRight && onSwipeRight(); }
+      else { onSwipeLeft && onSwipeLeft(); }
+    },
+  };
+}
+
+// Pull-to-refresh hook
+function usePullToRefresh(onRefresh) {
+  const startY = useRef(0);
+  const [pulling, setPulling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  function doRefresh() {
+    setRefreshing(true);
+    Promise.resolve(onRefresh()).finally(function() { setRefreshing(false); });
+  }
+
+  const handlers = {
+    onTouchStart: function(e) {
+      // Only activate when scrolled to top
+      const el = e.currentTarget;
+      if (el.scrollTop > 0) return;
+      startY.current = e.touches[0].clientY;
+    },
+    onTouchMove: function(e) {
+      if (!startY.current) return;
+      const dy = e.touches[0].clientY - startY.current;
+      if (dy > 60 && !pulling && !refreshing) {
+        setPulling(true);
+      }
+    },
+    onTouchEnd: function() {
+      if (pulling) {
+        setPulling(false);
+        doRefresh();
+      }
+      startY.current = 0;
+    },
+  };
+
+  return { handlers, pulling, refreshing };
+}
+
+// scrollIntoView handler for form inputs on mobile (prevents keyboard clip)
+function mobileInputFocus(e) {
+  if (!IS_MOBILE) return;
+  const el = e.target;
+  setTimeout(function() {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 320);
+}
+
 /* ── Skeleton loader helpers ── */
 function SkeletonRow(props) {
   const n = (props && props.cols) || 5;
@@ -274,6 +347,23 @@ function SkeletonStat() {
     h('div', { className: 'skel-line', style: { width: '60%', marginBottom: 10 } }),
     h('div', { className: 'skel-line', style: { width: '45%', height: 28, marginBottom: 8 } }),
     h('div', { className: 'skel-line', style: { width: '70%' } })
+  );
+}
+// Card-shaped skeleton for list screens (Customers, Inventory, POs, Reports)
+function SkeletonCard(props) {
+  const count = (props && props.count) || 4;
+  return h('div', { className: 'card' },
+    Array.from({ length: count }, function(_, i) {
+      return h('div', { key: i, className: 'skel-card-row' },
+        h('div', { className: 'skel-card-main' },
+          h('div', { className: 'skel-line', style: { width: '55%', marginBottom: 6 } }),
+          h('div', { className: 'skel-line', style: { width: '35%', height: 10 } })
+        ),
+        h('div', { className: 'skel-card-side' },
+          h('div', { className: 'skel-line', style: { width: 48, height: 20 } })
+        )
+      );
+    })
   );
 }
 
@@ -621,8 +711,20 @@ function useConnectionStatus() {
     }
     check();
     // Native online/offline events fire on WiFi drop/reconnect — instant
-    function onOnline()  { check(); }
-    function onOffline() { if (mounted) setOnline(false); }
+    let wasOffline = false;
+    function onOnline()  {
+      if (wasOffline) {
+        toast('Back online — reconnected to worker', 'success');
+        wasOffline = false;
+        // Auto-refresh key data
+        bootstrapLiveData && bootstrapLiveData();
+      }
+      check();
+    }
+    function onOffline() {
+      wasOffline = true;
+      if (mounted) setOnline(false);
+    }
     window.addEventListener('online',  onOnline);
     window.addEventListener('offline', onOffline);
     // Periodic re-check every 30s as a backup
@@ -846,15 +948,19 @@ function startSmsUnreadPoller() {
 
 function OfflineBanner() {
   const online = useConnectionStatus();
+  const [reconnecting, setReconnecting] = useState(false);
+  useEffect(() => {
+    if (online) { setReconnecting(false); return; }
+    // Show "Reconnecting…" after 2s offline to indicate retry is active
+    const t = setTimeout(function() { setReconnecting(true); }, 2000);
+    return function() { clearTimeout(t); };
+  }, [online]);
   if (online) return null;
-  return h('div', { style: {
-    background: 'rgba(200,57,44,0.08)', borderBottom: '1px solid rgba(200,57,44,0.25)',
-    borderLeft: '3px solid var(--accent)', padding: '7px 20px',
-    fontFamily: 'var(--mono)', fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase',
-    color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 8,
-  }},
-    h('span', { style: { color: 'var(--accent)' } }, '●'),
-    'Offline · changes queued, will sync on reconnect'
+  return h('div', { className: 'offline-banner' },
+    h('span', { className: 'offline-dot' }, '●'),
+    reconnecting
+      ? h(Fragment, null, 'Reconnecting… ', h('span', { className: 'offline-spinner' }))
+      : 'Offline · changes queued, will sync on reconnect'
   );
 }
 
@@ -1727,6 +1833,10 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [notePos, setNotePos]           = useState('top');
 
   const [lineQ, setLineQ] = useState('');
+  const [woLineResults, setWoLineResults] = useState([]);
+  const [woLineSearching, setWoLineSearching] = useState(false);
+  const [woDistResults, setWoDistResults] = useState([]);
+  const [woDistSearching, setWoDistSearching] = useState(false);
   const [lines, setLines] = useState(wo.lines || []);
   const [presetCat, setPresetCat] = useState(null); // 'services' | 'mountain' | 'road' | null
 
@@ -1796,17 +1906,60 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   }, [serial]);
 
   // ── Helpers ─────────────────────────────────────────────
-  const lineResults = lineQ
-    ? MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase())).slice(0,5)
+  // lineResults kept for keydown Enter (first result), backed by woLineResults from API
+  const lineResults = woLineResults.length > 0 ? woLineResults
+    : lineQ ? MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase())).slice(0,5)
     : [];
+
+  // WO line item search: LS API first, then distributor catalog
+  useEffect(() => {
+    if (!lineQ || lineQ.trim().length < 2) { setWoLineResults([]); setWoDistResults([]); return; }
+    const t = setTimeout(() => {
+      setWoLineSearching(true);
+      apiGet('/api/items-search?q=' + encodeURIComponent(lineQ.trim()))
+        .then(function(data) {
+          var items = data && data.items ? data.items.slice(0, 5) : [];
+          setWoLineResults(items.map(function(i) {
+            var shop = Array.isArray(i.ItemShops && i.ItemShops.ItemShop) ? i.ItemShops.ItemShop[0] : (i.ItemShops && i.ItemShops.ItemShop) || {};
+            return {
+              sku: i.customSku || i.systemSku || i.sku || '',
+              name: i.description || i.name || '',
+              price: parseFloat((i.Prices && i.Prices.ItemPrice && i.Prices.ItemPrice[0] && i.Prices.ItemPrice[0].amount) || i.defaultCost || 0),
+              qty: parseInt(shop.qoh || 0, 10),
+              source: 'ls',
+            };
+          }));
+        })
+        .catch(function() { setWoLineResults([]); })
+        .finally(function() { setWoLineSearching(false); });
+      // Distributor search with a 600ms extra delay
+      setTimeout(function() {
+        setWoDistSearching(true);
+        apiGet('/api/pos-parts-search?q=' + encodeURIComponent(lineQ.trim()))
+          .then(function(data) {
+            var distOnly = (data && data.items ? data.items : []).filter(function(i) { return i.source !== 'ls'; });
+            setWoDistResults(distOnly.slice(0, 6));
+          })
+          .catch(function() { setWoDistResults([]); })
+          .finally(function() { setWoDistSearching(false); });
+      }, 600);
+    }, 350);
+    return function() { clearTimeout(t); };
+  }, [lineQ]);
 
   function addLine(it) {
     setLines(l => [...l, {
       sku: it.sku, name: it.name, qty: 1, price: it.price,
       // BC PST: auto-exempt bikes, helmets, bike lights, labour (RSBC 1996 c.431)
       taxablePst: !isPstExempt(it), employee: employee, status: 'Open',
+      specialOrder: it.specialOrder || false,
+      source: it.source || '',
+      leadTime: it.leadTime || '',
+      dealerCost: it.dealerCost || 0,
     }]);
     setLineQ('');
+    setWoLineResults([]);
+    setWoDistResults([]);
   }
   function removeLine(i) { setLines(l => l.filter((_, ii) => ii !== i)); }
   function updateLine(i, patch) { setLines(l => l.map((row, ii) => ii === i ? Object.assign({}, row, patch) : row)); }
@@ -2437,17 +2590,41 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
             )
           );
         })(),
-        lineQ && lineResults.length > 0 && h('div', { style: { padding: '4px 12px 8px', background: 'var(--bg3)' } },
+        lineQ && woLineSearching && h('div', { style: { padding: '6px 12px', background: 'var(--bg3)', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' } }, 'Searching inventory...'),
+        lineQ && lineResults.length > 0 && h('div', { style: { background: 'var(--bg3)', borderBottom: '1px solid var(--line)' } },
           lineResults.map(c =>
             h('div', {
               key: c.sku,
               onClick: () => addLine(c),
               style: { padding: '6px 8px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: '1px solid var(--line)' },
             },
-              h('span', null, c.name + ' '),
+              h('div', null,
+                h('span', null, c.name + ' '),
+                c.qty != null && h('span', { style: { fontFamily: 'var(--mono)', fontSize: 10, color: c.qty > 0 ? '#3fa34e' : 'var(--text3)', marginLeft: 6 } }, c.qty > 0 ? c.qty + ' in stock' : 'OUT')
+              ),
               h('span', { className: 'mono', style: { color: 'var(--text3)' } }, c.sku + ' - ' + fmt$(c.price))
             )
           )
+        ),
+        lineQ && woDistSearching && h('div', { style: { padding: '6px 12px', background: 'var(--bg3)', fontSize: 11, color: '#b45309', fontFamily: 'var(--mono)' } }, 'Checking distributors...'),
+        lineQ && !woDistSearching && woDistResults.length > 0 && h('div', { style: { background: 'var(--bg3)', borderTop: '2px solid var(--line2)' } },
+          h('div', { style: { padding: '4px 8px', fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text3)' } }, 'Distributor — Special Order'),
+          woDistResults.map(function(c) {
+            var sourceBadge = c.source === 'hlc' ? 'HLC' : c.source === 'ogc' ? 'OGC' : c.source === 'oss' ? 'OSS' : (c.source || 'DIST').toUpperCase();
+            var badgeBg = c.source === 'hlc' ? '#b45309' : c.source === 'ogc' ? '#1d4ed8' : '#334155';
+            return h('div', {
+              key: c.id || c.sku,
+              onClick: function() { addLine(c); },
+              style: { padding: '6px 8px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontSize: 12, borderBottom: '1px solid var(--line)' },
+            },
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                h('span', { style: { background: badgeBg, color: '#fff', fontFamily: 'var(--mono)', fontSize: 9, padding: '1px 5px', flexShrink: 0 } }, sourceBadge),
+                h('span', null, c.name),
+                c.leadTime && h('span', { style: { fontFamily: 'var(--mono)', fontSize: 10, color: '#b45309' } }, c.leadTime)
+              ),
+              h('span', { className: 'mono', style: { color: 'var(--text3)' } }, c.sku + ' - ' + fmt$(c.price))
+            );
+          })
         ),
         h('table', { style: S.linesTable },
           h('thead', null,
@@ -2637,6 +2814,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   });
 
   const slow = useLoadTimeout(loading, 10000);
+  const ptr = usePullToRefresh(fetchWos);
 
   const TABS = [
     ['all','All'],['open','Open'],['inprogress','In progress'],
@@ -2648,6 +2826,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       h('span', null, '⚠️ Connection slow—still loading work orders…'),
       h('button', { className: 'btn', style: { marginLeft: 12 }, onClick: fetchWos }, 'Retry')
     ),
+    ptr.refreshing && h('div', { className: 'ptr-indicator' }, 'Refreshing…'),
+    ptr.pulling    && h('div', { className: 'ptr-indicator ptr-pulling' }, '↓ Release to refresh'),
     h(PageHead, {
       title: 'Work Orders',
       sub: 'Service queue',
@@ -3672,6 +3852,22 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     return () => clearTimeout(t);
   }, [query]);
 
+  // Distributor catalog search — fires 600ms after query change, shows HLC/OGC items below LS results
+  useEffect(() => {
+    if (query.trim().length < 2) { setDistResults([]); return; }
+    const t = setTimeout(() => {
+      setDistSearching(true);
+      apiGet('/api/pos-parts-search?q=' + encodeURIComponent(query.trim()))
+        .then(function(data) {
+          var distOnly = (data && data.items ? data.items : []).filter(function(i) { return i.source !== 'ls'; });
+          setDistResults(distOnly);
+        })
+        .catch(function() { setDistResults([]); })
+        .finally(function() { setDistSearching(false); });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [query]);
+
   function addItem(it) {
     const existing = items.find(i => i.sku === it.sku);
     if (existing) {
@@ -3691,9 +3887,14 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
         dept: it.dept,
         brand: it.brand,
         description: it.description,
+        specialOrder: it.specialOrder || false,
+        source: it.source || '',
+        leadTime: it.leadTime || '',
+        dealerCost: it.dealerCost || 0,
       }]);
     }
     setQuery('');
+    setDistResults([]);
     if (searchRef.current) searchRef.current.focus();
   }
 
@@ -3850,6 +4051,20 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           )
         ),
 
+        !query && lsCatalog.length > 0 && h('div', { className: 'quick-items' },
+          h('span', { className: 'quick-items-label' }, 'Quick add'),
+          lsCatalog.slice(0, 8).map(function(it) {
+            return h('button', {
+              key: it.sku,
+              className: 'quick-item-chip',
+              onClick: function() { addItem(it); }
+            },
+              h('span', { className: 'quick-item-name' }, it.name.length > 22 ? it.name.slice(0, 22) + '…' : it.name),
+              h('span', { className: 'quick-item-price' }, fmt$(it.price))
+            );
+          })
+        ),
+
         query && searching && h('div', { className: 'item-results' },
           h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
             'Searching...')
@@ -3871,6 +4086,40 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
         query && !searching && searchResults.length === 0 && query.trim().length >= 2 && h('div', { className: 'item-results' },
           h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
             'No results for "' + query + '"')
+        ),
+
+        // ── Distributor results (HLC / OGC) ──────────────────────────────────
+        query && distSearching && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
+          h('div', { style: { padding: '8px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 } },
+            h('span', { style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#b45309', animation: 'pulse 1s infinite' } }),
+            'Checking distributors...'
+          )
+        ),
+        query && !distSearching && distResults.length > 0 && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
+          h('div', { style: { padding: '6px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', display: 'flex', gap: 8 } },
+            'Distributor Catalog — Special Order'
+          ),
+          distResults.map(function(c) {
+            var sourceBadge = c.source === 'hlc' ? 'HLC' : c.source === 'ogc' ? 'OGC' : c.source === 'oss' ? 'OSS' : (c.source || 'DIST').toUpperCase();
+            var badgeBg = c.source === 'hlc' ? '#b45309' : c.source === 'ogc' ? '#1d4ed8' : '#334155';
+            return h('div', { key: c.id || c.sku, className: 'item-row', onClick: function() { addItem(c); }, style: { opacity: 0.92 } },
+              h('div', null,
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                  h('span', { style: { background: badgeBg, color: '#fff', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', padding: '1px 5px', flexShrink: 0 } }, sourceBadge),
+                  h('span', null, c.name)
+                ),
+                h('div', { className: 'sku', style: { display: 'flex', gap: 8, marginTop: 2 } },
+                  h('span', null, c.sku),
+                  c.brand && h('span', { style: { color: 'var(--text-3)' } }, c.brand),
+                  c.leadTime && h('span', { style: { color: '#b45309' } }, c.leadTime)
+                )
+              ),
+              h('div', { className: 'stock' }, c.inStock ? c.qty + ' @ dist' : 'Order'),
+              h('div', { className: 'price' }, fmt$(c.price))
+            );
+          }),
+          h('div', { style: { padding: '4px 14px 8px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 10 } },
+            distResults.length + ' distributor item' + (distResults.length === 1 ? '' : 's'))
         ),
 
         h('div', { className: 'line-row head' },
@@ -4951,6 +5200,10 @@ window.Ico            = Ico;
 window.isPstExempt    = isPstExempt;
 window.PST_EXEMPT_DEPTS = PST_EXEMPT_DEPTS;
 window.toast          = toast;
+window.withErrorBoundary = withErrorBoundary;
+window.SkeletonRow    = SkeletonRow;
+window.SkeletonStat   = SkeletonStat;
+window.getGreeting    = getGreeting;
 
 /* ── Mount ── */
 createRoot(document.getElementById('root')).render(h(App));
