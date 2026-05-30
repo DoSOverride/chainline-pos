@@ -1370,7 +1370,14 @@ function DashboardScreen({ setScreen, staff }) {
   const staffName = staff && staff.name ? staff.name : null;
 
   return h(Fragment, null,
-    showEod && h(EndOfDayModal, { onClose: function() { setShowEod(false); } }),
+    showEod && h(
+      (window.EODModal || EndOfDayModal),
+      {
+        onClose: function() { setShowEod(false); },
+        wosCompleted: lsWorkOrders.filter(function(w) { return (w.status || '').toLowerCase().includes('done') || (w.status || '').toLowerCase().includes('finished'); }).length || null,
+        wosCreated: lsWorkOrders.filter(function(w) { var d = w.dateIn || ''; return d.startsWith(new Date().toISOString().slice(0,10)); }).length || null,
+      }
+    ),
     h(PageHead, {
       title: 'Dashboard',
       sub: getGreeting(staffName),
@@ -3033,6 +3040,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
           placeholder: 'Search WO #, customer, bike, serial…',
           value: search,
           onChange: e => setSearch(e.target.value),
+          onFocus: mobileInputFocus,
         })
       ),
       h('button', { className: 'pill' }, 'Mechanic ', h('span', { className: 'mono' }, '\xb7 all')),
@@ -3049,9 +3057,9 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
         : sorted.length === 0
         ? h('div', { className: 'wo-card-empty' },
             h('div', { style: { fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 } }, 'No work orders match'),
-            h('button', { className: 'btn', onClick: () => { setTab('all'); setSearch(''); } }, 'Clear filters')
+            h('button', { className: 'btn', onClick: () => { setTab('all'); setSearch(''); setVisibleCount(50); } }, 'Clear filters')
           )
-        : sorted.map(function(r) {
+        : visibleWos.map(function(r) {
             function smsWo() {
               const ph = r.phone || '';
               if (!ph) { toast('No phone number on file', 'error'); return; }
@@ -3115,7 +3123,14 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
               ),
               h('div', { className: 'wo-card-swipe-hint' }, '← SMS  \xb7  Ready →')
             );
-          })
+          }),
+      hasMore && !loading && h('div', { style: { textAlign: 'center', padding: '12px 0' } },
+        h('button', {
+          className: 'btn ghost',
+          style: { fontSize: 12, width: '100%' },
+          onClick: () => setVisibleCount(c => c + 50),
+        }, 'Show more (' + (sorted.length - visibleCount) + ' remaining)')
+      )
     ),
 
     // ── Desktop table ──
@@ -4311,6 +4326,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
               className: 'input lg',
               value: query,
               onChange: e => setQuery(e.target.value),
+              onFocus: mobileInputFocus,
               placeholder: 'Scan barcode or search items, SKUs, services…',
             }),
             h('span', { className: 'kbd-hint' }, '/')
@@ -4659,8 +4675,8 @@ function CustomersScreen({ setScreen, onNewSale, onNewWo, onMessage }) {
                   { label: 'New Work Order', onClick: function() { onNewWo && onNewWo(c); } },
                   { label: 'Message',        onClick: function() { onMessage && onMessage(c); } },
                   'divider',
-                  { label: 'Edit',   onClick: function() { toast('Edit coming soon'); } },
-                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                  { label: 'Edit',   onClick: function() { setSelected(c); } },
+                  { label: 'Delete', onClick: function() { toast('Edit customer in Lightspeed to delete', ''); }, danger: true },
                 ]})
               )
             );
@@ -4734,8 +4750,8 @@ function ItemDetail({ item, onClose }) {
       h('div', { className: 'panel-section' },
         h('div', { className: 'panel-section-head' }, 'Actions'),
         h('div', { style: { display: 'flex', gap: 8, padding: '10px 0' } },
-          h('button', { className: 'btn', onClick: function() { toast('Reorder requested', 'success'); } }, 'Reorder'),
-          h('button', { className: 'btn', onClick: function() { toast('Added to PO', 'success'); } }, 'Add to PO')
+          h('button', { className: 'btn', onClick: function() { toast('Go to Purchase Orders to create a reorder', ''); } }, 'Reorder'),
+          h('button', { className: 'btn', onClick: function() { toast('Go to Purchase Orders → New PO to add this item', ''); } }, 'Add to PO')
         )
       ),
       h('div', { className: 'panel-section' },
@@ -4806,9 +4822,9 @@ function InventoryScreen() {
                 h(OptionsMenu, { items: [
                   { label: 'View detail', onClick: function() { setSelected(c); } },
                   { label: 'Edit',        onClick: function() { setSelected(c); } },
-                  { label: 'Reorder',     onClick: function() { toast('Reorder requested', 'success'); } },
+                  { label: 'Reorder',     onClick: function() { toast('Go to Purchase Orders to create a reorder', ''); } },
                   'divider',
-                  { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
+                  { label: 'Delete', onClick: function() { toast('Edit item in Lightspeed to delete', ''); }, danger: true },
                 ]})
               )
             );
@@ -5042,10 +5058,10 @@ function ReportsScreen() {
         );
       })
     ),
-    range === 'custom' && h('div', { style: { display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' } },
-      h('input', { className: 'input mono', type: 'date', value: customStart, onChange: function(e) { setCustomStart(e.target.value); }, style: { width: 160 } }),
-      h('span', { style: { color: 'var(--text-2)' } }, 'to'),
-      h('input', { className: 'input mono', type: 'date', value: customEnd, onChange: function(e) { setCustomEnd(e.target.value); }, style: { width: 160 } })
+    range === 'custom' && h('div', { className: 'reports-date-range', style: { display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' } },
+      h('input', { className: 'input mono', type: 'date', value: customStart, onChange: function(e) { setCustomStart(e.target.value); }, onFocus: mobileInputFocus }),
+      h('span', { style: { color: 'var(--text-2)', whiteSpace: 'nowrap' } }, 'to'),
+      h('input', { className: 'input mono', type: 'date', value: customEnd, onChange: function(e) { setCustomEnd(e.target.value); }, onFocus: mobileInputFocus })
     ),
     h('div', { className: 'card mb-22' },
       h('div', { className: 'card-head' }, h('h3', null, 'Revenue'), h('span', { className: 'sub' }, 'By day')),
@@ -5695,6 +5711,10 @@ function SettingsScreen() {
           )
         )
       )
+    )
+  );
+}
+
 /* ─────────────────────────────────────────
    SCREEN — BOOKINGS
 ───────────────────────────────────────── */
