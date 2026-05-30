@@ -448,25 +448,79 @@ ul, ol { list-style: none; }
   color: var(--blue-fg);
   border-color: var(--blue-line);
 }
+/* In Progress = amber (work happening) */
 .badge.inprogress, .badge-inprogress {
-  background: var(--bg3);
-  color: var(--text2);
-  border-color: var(--line3);
-}
-.badge.booked, .badge-booked {
   background: var(--amber-bg);
   color: var(--amber-fg);
   border-color: var(--amber-line);
+}
+/* Booked = violet/blue (scheduled) */
+.badge.booked, .badge-booked {
+  background: var(--blue-bg);
+  color: var(--blue-fg);
+  border-color: var(--blue-line);
 }
 .badge.overdue, .badge-overdue {
   background: var(--red-bg);
   color: var(--red-fg);
   border-color: rgba(214,70,58,0.32);
 }
-.badge.closed, .badge-closed {
+/* Closed/Picked Up/Finished = gray (done) */
+.badge.closed, .badge-closed,
+.badge.finished, .badge-finished,
+.badge.pickedup, .badge-pickedup {
   background: var(--bg3);
   color: var(--text3);
   border-color: var(--line2);
+}
+
+/* Quick-action icon buttons on WO rows */
+.btn-icon {
+  padding: 4px 6px;
+  min-width: 28px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.qa-quick {
+  opacity: 0.6;
+  transition: opacity 0.1s;
+}
+.qa-quick:hover { opacity: 1; }
+.qa-ready:hover { color: var(--green-fg); border-color: var(--green-line); }
+
+/* Service type estimator chip */
+.service-estimate {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--blue-bg);
+  border: 1px solid var(--blue-line);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--blue-fg);
+}
+.se-time {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--mono);
+  font-weight: 600;
+}
+.se-price {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--green-fg);
+}
+.se-desc {
+  width: 100%;
+  color: var(--text2);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 /* Misc text tokens */
@@ -1670,11 +1724,13 @@ input[type="date"], .mono-input {
     right: 0;
     top: auto;
     width: 100%;
-    height: 56px;
+    /* height is auto — driven by content + safe-area padding */
+    height: auto;
     flex-direction: row;
     border-right: none;
     border-top: 1px solid var(--line2);
     z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .sidebar-brand, .sidebar-foot, .nav-label,
   .nav-section + .nav-section { display: none; }
@@ -1689,26 +1745,29 @@ input[type="date"], .mono-input {
   .nav-section::-webkit-scrollbar { display: none; }
   .nav-item {
     flex-direction: column;
-    gap: 2px;
-    padding: 8px 12px;
-    font-size: 9px;
+    gap: 3px;
+    padding: 10px 10px 8px;
+    font-size: 11px;
     min-width: 56px;
+    min-height: 48px;           /* WCAG touch target */
     justify-content: center;
+    align-items: center;
     border-left: none;
-    border-top: 2px solid transparent;
-    letter-spacing: 0.04em;
+    border-top: 3px solid transparent;
+    letter-spacing: 0.03em;
+    flex: 1;
   }
   .nav-item.active {
     border-left: none;
-    border-top: 2px solid var(--accent);
+    border-top: 3px solid var(--accent);
+    color: var(--accent);
   }
-  .nav-item svg { width: 18px; height: 18px; }
+  .nav-item svg { width: 24px; height: 24px; }  /* 24px icon */
   .nav-count { display: none; }
   .nav-item-label { display: none; }
-  .nav-item-label-mobile { display: inline; }
-  /* Reserve bottom-nav height + iPhone home-indicator safe-area */
-  #main, .main { padding-bottom: max(72px, calc(env(safe-area-inset-bottom) + 72px)); }
-  #sidebar, .sidebar { padding-bottom: env(safe-area-inset-bottom); }
+  .nav-item-label-mobile { display: inline; font-size: 11px; }
+  /* Reserve bottom-nav height (48px items + safe-area) */
+  #main, .main { padding-bottom: max(64px, calc(env(safe-area-inset-bottom, 0px) + 64px)); }
   .page { padding: 16px 12px 80px; }
   .page-head { flex-direction: column; gap: 8px; align-items: stretch; }
   .page-head > .actions, .page-head > .row, .page-head > * { width: 100%; flex-wrap: wrap; }
