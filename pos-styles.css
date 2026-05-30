@@ -2396,3 +2396,85 @@ td .skel-line {
 .btn.ghost[style*="height: 22"], .btn.ghost[style*="height:22"] {
   min-height: unset;
 }
+
+/* ════════════════════════════════════════════
+   VENDOR CATALOG SCREEN
+   ════════════════════════════════════════════ */
+.screen.vendor-catalog { display: flex; flex-direction: column; gap: 0; }
+
+.vendor-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  overflow-x: auto;
+}
+.vendor-chips .chip { flex-shrink: 0; font-size: 11px; padding: 5px 10px; }
+.vendor-chips .chip-count {
+  background: var(--line3);
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  line-height: 1.4;
+}
+.vendor-chips .chip.active .chip-count {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.vendor-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.vendor-item-card {
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 80ms;
+}
+.vendor-item-card:hover { border-color: var(--line3); }
+
+.item-info { flex: 1; }
+.item-name { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.35; margin-bottom: 3px; }
+.item-sku  { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+.item-upc  { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+.item-pricing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.vendor-price { font-size: 10px; color: var(--text3); }
+.our-price    { font-size: 12px; font-weight: 600; color: var(--text); }
+.stock-badge  {
+  font-size: 10px;
+  font-family: var(--mono);
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.03em;
+}
+.stock-badge.in-stock { background: rgba(34,197,94,.12); color: #22c55e; }
+.stock-badge.oos      { background: var(--line); color: var(--text3); }
+
+.item-actions { display: flex; gap: 6px; }
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--line2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: background 80ms, color 80ms;
+  font-family: var(--ui);
+}
+.btn-sm:hover { background: var(--accent-glow); border-color: var(--accent); color: var(--text); }

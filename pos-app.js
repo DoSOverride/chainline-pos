@@ -766,28 +766,65 @@ function useBarcodeScanner(onScan) {
 }
 
 /* ─────────────────────────────────────────
-   GLOBAL SEARCH (Cmd+K)
+   GLOBAL SEARCH (Cmd+K) — v2: live API enrichment + quick-nav
 ───────────────────────────────────────── */
 function GlobalSearch({ onNavigate, onClose }) {
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
+  const [apiExtras, setApiExtras] = useState({ customers: [], items: [] });
+  const [searching, setSearching] = useState(false);
   const inputRef = useRef(null);
+  const debounceRef = useRef(null);
 
   useEffect(() => { if (inputRef.current) inputRef.current.focus(); }, []);
 
-  const results = [];
+  // Local instant results from bootstrapped arrays
+  const localResults = [];
   if (q.trim().length > 1) {
     const ql = q.toLowerCase();
     lsCustomers.filter(c => c.name.toLowerCase().includes(ql) || (c.phone || '').includes(ql)).slice(0,3).forEach(c =>
-      results.push({ type: 'customer', label: c.name, sub: c.phone, id: c.id, screen: 'customers' })
+      localResults.push({ type: 'customer', label: c.name, sub: c.phone || 'No phone', id: c.id, screen: 'customers' })
     );
-    lsWorkOrders.filter(r => (r.id || '').toLowerCase().includes(ql) || (r.cust || '').toLowerCase().includes(ql) || (r.bike || '').toLowerCase().includes(ql)).slice(0,3).forEach(r =>
-      results.push({ type: 'workorder', label: r.id + ' - ' + r.cust, sub: r.bike, id: r.id, screen: 'work-orders' })
+    lsWorkOrders.filter(r => (r.id || '').toLowerCase().includes(ql) || (r.cust || '').toLowerCase().includes(ql) || (r.bike || '').toLowerCase().includes(ql)).slice(0,4).forEach(r =>
+      localResults.push({ type: 'workorder', label: (r.id || '') + ' \xb7 ' + (r.cust || ''), sub: (r.bike || '') + ' \xb7 ' + (r.status || ''), id: r.id, screen: 'work-orders', _wo: r })
     );
     lsCatalog.filter(it => it.name.toLowerCase().includes(ql) || it.sku.toLowerCase().includes(ql)).slice(0,3).forEach(it =>
-      results.push({ type: 'item', label: it.name, sub: it.sku + ' - ' + fmt$(it.price), id: it.sku, screen: 'inventory' })
+      localResults.push({ type: 'item', label: it.name, sub: it.sku + ' \xb7 ' + fmt$(it.price) + (it.stock > 0 ? ' \xb7 ' + it.stock + ' in stock' : ' \xb7 OOS'), id: it.sku, screen: 'inventory', _item: it })
     );
   }
+
+  // Debounced API enrichment
+  useEffect(() => {
+    if (q.trim().length < 2) { setApiExtras({ customers: [], items: [] }); setSearching(false); return; }
+    clearTimeout(debounceRef.current);
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      Promise.all([
+        apiGet('/api/pos-customers?search=' + encodeURIComponent(q) + '&limit=5').catch(() => null),
+        apiGet('/api/items-search?q=' + encodeURIComponent(q) + '&limit=5').catch(() => null),
+      ]).then(([cd, id]) => {
+        const rawC = (cd && (cd.customers || (Array.isArray(cd) ? cd : []))) || [];
+        const rawI = (id && id.items) ? id.items : [];
+        setApiExtras({
+          customers: rawC.map(normaliseCustomer).filter(c => !lsCustomers.find(x => x.id === c.id)),
+          items:     rawI.map(normaliseItem).filter(it => !lsCatalog.find(x => x.sku === it.sku)),
+        });
+        setSearching(false);
+      }).catch(() => setSearching(false));
+    }, 320);
+    return () => clearTimeout(debounceRef.current);
+  }, [q]);
+
+  // Merge local + API extras
+  const results = [...localResults];
+  const localCustCount = localResults.filter(r => r.type === 'customer').length;
+  const localItemCount = localResults.filter(r => r.type === 'item').length;
+  apiExtras.customers.slice(0, Math.max(0, 3 - localCustCount)).forEach(c =>
+    results.push({ type: 'customer', label: c.name, sub: c.phone || 'No phone', id: c.id, screen: 'customers' })
+  );
+  apiExtras.items.slice(0, Math.max(0, 3 - localItemCount)).forEach(it =>
+    results.push({ type: 'item', label: it.name, sub: it.sku + ' \xb7 ' + fmt$(it.price) + (it.stock > 0 ? ' \xb7 ' + it.stock + ' in stock' : ' \xb7 OOS'), id: it.sku, screen: 'inventory', _item: it })
+  );
 
   function onKey(e) {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s+1, results.length-1)); }
@@ -796,36 +833,68 @@ function GlobalSearch({ onNavigate, onClose }) {
     if (e.key === 'Escape') onClose();
   }
 
-  const typeLabel = { customer: 'Customer', workorder: 'Work Order', item: 'Inventory' };
+  const typeLabel = { customer: 'Customer', workorder: 'Work Order', item: 'Parts' };
+  const typeColor  = { customer: '#3b82f6', workorder: 'var(--accent)', item: '#10b981' };
 
-  return h(Modal, { title: 'Global Search', onClose, width: 560 },
+  return h(Modal, { title: 'Global Search \xb7 \u2318K', onClose, width: 580 },
     h('div', { style: { padding: '12px 18px' } },
-      h('input', {
-        ref: inputRef,
-        className: 'input',
-        placeholder: 'Search customers, work orders, SKUs...',
-        value: q,
-        onChange: e => { setQ(e.target.value); setSel(0); },
-        onKeyDown: onKey,
-        style: { fontSize: 15 },
-      })
+      h('div', { style: { position: 'relative' } },
+        h('input', {
+          ref: inputRef,
+          className: 'input',
+          placeholder: 'Search customers, work orders, parts, SKUs\u2026',
+          value: q,
+          onChange: e => { setQ(e.target.value); setSel(0); },
+          onKeyDown: onKey,
+          style: { fontSize: 15, paddingRight: 40 },
+        }),
+        searching && h('span', {
+          style: { position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', letterSpacing: '.06em', pointerEvents: 'none' },
+        }, 'searching\u2026')
+      ),
+      q.length < 2 && h('div', { style: { marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' } },
+        [
+          { label: 'Work Orders', screen: 'work-orders' },
+          { label: 'Sales', screen: 'sales' },
+          { label: 'Customers', screen: 'customers' },
+          { label: 'Inventory', screen: 'inventory' },
+          { label: 'Reports', screen: 'reports' },
+        ].map(nav => h('button', {
+          key: nav.screen,
+          className: 'btn ghost',
+          style: { fontSize: 11, padding: '3px 10px', height: 26 },
+          onClick: () => { onNavigate({ screen: nav.screen }); onClose(); },
+        }, nav.label))
+      )
     ),
-    results.length > 0 && h('div', { style: { borderTop: '1px solid var(--line)', maxHeight: 360, overflowY: 'auto' } },
+    results.length > 0 && h('div', { style: { borderTop: '1px solid var(--line)', maxHeight: 400, overflowY: 'auto' } },
       results.map((r, i) =>
         h('div', {
           key: i,
           className: 'global-search-result' + (i === sel ? ' selected' : ''),
           onClick: () => { onNavigate(r); onClose(); },
+          style: { display: 'flex', alignItems: 'center', gap: 10 },
         },
-          h('div', { className: 'gs-type' }, typeLabel[r.type] || r.type),
-          h('div', { className: 'gs-label' }, r.label),
-          h('div', { className: 'gs-sub' }, r.sub)
+          h('div', {
+            className: 'gs-type',
+            style: { color: typeColor[r.type] || 'var(--text3)', borderColor: typeColor[r.type] || 'var(--line)', flexShrink: 0 },
+          }, typeLabel[r.type] || r.type),
+          h('div', { style: { flex: 1, minWidth: 0 } },
+            h('div', { className: 'gs-label' }, r.label),
+            h('div', { className: 'gs-sub' }, r.sub)
+          ),
+          r.type === 'workorder' && r._wo && h('div', {
+            style: { fontSize: 10, flexShrink: 0, alignSelf: 'center', fontFamily: 'var(--mono)', color: r._wo.dueState === 'overdue' ? 'var(--accent)' : 'var(--text3)' },
+          }, r._wo.due || ''),
+          r.type === 'item' && r._item && r._item.stock > 0 && h('div', {
+            style: { fontSize: 10, color: '#10b981', fontFamily: 'var(--mono)', flexShrink: 0, alignSelf: 'center' },
+          }, r._item.stock + ' stk')
         )
       )
     ),
-    q.length > 1 && results.length === 0 && h('div', {
-      style: { padding: '24px 18px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' }
-    }, 'NO RESULTS')
+    q.length > 1 && results.length === 0 && !searching && h('div', {
+      style: { padding: '28px 18px', textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' }
+    }, 'NO RESULTS FOR "' + q.toUpperCase() + '"')
   );
 }
 
@@ -4271,7 +4340,7 @@ const MOCK_CUSTOMER_DETAIL = {
   },
 };
 
-function CustomerDetail({ customer, onClose, onNewSale, onNewWo }) {
+function CustomerDetail({ customer, onClose, onNewSale, onNewWo, onMessage }) {
   const detail = MOCK_CUSTOMER_DETAIL[customer.id] || { bikes: [], orders: [], openWo: [] };
   const [addBikeMode, setAddBikeMode] = useState(false);
   const [newBike, setNewBike] = useState('');
@@ -4285,6 +4354,7 @@ function CustomerDetail({ customer, onClose, onNewSale, onNewWo }) {
       h('div', { style: { display: 'flex', gap: 8, marginLeft: 'auto' } },
         h('button', { className: 'btn primary', onClick: function() { onNewSale && onNewSale(customer); onClose(); } }, 'New Sale'),
         h('button', { className: 'btn', onClick: function() { onNewWo && onNewWo(customer); onClose(); } }, 'New WO'),
+        customer.phone && h('button', { className: 'btn', onClick: function() { onMessage && onMessage(customer); onClose(); } }, h(Ico.MessageBubble, { size: 12 }), ' Message'),
         h('button', { className: 'btn ghost', onClick: onClose }, '\xd7')
       )
     ),
@@ -4328,7 +4398,7 @@ function CustomerDetail({ customer, onClose, onNewSale, onNewWo }) {
   );
 }
 
-function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
+function CustomersScreen({ setScreen, onNewSale, onNewWo, onMessage }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
@@ -4378,7 +4448,7 @@ function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
       )
     ),
     selected && h('div', { className: 'panel-overlay', onClick: function(e) { if (e.target === e.currentTarget) setSelected(null); } },
-      h(CustomerDetail, { customer: selected, onClose: function() { setSelected(null); }, onNewSale, onNewWo })
+      h(CustomerDetail, { customer: selected, onClose: function() { setSelected(null); }, onNewSale, onNewWo, onMessage })
     )
   );
 }
@@ -5176,6 +5246,148 @@ function PlaceholderScreen({ name }) {
   );
 }
 
+
+/* ─────────────────────────────────────────
+   SCREEN — MESSAGES  (RingCentral / Telus Business Connect SMS)
+───────────────────────────────────────── */
+function fmtPhone(p) {
+  if (!p) return '';
+  const d = p.replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '1') return '(' + d.slice(1, 4) + ') ' + d.slice(4, 7) + '-' + d.slice(7);
+  if (d.length === 10) return '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6);
+  return p;
+}
+function fmtMsgTime(iso) {
+  if (!iso) return '';
+  const dt = new Date(iso); const now = new Date();
+  if (dt.toDateString() === now.toDateString()) return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return dt.getFullYear() === now.getFullYear()
+    ? dt.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    : dt.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
+function MessagesScreen({ initialPhone }) {
+  const [messages,  setMessages]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [selected,  setSelected]  = useState(initialPhone || null);
+  const [draft,     setDraft]     = useState('');
+  const [sending,   setSending]   = useState(false);
+  const [newPhone,  setNewPhone]  = useState('');
+  const [showNew,   setShowNew]   = useState(false);
+  const threadEndRef = useRef(null);
+  function fetchInbox() {
+    return apiGet('/api/sms-inbox')
+      .then(function(d) { setMessages(d.messages || []); setLoading(false); })
+      .catch(function() { setLoading(false); });
+  }
+  useEffect(function() { fetchInbox(); const id = setInterval(fetchInbox, 30000); return function() { clearInterval(id); }; }, []);
+  useEffect(function() { if (threadEndRef.current) threadEndRef.current.scrollIntoView({ behavior: 'smooth' }); }, [selected, messages.length]);
+  const convMap = {};
+  messages.forEach(function(m) {
+    const other = m.direction === 'Inbound' ? m.from : m.to;
+    if (!other) return;
+    (convMap[other] = convMap[other] || []).push(m);
+  });
+  const conversations = Object.keys(convMap).map(function(phone) {
+    const msgs   = convMap[phone].slice().sort(function(a, b) { return new Date(a.createdTime) - new Date(b.createdTime); });
+    const last   = msgs[msgs.length - 1];
+    const unread = convMap[phone].filter(function(m) { return m.direction === 'Inbound' && m.readStatus === 'Unread'; }).length;
+    return { phone, msgs, last, unread };
+  }).sort(function(a, b) { return new Date(b.last.createdTime) - new Date(a.last.createdTime); });
+  const activeThread = selected ? (convMap[selected] || []).slice().sort(function(a, b) { return new Date(a.createdTime) - new Date(b.createdTime); }) : [];
+  const totalUnread  = conversations.reduce(function(s, c) { return s + c.unread; }, 0);
+  function sendReply() {
+    const to = selected || newPhone.trim(); const msg = draft.trim();
+    if (!to || !msg) return;
+    setSending(true);
+    apiPost('/api/sms-reply', { to, message: msg })
+      .then(function(d) {
+        if (d.ok || d.stub) {
+          setDraft('');
+          if (!selected && to) { setSelected(to); setShowNew(false); setNewPhone(''); }
+          toast('Message sent', 'success');
+          setMessages(function(prev) { return prev.concat([{ id: Date.now(), from: 'us', to, direction: 'Outbound', body: msg, createdTime: new Date().toISOString(), readStatus: 'Read' }]); });
+        } else { toast(d.error || 'Send failed', 'error'); }
+      })
+      .catch(function(e) { toast(String(e.message || 'Send failed'), 'error'); })
+      .finally(function() { setSending(false); });
+  }
+  function onMsgKeyDown(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); sendReply(); } }
+  return h(Fragment, null,
+    h(PageHead, { title: 'Messages', sub: 'SMS \xb7 Telus Business Connect',
+      actions: [h('button', { key: 'new', className: 'btn primary', onClick: function() { setShowNew(true); setSelected(null); } }, h(Ico.Plus, { size: 13 }), ' New Message')],
+    }),
+    h('div', { style: { display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 6, overflow: 'hidden' } },
+      h('div', { style: { width: 280, flexShrink: 0, borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+        h('div', { style: { padding: '10px 12px 8px', borderBottom: '1px solid var(--line)', fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.08em' } },
+          loading ? 'Loading...' : (conversations.length + ' conversation' + (conversations.length !== 1 ? 's' : '') + (totalUnread ? ' - ' + totalUnread + ' unread' : ''))
+        ),
+        h('div', { style: { flex: 1, overflowY: 'auto' } },
+          conversations.length === 0 && !loading && h('div', { style: { padding: '24px 16px', color: 'var(--text-3)', fontSize: 12, textAlign: 'center' } }, 'No SMS messages yet. Send the first one!'),
+          conversations.map(function(conv) {
+            return h('div', { key: conv.phone,
+              onClick: function() { setSelected(conv.phone); setShowNew(false); },
+              style: { padding: '10px 14px', borderBottom: '1px solid var(--line)', cursor: 'pointer', background: selected === conv.phone ? 'var(--bg-2)' : 'transparent' },
+            },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 } },
+                h('span', { style: { fontWeight: conv.unread ? 600 : 400, fontSize: 13, color: 'var(--text)' } }, fmtPhone(conv.phone)),
+                h('span', { style: { fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--mono)' } }, fmtMsgTime(conv.last.createdTime))
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+                h('span', { style: { fontSize: 11, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 } },
+                  (conv.last.direction === 'Outbound' ? 'You: ' : '') + (conv.last.body || '(media)')
+                ),
+                conv.unread > 0 && h('span', { style: { background: 'var(--accent)', color: '#fff', borderRadius: 10, fontSize: 10, padding: '1px 6px', fontWeight: 600, flexShrink: 0 } }, conv.unread)
+              )
+            );
+          })
+        )
+      ),
+      h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+        h('div', { style: { padding: '10px 16px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10, minHeight: 46 } },
+          selected
+            ? h(Fragment, null,
+                h('span', { style: { fontWeight: 600, fontSize: 14 } }, fmtPhone(selected)),
+                h('span', { style: { fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-3)' } }, selected)
+              )
+            : showNew ? h('span', { style: { fontSize: 13, color: 'var(--text-2)' } }, 'New Message')
+            : h('span', { style: { fontSize: 13, color: 'var(--text-3)' } }, 'Select a conversation')
+        ),
+        showNew && !selected && h('div', { style: { padding: '8px 16px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 8 } },
+          h('span', { style: { fontSize: 11, color: 'var(--text-2)', fontFamily: 'var(--mono)', width: 22 } }, 'To:'),
+          h('input', { className: 'input', placeholder: '+16045551234', value: newPhone, onChange: function(e) { setNewPhone(e.target.value); }, style: { flex: 1, height: 30, fontSize: 12 } })
+        ),
+        h('div', { style: { flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 } },
+          activeThread.length === 0 && selected && h('div', { style: { textAlign: 'center', color: 'var(--text-3)', fontSize: 12, margin: 'auto' } }, 'No messages in this thread'),
+          activeThread.length === 0 && !selected && !showNew && h('div', { style: { textAlign: 'center', color: 'var(--text-3)', margin: 'auto' } }, h(Ico.MessageBubble, { size: 40 })),
+          activeThread.map(function(m, i) {
+            const out = m.direction === 'Outbound';
+            return h('div', { key: m.id || i, style: { display: 'flex', justifyContent: out ? 'flex-end' : 'flex-start' } },
+              h('div', { title: fmtMsgTime(m.createdTime), style: {
+                  maxWidth: '70%', padding: '7px 11px',
+                  borderRadius: out ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
+                  background: out ? 'var(--accent)' : 'var(--bg-2)', color: out ? '#fff' : 'var(--text)',
+                  fontSize: 13, lineHeight: 1.45, wordBreak: 'break-word',
+                  border: out ? 'none' : '1px solid var(--line)',
+              } }, m.body || '(media)')
+            );
+          }),
+          h('div', { ref: threadEndRef })
+        ),
+        (selected || showNew) && h('div', { style: { padding: '8px 12px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8, alignItems: 'flex-end' } },
+          h('textarea', { className: 'input', rows: 2, placeholder: 'Type a message... (Cmd+Enter to send)',
+            value: draft, onChange: function(e) { setDraft(e.target.value); }, onKeyDown: onMsgKeyDown,
+            style: { flex: 1, resize: 'none', fontSize: 13, lineHeight: 1.4, padding: '6px 10px' },
+          }),
+          h('button', { className: 'btn primary',
+            disabled: sending || !draft.trim() || (showNew && !selected && !newPhone.trim()),
+            onClick: sendReply, style: { alignSelf: 'flex-end', height: 36 },
+          }, sending ? '...' : 'Send')
+        )
+      )
+    )
+  );
+}
+
 /* ─────────────────────────────────────────
    APP ROOT
 ───────────────────────────────────────── */
@@ -5186,13 +5398,14 @@ function App() {
   const [screen, setScreen]           = useState('dashboard');
   const [activeWo, setActiveWo]       = useState(null);
   const [pendingCustomer, setPendingCustomer] = useState(null);
+  const [pendingMsgPhone, setPendingMsgPhone]   = useState(null);
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [saleCount, setSaleCount]     = useState(0);
   const topbarSearchRef = useRef(null);
 
   // Bootstrap live data (WOs, customers, catalog) on first mount.
   // Runs once; async — components see data fill in as fetches complete.
-  useEffect(function() { bootstrapLiveData(); }, []);
+  useEffect(function() { bootstrapLiveData(); const _rcPoll = startSmsUnreadPoller(); return function() { clearInterval(_rcPoll); }; }, []);
 
   // G→D sequence state
   const gSeqRef = useRef(null);
@@ -5251,6 +5464,11 @@ function App() {
     setScreen('new-wo');
   }
 
+  function handleMessageCustomer(customer) {
+    setPendingMsgPhone(customer.phone || null);
+    setScreen('messages');
+  }
+
   if (!staff) {
     return h(Fragment, null,
       h(LoginScreen, { onLogin: setStaff }),
@@ -5274,12 +5492,14 @@ function App() {
       case 'wo-calendar':    return h(WorkOrderCalendarScreen, { setScreen, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'new-wo':         return h(NewWorkOrderScreen,    { setScreen, pendingCustomer, onClearPending: () => setPendingCustomer(null) });
       case 'sales':          return h(SalesScreen,           { pendingCustomer, onClearPending: () => setPendingCustomer(null), saleCount, onSaleComplete: () => setSaleCount(function(c) { return c + 1; }) });
-      case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
+      case 'customers':      return h(window.CustomersScreen      || CustomersScreen,       { setScreen, onNewSale: handleNewSaleForCustomer, onNewWo: handleNewWoForCustomer, onMessage: handleMessageCustomer, onOpenWo: (wo) => { setActiveWo(wo); setScreen('wo-detail'); } });
       case 'inventory':      return h(window.InventoryScreen      || InventoryScreen,       { staff, setScreen });
       case 'purchase-orders':return h(window.PurchaseOrdersScreen || PurchaseOrdersScreen);
+      case 'vendor-catalog': return h(VendorCatalogScreen);
       case 'reports':        return h(window.ReportsScreen        || ReportsScreen);
       case 'settings':       return h(SettingsScreen);
       case 'bookings':       return h(BookingsScreen,        { setScreen });
+      case 'messages':       return h(MessagesScreen,       { initialPhone: pendingMsgPhone });
       default:               return h(PlaceholderScreen, { name: screen });
     }
   }
