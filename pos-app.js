@@ -12,16 +12,18 @@ const { createRoot } = ReactDOM;
 /* ── Constants ── */
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
+// PINs are stored server-side in KV (pos:staff) and verified via /api/pos-login.
+// DO NOT add pin fields here — this file is served publicly.
 const STAFF = [
-  { id:  1, name: 'Jason',   initials: 'JA', role: 'Warranty', tone: 'ja', pin: '1139' },
-  { id:  5, name: 'Phil',    initials: 'PH', role: 'Mechanic', tone: 'ph', pin: '1139' },
-  { id:  6, name: 'Steve',   initials: 'ST', role: 'Mechanic', tone: 'st', pin: '1139' },
-  { id:  7, name: 'Matt',    initials: 'MA', role: 'Manager',  tone: 'ma', pin: '1139' },
-  { id:  8, name: 'Darrin',  initials: 'DA', role: 'Owner',    tone: 'da', pin: '1139' },
-  { id:  9, name: 'Tao',     initials: 'TC', role: 'Manager',  tone: 'tc', pin: '1139' },
-  { id: 10, name: 'Beckett', initials: 'BE', role: 'Mechanic', tone: 'be', pin: '1139' },
-  { id: 11, name: 'Curren',  initials: 'CU', role: 'Mechanic', tone: 'cu', pin: '1139' },
-  { id: 12, name: 'Danny',   initials: 'DN', role: 'Mechanic', tone: 'dn', pin: '1139' },
+  { id:  1, name: 'Jason',   initials: 'JA', role: 'Warranty', tone: 'ja' },
+  { id:  5, name: 'Phil',    initials: 'PH', role: 'Mechanic', tone: 'ph' },
+  { id:  6, name: 'Steve',   initials: 'ST', role: 'Mechanic', tone: 'st' },
+  { id:  7, name: 'Matt',    initials: 'MA', role: 'Manager',  tone: 'ma' },
+  { id:  8, name: 'Darrin',  initials: 'DA', role: 'Owner',    tone: 'da' },
+  { id:  9, name: 'Tao',     initials: 'TC', role: 'Manager',  tone: 'tc' },
+  { id: 10, name: 'Beckett', initials: 'BE', role: 'Mechanic', tone: 'be' },
+  { id: 11, name: 'Curren',  initials: 'CU', role: 'Mechanic', tone: 'cu' },
+  { id: 12, name: 'Danny',   initials: 'DN', role: 'Mechanic', tone: 'dn' },
 ];
 
 const MECHANICS = STAFF.filter(s => s.role === 'Mechanic' || s.role === 'Manager').map(s => ({
@@ -672,73 +674,74 @@ function SmsModal({ customer, phone, onClose }) {
   );
 }
 
-/* ── Mark Ready Modal (with optional SMS) ── */
-function MarkReadyModal({ wo, onConfirm, onCancel }) {
-  const firstName = (wo.cust || '').split(' ')[0] || 'there';
-  const DEFAULT_MSG = 'Hi ' + firstName + ', your bike is ready for pickup at ChainLine Cycle! We’re open Mon–Sat 10am–6pm, Sun 11am–5pm.';
+/* ── Mark Status Modal (Ready or Finished, with optional SMS) ── */
+function MarkStatusModal({ wo, targetStatus, onConfirm, onCancel }) {
+  const label = targetStatus === ‘finished’ ? ‘Finished’ : ‘Ready’;
+  const firstName = (wo.cust || ‘’).split(‘ ‘)[0] || ‘there’;
+  const DEFAULT_MSG = ‘Hi ‘ + firstName + ‘, your bike is ready for pickup at ChainLine Cycle! We’re open Mon–Sat 10am–6pm, Sun 11am–5pm.’;
   const [msg, setMsg] = useState(DEFAULT_MSG);
   const [sending, setSending] = useState(false);
   const hasPhone = !!(wo.phone);
 
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape' && !sending) onCancel(); }
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    function onKey(e) { if (e.key === ‘Escape’ && !sending) onCancel(); }
+    document.addEventListener(‘keydown’, onKey);
+    return () => document.removeEventListener(‘keydown’, onKey);
   }, [onCancel, sending]);
 
-  async function handleMarkReady(withSms) {
+  async function handleMarkStatus(withSms) {
     setSending(true);
     try {
-      const res = await apiPost('/api/workorder/' + wo.id + '/status', { status: 'ready' });
-      if (res && res.error) { toast('Failed to update status', 'error'); setSending(false); return; }
+      const res = await apiPost(‘/api/workorder/’ + wo.id + ‘/status’, { status: targetStatus });
+      if (res && res.error) { toast(‘Failed to update status’, ‘error’); setSending(false); return; }
       if (withSms && hasPhone) {
-        const raw = (wo.phone || '').replace(/\D/g, '');
-        const e164 = raw.replace(/^1?(\d{10})$/, '+1$1');
+        const raw = (wo.phone || ‘’).replace(/\D/g, ‘’);
+        const e164 = raw.replace(/^1?(\d{10})$/, ‘+1$1’);
         try {
-          const smsRes = await apiPost('/api/send-sms', { to: e164, message: msg });
-          if (smsRes && !smsRes.error) toast('SMS sent!', 'success');
-          else toast('Status updated — SMS failed', 'error');
-        } catch (_) { toast('Status updated — SMS failed', 'error'); }
+          const smsRes = await apiPost(‘/api/send-sms’, { to: e164, message: msg });
+          if (smsRes && !smsRes.error) toast(‘SMS sent!’, ‘success’);
+          else toast(‘Status updated — SMS failed’, ‘error’);
+        } catch (_) { toast(‘Status updated — SMS failed’, ‘error’); }
       }
       onConfirm();
     } catch (_) {
-      toast('Failed to update status', 'error');
+      toast(‘Failed to update status’, ‘error’);
     }
     setSending(false);
   }
 
-  return h('div', { className: 'modal-overlay', onClick: e => { if (e.target === e.currentTarget && !sending) onCancel(); } },
-    h('div', { className: 'modal-box', style: { width: 440 }, onClick: e => e.stopPropagation() },
-      h('div', { className: 'modal-head' },
-        h('span', { className: 'modal-title' }, 'Mark as Ready?'),
-        h('button', { className: 'btn ghost', style: { height: 24, padding: '0 6px', marginLeft: 'auto' }, onClick: onCancel, disabled: sending }, '\xd7')
+  return h(‘div’, { className: ‘modal-overlay’, onClick: e => { if (e.target === e.currentTarget && !sending) onCancel(); } },
+    h(‘div’, { className: ‘modal-box’, style: { width: 440 }, onClick: e => e.stopPropagation() },
+      h(‘div’, { className: ‘modal-head’ },
+        h(‘span’, { className: ‘modal-title’ }, ‘Mark as ‘ + label + ‘?’),
+        h(‘button’, { className: ‘btn ghost’, style: { height: 24, padding: ‘0 6px’, marginLeft: ‘auto’ }, onClick: onCancel, disabled: sending }, ‘\xd7’)
       ),
-      h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 14 } },
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-          h('div', { style: { fontWeight: 600, fontSize: 14 } }, wo.cust || 'Unknown'),
-          wo.bike && h('div', { style: { color: 'var(--text3)', fontSize: 13 } }, wo.bike),
-          wo.phone && h('div', { style: { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text2)' } }, wo.phone)
+      h(‘div’, { style: { padding: 18, display: ‘flex’, flexDirection: ‘column’, gap: 14 } },
+        h(‘div’, { style: { display: ‘flex’, flexDirection: ‘column’, gap: 4 } },
+          h(‘div’, { style: { fontWeight: 600, fontSize: 14 } }, wo.cust || ‘Unknown’),
+          wo.bike && h(‘div’, { style: { color: ‘var(--text3)’, fontSize: 13 } }, wo.bike),
+          wo.phone && h(‘div’, { style: { fontFamily: ‘var(--font-mono)’, fontSize: 12, color: ‘var(--text2)’ } }, wo.phone)
         ),
         hasPhone
-          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-              h('label', { style: { fontSize: 12, fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.06em' } }, '📱 Text customer?'),
-              h('textarea', {
-                className: 'textarea',
+          ? h(‘div’, { style: { display: ‘flex’, flexDirection: ‘column’, gap: 6 } },
+              h(‘label’, { style: { fontSize: 12, fontWeight: 600, color: ‘var(--text2)’, textTransform: ‘uppercase’, letterSpacing: ‘0.06em’ } }, ‘📱 Text customer?’),
+              h(‘textarea’, {
+                className: ‘textarea’,
                 value: msg,
                 onChange: e => setMsg(e.target.value),
                 rows: 3,
-                style: { fontSize: 13, resize: 'vertical' },
+                style: { fontSize: 13, resize: ‘vertical’ },
                 disabled: sending,
               })
             )
-          : h('div', { style: { fontSize: 13, color: 'var(--text3)' } }, 'No phone number on file'),
-        h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 } },
-          h('button', { className: 'btn ghost', onClick: onCancel, disabled: sending }, 'Cancel'),
-          h('button', { className: 'btn', onClick: () => handleMarkReady(false), disabled: sending },
-            sending ? 'Updating…' : hasPhone ? 'Mark Ready Only' : 'Mark Ready'
+          : h(‘div’, { style: { fontSize: 13, color: ‘var(--text3)’ } }, ‘No phone number on file’),
+        h(‘div’, { style: { display: ‘flex’, gap: 8, justifyContent: ‘flex-end’, paddingTop: 4 } },
+          h(‘button’, { className: ‘btn ghost’, onClick: onCancel, disabled: sending }, ‘Cancel’),
+          h(‘button’, { className: ‘btn’, onClick: () => handleMarkStatus(false), disabled: sending },
+            sending ? ‘Updating…’ : hasPhone ? (‘Mark ‘ + label + ‘ Only’) : (‘Mark ‘ + label)
           ),
-          hasPhone && h('button', { className: 'btn primary', onClick: () => handleMarkReady(true), disabled: sending },
-            sending ? 'Sending…' : 'Mark Ready + Text'
+          hasPhone && h(‘button’, { className: ‘btn primary’, onClick: () => handleMarkStatus(true), disabled: sending },
+            sending ? ‘Sending…’ : (‘Mark ‘ + label + ‘ + Text’)
           )
         )
       )
@@ -1060,16 +1063,34 @@ function LoginScreen({ onLogin }) {
   }
 
   function tryLogin(p) {
-    const match = STAFF.find(s => s.id === selected.id && s.pin === p);
-    if (match) {
-      try { sessionStorage.setItem('pos-staff', JSON.stringify(match)); } catch {}
-      onLogin(match);
-    } else {
-      setError('Wrong PIN');
-      setShake(true);
-      setPin('');
-      setTimeout(() => setShake(false), 400);
-    }
+    // Verify PIN server-side via /api/pos-login — PINs are never stored in this file.
+    fetch(WORKER + '/api/pos-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ staffId: selected.id, pin: p }),
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res && res.success) {
+          const staff = res.staff || selected;
+          // Store the worker-returned staff object (no pin field) in sessionStorage
+          try { sessionStorage.setItem('pos-staff', JSON.stringify(staff)); } catch {}
+          // Set the POS_PIN (X-POS-Auth) that was entered so API calls work
+          try { localStorage.setItem('pos-api-pin', p); } catch {}
+          onLogin(staff);
+        } else {
+          setError('Wrong PIN');
+          setShake(true);
+          setPin('');
+          setTimeout(() => setShake(false), 400);
+        }
+      })
+      .catch(() => {
+        setError('Login failed — check connection');
+        setShake(true);
+        setPin('');
+        setTimeout(() => setShake(false), 400);
+      });
   }
 
   const keys = ['1','2','3','4','5','6','7','8','9','del','0','ok'];
@@ -2119,7 +2140,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [showFeeModal, setShowFeeModal]         = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showAuditModal, setShowAuditModal]     = useState(false);
-  const [showMarkReadyModal, setShowMarkReadyModal] = useState(false);
+  const [markStatusTarget, setMarkStatusTarget] = useState(null); // 'ready' | 'finished' | null
 
   // ── Click-outside for 3-dot menu ────────────────────────
   useEffect(() => {
@@ -2230,8 +2251,8 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
 
   function changeStatus(s) {
     const norm = s.toLowerCase().replace(/\s+/g, '');
-    if (norm === 'ready') {
-      setShowMarkReadyModal(true);
+    if (norm === 'ready' || norm === 'finished') {
+      setMarkStatusTarget(norm);
       return;
     }
     setStatus(s);
@@ -2438,15 +2459,17 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
     showFeeModal && h(AddFeeModal, { woId: wo.id, currentFees: extraFees, onSave: setExtraFees, onClose: () => setShowFeeModal(false) }),
     showReserveModal && h(ReserveItemModal, { woId: wo.id, currentItems: reservedItems, onSave: setReservedItems, onClose: () => setShowReserveModal(false) }),
     showAuditModal && h(AuditLogModal, { woId: wo.id, onClose: () => setShowAuditModal(false) }),
-    showMarkReadyModal && h(MarkReadyModal, {
+    markStatusTarget && h(MarkStatusModal, {
       wo: Object.assign({}, wo, { bike: customerItem || wo.bike }),
+      targetStatus: markStatusTarget,
       onConfirm: () => {
-        setShowMarkReadyModal(false);
-        setStatus('ready');
-        toast('Marked Ready', 'success');
+        const s = markStatusTarget;
+        setMarkStatusTarget(null);
+        setStatus(s);
+        toast('Marked ' + (s === 'finished' ? 'Finished' : 'Ready'), 'success');
         window.dispatchEvent(new Event('wo:updated'));
       },
-      onCancel: () => setShowMarkReadyModal(false),
+      onCancel: () => setMarkStatusTarget(null),
     }),
 
     h('div', { style: S.page },
@@ -3093,7 +3116,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   const openWo = onOpenWo || (() => {});
   const [wos, setWos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [markReadyWo, setMarkReadyWo] = useState(null);
+  const [markStatusWo, setMarkStatusWo] = useState(null);
+  const [markStatusTarget, setMarkStatusTarget] = useState(null); // 'ready' | 'finished'
 
   function fetchWos() {
     setLoading(true);
@@ -3187,10 +3211,16 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   ];
 
   return h(Fragment, null,
-    markReadyWo && h(MarkReadyModal, {
-      wo: markReadyWo,
-      onConfirm: () => { setMarkReadyWo(null); fetchWos(); toast('Marked Ready', 'success'); },
-      onCancel: () => setMarkReadyWo(null),
+    markStatusWo && markStatusTarget && h(MarkStatusModal, {
+      wo: markStatusWo,
+      targetStatus: markStatusTarget,
+      onConfirm: () => {
+        const s = markStatusTarget;
+        setMarkStatusWo(null); setMarkStatusTarget(null);
+        fetchWos();
+        toast('Marked ' + (s === 'finished' ? 'Finished' : 'Ready'), 'success');
+      },
+      onCancel: () => { setMarkStatusWo(null); setMarkStatusTarget(null); },
     }),
     slow && loading && h('div', { className: 'slow-conn-banner' },
       h('span', null, '⚠️ Connection slow—still loading work orders…'),
