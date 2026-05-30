@@ -19,7 +19,7 @@
   'use strict';
 
   function init() {
-    if (!window.React || !window.MOCK_WO) return setTimeout(init, 50);
+    if (!window.React || !window.apiGet) return setTimeout(init, 50);
 
     const { createElement: h, useState, useEffect, useMemo, Fragment } = React;
 
@@ -198,7 +198,7 @@
       const setScreen = props.setScreen;
       const onOpenWo = props.onOpenWo;
 
-      const [wos, setWos] = useState(window.MOCK_WO || []);
+      const [wos, setWos] = useState(window.lsWorkOrders || window.MOCK_WO || []);
       const [mechFilter, setMechFilter] = useState('all');
       const [tick, setTick] = useState(0);
       const [pendingAssign, setPendingAssign] = useState(null); // { woId, newStatus }

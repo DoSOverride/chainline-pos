@@ -1293,7 +1293,7 @@
   ═══════════════════════════════════════════ */
   function CustomersScreen({ setScreen, onNewSale, onNewWo, onOpenWo }) {
     const [q, setQ] = useState('');
-    const [customers, setCustomers] = useState(MOCK_CUSTOMERS_FULL);
+    const [customers, setCustomers] = useState(() => (window.lsCustomers && window.lsCustomers.length > 0) ? window.lsCustomers : MOCK_CUSTOMERS_FULL);
     const [selectedIndex, setSelectedIndex] = useState(null);  /* index into customers array */
     const [showNew, setShowNew] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -1311,7 +1311,7 @@
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
         const trimmed = q.trim();
-        if (trimmed.length < 2) { setCustomers(MOCK_CUSTOMERS_FULL); return; }
+        if (trimmed.length < 2) { setCustomers((window.lsCustomers && window.lsCustomers.length > 0) ? window.lsCustomers : MOCK_CUSTOMERS_FULL); return; }
         setLoading(true);
         const result = await apiFetch('/api/customers?q=' + encodeURIComponent(trimmed));
         setLoading(false);
@@ -1333,7 +1333,7 @@
             }))
           : null;
         if (mapped) setCustomers(mapped);
-        else setCustomers(MOCK_CUSTOMERS_FULL);
+        else setCustomers((window.lsCustomers && window.lsCustomers.length > 0) ? window.lsCustomers : MOCK_CUSTOMERS_FULL);
       }, 250);
       return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     }, [q]);

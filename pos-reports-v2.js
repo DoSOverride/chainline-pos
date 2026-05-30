@@ -103,6 +103,30 @@
     { id: 'WO-2404', cust: 'Zara Nkosi',         bike: 'Marin Pine Mountain 2',        mech: 'Danny',   mechInit: 'DN', mechTone: 'dn', status: 'open',        dateIn: '2026-05-17', dateOut: null,         hours: 0,    total:  75.00 },
   ];
 
+  // Use live WOs from pos-app.js bootstrap if available; fall back to mock for Reports
+  function getLiveWOs() {
+    const live = window.lsWorkOrders;
+    if (live && live.length > 0) {
+      // Shape live WOs to match the MOCK_WORKORDERS schema Reports expects
+      return live.map(function(w) {
+        return {
+          id:       w.id,
+          cust:     w.cust || '',
+          bike:     w.bike || '',
+          mech:     w.mech || '',
+          mechInit: w.mech || '',
+          mechTone: w.tone || 'am',
+          status:   w.status || 'open',
+          dateIn:   w.dateIn || (w.due || '').slice(0, 10) || '',
+          dateOut:  w.dateDue || null,
+          hours:    0,
+          total:    w.total || 0,
+        };
+      });
+    }
+    return MOCK_WORKORDERS;
+  }
+
   /* ─── API with mock fallback ─── */
   const WORKER = typeof window !== 'undefined' && window.WORKER ? window.WORKER : 'https://still-term-f1ec.taocaruso77.workers.dev';
 
@@ -544,8 +568,9 @@
   function MechanicTab() {
     const [filteredMech, setFilteredMech] = useState(null);
 
+    const allWOs = getLiveWOs();
     const filtered = filteredMech
-      ? MOCK_WORKORDERS.filter(w => w.mech === filteredMech)
+      ? allWOs.filter(w => w.mech === filteredMech)
       : null;
 
     if (filteredMech && filtered) {
@@ -836,29 +861,30 @@
     const [mechFilter, setMechFilter] = useState('all');
     const [preset, setPreset] = useState('this-month');
 
+    const allWOs = getLiveWOs();
     const statuses = ['all', 'open', 'inprogress', 'ready', 'overdue', 'closed', 'booked'];
-    const mechs = ['all', ...Array.from(new Set(MOCK_WORKORDERS.map(w => w.mech))).sort()];
+    const mechs = ['all', ...Array.from(new Set(allWOs.map(w => w.mech))).sort()];
 
-    const filtered = MOCK_WORKORDERS.filter(w => {
+    const filtered = allWOs.filter(w => {
       if (statusFilter !== 'all' && w.status !== statusFilter) return false;
       if (mechFilter !== 'all' && w.mech !== mechFilter) return false;
       return true;
     });
 
     /* Avg turnaround: closed WOs only */
-    const closed = MOCK_WORKORDERS.filter(w => w.status === 'closed' && w.dateIn && w.dateOut);
+    const closed = allWOs.filter(w => w.status === 'closed' && w.dateIn && w.dateOut);
     const avgTurnaround = closed.length
       ? closed.reduce((s, w) => s + (new Date(w.dateOut) - new Date(w.dateIn)) / 86400000, 0) / closed.length
       : 0;
-    const overdue = MOCK_WORKORDERS.filter(w => w.status === 'overdue').length;
+    const overdue = allWOs.filter(w => w.status === 'overdue').length;
 
     return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16 } },
       /* Stat chips */
       h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap' } },
-        h(StatCard, { label: 'Total WOs', value: MOCK_WORKORDERS.length }),
+        h(StatCard, { label: 'Total WOs', value: allWOs.length }),
         h(StatCard, { label: 'Overdue', value: overdue, sub: 'need attention' }),
         h(StatCard, { label: 'Avg Turnaround', value: avgTurnaround.toFixed(1) + 'd', sub: 'closed WOs' }),
-        h(StatCard, { label: 'In Progress', value: MOCK_WORKORDERS.filter(w => w.status === 'inprogress').length }),
+        h(StatCard, { label: 'In Progress', value: allWOs.filter(w => w.status === 'inprogress').length }),
       ),
 
       /* Filters */

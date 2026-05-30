@@ -33,40 +33,106 @@ const SERVICE_TYPES = [
   'Suspension service', 'Shock service', 'Wheel build', 'Tubeless setup', 'Bike fit', 'Other',
 ];
 
-const MOCK_WO = [
-  { id: 'WO-2391', cust: 'Devon Tran',        phone: '(250) 555-0188', bike: 'Norco Sight C2 \xb7 2023 \xb7 Forest Green',  svc: 'Drivetrain replace',         due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'AM', tone: 'am', prio: false, total: 312.50, hookIn: 'FLOR 27', notes: 'Replace full drivetrain - cassette, chain, chainrings. Customer reports skipping under load.' },
-  { id: 'WO-2388', cust: 'Hannah Riise',       phone: '(250) 555-0142', bike: 'Santa Cruz Bronson \xb7 CC X01',               svc: 'Suspension service',         due: 'May 20', dueState: 'today',   status: 'inprogress', mech: 'JK', tone: 'jk', prio: true,  total: 226.81, hookIn: '', hookOut: 'WH', notes: 'Rear shock feels harsh on chunder. Clicking from BB area under load - inspect cranks/BB. Loaner wheelset OK if needed.' },
-  { id: 'WO-2382', cust: 'Marc Lefebvre',      phone: '(250) 555-0119', bike: 'Trek Fuel EX 8 \xb7 Lithium Grey',             svc: 'Full tune + brake bleed',    due: 'May 18', dueState: 'overdue', overdueBy: '2d late', status: 'open',  mech: 'SR', tone: 'sr', prio: true,  total: 185.00, hookIn: 'DHS' },
-  { id: 'WO-2402', cust: 'Priya Sharma',       phone: '(778) 555-0207', bike: 'Specialized Stumpjumper Comp',                 svc: 'Booking \xb7 pre-season tune',due: 'May 22', status: 'booked',    mech: 'MB', tone: 'mb', prio: false, total: 0 },
-  { id: 'WO-2379', cust: 'Owen Bartholomew',   phone: '(250) 555-0166', bike: 'Kona Process 134 \xb7 2022',                   svc: 'Wheel build \xb7 rear',       due: 'May 17', dueState: 'overdue', overdueBy: '3d late', status: 'open',  mech: 'AM', tone: 'am', prio: false, total: 275.00 },
-  { id: 'WO-2399', cust: 'Eli Constantine',    phone: '(604) 555-0152', bike: 'Yeti SB140 LR \xb7 Cobalt',                    svc: 'Shock service \xb7 Float X',  due: 'May 21', status: 'inprogress', mech: 'JK', tone: 'jk', prio: false, total: 145.00 },
-  { id: 'WO-2404', cust: 'Mei Ito',            phone: '(250) 555-0173', bike: 'Rocky Mountain Altitude',                      svc: 'Booking \xb7 derailleur align',due: 'May 23', status: 'booked',   mech: 'SR', tone: 'sr', prio: false, total: 0 },
-  { id: 'WO-2395', cust: 'Jasper Quinn-Holden', phone: '(250) 555-0131',bike: 'Pivot Trail 429 \xb7 Slate',                   svc: 'Tubeless setup + bearing',   due: 'May 20', dueState: 'today',   status: 'ready',      mech: 'MB', tone: 'mb', prio: false, total: 88.50 },
-  { id: 'WO-2387', cust: 'Sienna Park',        phone: '(250) 555-0145', bike: 'Devinci Marshall A29',                         svc: 'Hydraulic line replace',     due: 'May 21', status: 'open',      mech: 'AM', tone: 'am', prio: false, total: 95.00 },
-  { id: 'WO-2403', cust: 'Augustin Vega',      phone: '(250) 555-0198', bike: 'Cerv\xe9lo Aspero \xb7 Champagne',             svc: 'Booking \xb7 pedal swap + fit',due: 'May 24', status: 'booked',   mech: 'JK', tone: 'jk', prio: false, total: 0 },
-];
+/* ── Live data arrays (populated on init from LS API) ── */
+// These replace the old MOCK_* arrays. Module-level so all components share one copy.
+let lsWorkOrders = [];   // from /api/workorders (KV-backed)
+let lsCustomers  = [];   // from /api/pos-customers?limit=100
+let lsCatalog    = [];   // from /api/items-search (popular items, lazy-loaded)
 
-const MOCK_CUSTOMERS = [
-  { id: 1, name: 'Hannah Riise',    phone: '(250) 555-0142', bikes: 3, memberSince: '2021-03-14' },
-  { id: 2, name: 'Devon Tran',      phone: '(250) 555-0188', bikes: 2, memberSince: '2020-07-22' },
-  { id: 3, name: 'Marc Lefebvre',   phone: '(250) 555-0119', bikes: 1, memberSince: '2019-01-08' },
-  { id: 4, name: 'Hannah Kowalski', phone: '(250) 555-0319', bikes: 1, memberSince: '2024-04-11' },
-  { id: 5, name: 'Priya Sharma',    phone: '(778) 555-0207', bikes: 2, memberSince: '2022-09-30' },
-];
+// Backward-compat aliases — const references to the same arrays.
+// bootstrapLiveData() pushes into these arrays in-place so all consumers see live data.
+const MOCK_WO        = lsWorkOrders;
+const MOCK_CUSTOMERS = lsCustomers;
+const MOCK_CATALOG   = lsCatalog;
 
-const MOCK_CATALOG = [
-  // taxablePst: false = PST-exempt (BC: labour/services not subject to PST per PSTA s.37)
-  { sku: 'SHIM-XT-CS-12',   name: 'Shimano XT M8100 Cassette \xb7 12-spd',        price: 189.00, stock: 3,  low: false },
-  { sku: 'TIRE-MAXX-29-DH', name: 'Maxxis Minion DHF 29\xd72.5 \xb7 3C MaxxGrip', price: 84.00,  stock: 8,  low: false },
-  { sku: 'LAB-INSTALL-CS',  name: 'Labour \xb7 Cassette install',                  price: 25.00,  stock: 99, low: false, taxablePst: false },
-  { sku: 'CHAIN-XT-126L',   name: 'Shimano XT Chain \xb7 126L',                    price: 62.00,  stock: 5,  low: false },
-  { sku: 'BRAKE-PAD-CODE',  name: 'SRAM Code Brake Pads \xb7 Metallic',            price: 38.00,  stock: 14, low: false },
-  { sku: 'GREASE-SLICK',    name: 'SlickHoney Suspension Grease \xb7 32g',         price: 18.00,  stock: 6,  low: true  },
-  { sku: 'GRIP-ODI-ELITE',  name: 'ODI Elite Pro Lock-On Grips',                   price: 32.00,  stock: 9,  low: false },
-  { sku: 'TUBE-29-PRES',    name: '29" Tube \xb7 Presta Valve',                    price: 11.00,  stock: 38, low: false },
-  { sku: 'SVC-TUNE-B',      name: 'Marin Tune-Up Basic',                           price: 75.00,  stock: 99, low: false, taxablePst: false },
-  { sku: 'SVC-TUNE-S',      name: 'Marin Tune-Up Standard',                        price: 120.00, stock: 99, low: false, taxablePst: false },
-];
+// Normalise a raw KV workorder into the flat shape used throughout the POS
+function normaliseWo(w) {
+  if (w.cust) return w; // already flat
+  return {
+    id:       w.workOrderID || w.id,
+    cust:     [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || w.customerName || 'Unknown',
+    phone:    w.Contact?.mobile || w.Contact?.phone || '',
+    bike:     w.itemDescription || w.bikeDescription || '',
+    svc:      w.note?.split('\n')[0] || w.serviceType || 'Service',
+    due:      w.dateDue || (w.timeIn ? new Date(w.timeIn).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : 'TBD'),
+    dateDue:  w.dateDue || (w.timeIn ? w.timeIn.slice(0, 10) : ''),
+    dueState: null,
+    status:   (w.workOrderStatus || w.status || 'open').toLowerCase().replace(/\s+/g, ''),
+    mech:     (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || w.mech || 'UN',
+    tone:     w.tone || 'am',
+    prio:     !!w.priority || !!w.prio,
+    total:    parseFloat(w.total || 0),
+    hookIn:   w.hookIn || '',
+    hookOut:  w.hookOut || '',
+    notes:    w.notes || w.note || '',
+  };
+}
+
+// Normalise a raw LS customer into the flat shape used by MOCK_CUSTOMERS consumers
+function normaliseCustomer(c) {
+  if (c.name) return c; // already flat
+  const firstName = c.firstName || '';
+  const lastName  = c.lastName  || '';
+  return {
+    id:          c.id || c.customerID,
+    name:        [firstName, lastName].filter(Boolean).join(' ') || 'Unknown',
+    phone:       c.mobile || c.phone || '',
+    bikes:       c.bikesCount || 0,
+    memberSince: c.created ? c.created.slice(0, 10) : '',
+    email:       c.email || '',
+    firstName,
+    lastName,
+  };
+}
+
+// Normalise a raw LS item into the flat shape used by MOCK_CATALOG consumers
+function normaliseItem(i) {
+  if (typeof i.sku === 'string' && typeof i.price === 'number') return i; // already flat
+  return {
+    sku:        i.systemSku || i.customSku || i.sku || '',
+    name:       i.description || i.name || '',
+    price:      parseFloat(i.Prices?.ItemPrice?.amount || i.price || 0),
+    stock:      parseInt(i.qoh || i.stock || 0),
+    low:        (parseInt(i.qoh || i.stock || 0)) < 3,
+    taxablePst: !i.taxClass || i.taxClass !== 'Labour',
+    upc:        i.upc || i.customSku || '',
+    cost:       parseFloat(i.defaultCost || 0),
+    dept:       i.Department?.name || i.dept || '',
+    brand:      i.ItemAttributes?.brand || i.brand || '',
+  };
+}
+
+// Bootstrap: called once on mount. Loads WOs + customers into live arrays in-place.
+// Catalog seeded with popular items so barcode fallback has real data immediately.
+async function bootstrapLiveData() {
+  // Work orders
+  try {
+    const woData = await apiGet('/api/workorders');
+    if (woData && Array.isArray(woData.workorders)) {
+      woData.workorders.map(normaliseWo).forEach(w => lsWorkOrders.push(w));
+      window.MOCK_WO = lsWorkOrders;
+    }
+  } catch {}
+
+  // Customers
+  try {
+    const custData = await apiGet('/api/pos-customers?limit=100');
+    const raw = custData?.customers || (Array.isArray(custData) ? custData : null);
+    if (raw) {
+      raw.map(normaliseCustomer).forEach(c => lsCustomers.push(c));
+      window.MOCK_CUSTOMERS = lsCustomers;
+    }
+  } catch {}
+
+  // Catalog — seed with popular/recent items so barcode fallback has real data
+  try {
+    const catData = await apiGet('/api/items-search?q=');
+    if (catData && Array.isArray(catData.items) && catData.items.length > 0) {
+      catData.items.map(normaliseItem).forEach(it => lsCatalog.push(it));
+      window.MOCK_CATALOG = lsCatalog;
+    }
+  } catch {}
+}
 
 /* ── Utilities ── */
 function fmt$(n) {
@@ -514,13 +580,13 @@ function GlobalSearch({ onNavigate, onClose }) {
   const results = [];
   if (q.trim().length > 1) {
     const ql = q.toLowerCase();
-    MOCK_CUSTOMERS.filter(c => c.name.toLowerCase().includes(ql) || c.phone.includes(ql)).slice(0,3).forEach(c =>
+    lsCustomers.filter(c => c.name.toLowerCase().includes(ql) || (c.phone || '').includes(ql)).slice(0,3).forEach(c =>
       results.push({ type: 'customer', label: c.name, sub: c.phone, id: c.id, screen: 'customers' })
     );
-    MOCK_WO.filter(r => r.id.toLowerCase().includes(ql) || r.cust.toLowerCase().includes(ql) || r.bike.toLowerCase().includes(ql)).slice(0,3).forEach(r =>
+    lsWorkOrders.filter(r => (r.id || '').toLowerCase().includes(ql) || (r.cust || '').toLowerCase().includes(ql) || (r.bike || '').toLowerCase().includes(ql)).slice(0,3).forEach(r =>
       results.push({ type: 'workorder', label: r.id + ' - ' + r.cust, sub: r.bike, id: r.id, screen: 'work-orders' })
     );
-    MOCK_CATALOG.filter(it => it.name.toLowerCase().includes(ql) || it.sku.toLowerCase().includes(ql)).slice(0,3).forEach(it =>
+    lsCatalog.filter(it => it.name.toLowerCase().includes(ql) || it.sku.toLowerCase().includes(ql)).slice(0,3).forEach(it =>
       results.push({ type: 'item', label: it.name, sub: it.sku + ' - ' + fmt$(it.price), id: it.sku, screen: 'inventory' })
     );
   }
@@ -642,7 +708,13 @@ function LoginScreen({ onLogin }) {
 /* ─────────────────────────────────────────
    SIDEBAR
 ───────────────────────────────────────── */
-const WO_ACTIVE_COUNT = MOCK_WO.filter(wo => wo.status !== 'done' && wo.status !== 'ready' && wo.status !== 'booked').length;
+// WO_ACTIVE_COUNT is computed dynamically from lsWorkOrders at render time (see Sidebar below).
+// Kept as a getter so sibling modules that read window.WO_ACTIVE_COUNT get a fresh value.
+function getWoActiveCount() {
+  return lsWorkOrders.filter(wo => wo.status !== 'done' && wo.status !== 'ready' && wo.status !== 'booked').length;
+}
+// Legacy alias for any callers that expect a number (will be 0 until bootstrap completes).
+Object.defineProperty(window, 'WO_ACTIVE_COUNT', { get: getWoActiveCount, configurable: true });
 
 const NAV_MAIN = [
   { id: 'my-queue',    label: 'My Queue',    mobileLabel: 'Queue',   Icon: 'List',      count: null },
@@ -730,7 +802,7 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
   const activeNav = (screen === 'new-wo' || screen === 'wo-detail' || screen === 'wo-calendar') ? 'work-orders' : screen;
   const [moreOpen, setMoreOpen] = useState(false);
   const navItem = (n) => {
-    const count = n.id === 'work-orders' ? WO_ACTIVE_COUNT : n.count;
+    const count = n.id === 'work-orders' ? getWoActiveCount() : n.count;
     return h('a', {
       key: n.id,
       className: 'nav-item' + (activeNav === n.id ? ' active' : '') + (n.mobileHidden ? ' mobile-hidden' : ''),
@@ -2110,7 +2182,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
                   });
                   // Add bundled parts if any
                   if (p.parts && p.parts.length) {
-                    const catalog = window.MOCK_CATALOG || [];
+                    const catalog = window.lsCatalog || window.MOCK_CATALOG || [];
                     p.parts.forEach(part => {
                       const it = catalog.find(c => c.sku === part.sku);
                       addLine({
@@ -2498,26 +2570,15 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
    Simple month grid. Each cell shows WO dots coloured by status; click opens WO.
 ───────────────────────────────────────── */
 function WorkOrderCalendarScreen({ setScreen, onOpenWo }) {
-  const [wos, setWos] = useState(window.MOCK_WO || []);
+  // lsWorkOrders is already populated by bootstrapLiveData() (shared module-level array).
+  // Re-fetch on mount in case bootstrap hasn't finished yet or calendar was opened early.
+  const [wos, setWos] = useState(lsWorkOrders.length > 0 ? lsWorkOrders : []);
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
 
   useEffect(() => {
     apiGet('/api/workorders').then(data => {
       if (data && Array.isArray(data.workorders) && data.workorders.length > 0) {
-        setWos(data.workorders.map(w => {
-          if (w.cust) return w;
-          return {
-            id: w.workOrderID || w.id,
-            cust: [w.Contact?.firstName, w.Contact?.lastName].filter(Boolean).join(' ') || 'Unknown',
-            bike: w.itemDescription || '',
-            svc: w.note?.split('\n')[0] || 'Service',
-            due: w.timeDue || w.dateDue || w.timeIn || '',
-            dateDue: w.dateDue || (w.timeIn ? w.timeIn.slice(0,10) : ''),
-            status: (w.workOrderStatus || 'open').toLowerCase().replace(/\s+/g, ''),
-            mech: (w.Employee?.firstName?.[0] || '') + (w.Employee?.lastName?.[0] || '') || 'UN',
-            prio: !!w.priority,
-          };
-        }));
+        setWos(data.workorders.map(normaliseWo));
       }
     }).catch(() => {});
   }, []);
@@ -2766,8 +2827,10 @@ function NewWorkOrderScreen({ setScreen, pendingCustomer, onClearPending }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, []);
 
-  const suggestions = MOCK_CUSTOMERS.filter(c =>
-    !customer || c.name.toLowerCase().includes(customer.toLowerCase()) || c.phone.includes(customer)
+  // Use lsCustomers (live-loaded) for suggestions; filter client-side on what's cached.
+  // Live search is also done via /api/pos-customers?search= for longer queries.
+  const suggestions = lsCustomers.filter(c =>
+    !customer || c.name.toLowerCase().includes(customer.toLowerCase()) || (c.phone || '').includes(customer)
   ).slice(0, 6);
 
   function handleCreate() {
@@ -3688,9 +3751,9 @@ function CustomersScreen({ setScreen, onNewSale, onNewWo }) {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
 
-  const filtered = MOCK_CUSTOMERS.filter(function(c) {
+  const filtered = lsCustomers.filter(function(c) {
     const q = search.toLowerCase();
-    return !q || c.name.toLowerCase().includes(q) || c.phone.includes(q);
+    return !q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q);
   });
 
   return h(Fragment, null,
@@ -3815,13 +3878,13 @@ function InventoryScreen() {
   const [search, setSearch]   = useState('');
   const [selected, setSelected] = useState(null);
 
-  const filtered = MOCK_CATALOG.filter(function(c) {
+  const filtered = lsCatalog.filter(function(c) {
     const q = search.toLowerCase();
     return !q || c.name.toLowerCase().includes(q) || c.sku.toLowerCase().includes(q);
   });
 
   useBarcodeScanner(useCallback(function(code) {
-    const found = MOCK_CATALOG.find(function(c) { return c.sku === code; });
+    const found = lsCatalog.find(function(c) { return c.sku === code; });
     if (found) setSelected(found);
     else toast('Not found: ' + code, 'error');
   }, []));
@@ -4405,6 +4468,10 @@ function App() {
   const [saleCount, setSaleCount]     = useState(0);
   const topbarSearchRef = useRef(null);
 
+  // Bootstrap live data (WOs, customers, catalog) on first mount.
+  // Runs once; async — components see data fill in as fetches complete.
+  useEffect(function() { bootstrapLiveData(); }, []);
+
   // G→D sequence state
   const gSeqRef = useRef(null);
 
@@ -4512,9 +4579,18 @@ function App() {
 }
 
 /* ── Expose globals for sibling modules (shopfloor, myqueue, presets, etc.) ── */
+// MOCK_WO / MOCK_CATALOG / MOCK_CUSTOMERS are the same array refs as lsWorkOrders /
+// lsCatalog / lsCustomers — sibling modules that read window.MOCK_* get live data
+// once bootstrapLiveData() has run (called in App useEffect on mount).
 window.MOCK_WO        = MOCK_WO;
 window.MOCK_CATALOG   = MOCK_CATALOG;
 window.MOCK_CUSTOMERS = MOCK_CUSTOMERS;
+window.lsWorkOrders   = lsWorkOrders;
+window.lsCatalog      = lsCatalog;
+window.lsCustomers    = lsCustomers;
+window.normaliseWo       = normaliseWo;
+window.normaliseCustomer = normaliseCustomer;
+window.normaliseItem     = normaliseItem;
 window.WO_STATUSES    = WO_STATUSES;
 window.STAFF          = STAFF;
 window.MECHANICS      = MECHANICS;

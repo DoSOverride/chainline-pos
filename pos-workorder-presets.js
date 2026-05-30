@@ -92,7 +92,7 @@
 
   // Wait for React + the host app to be ready
   function init() {
-    if (!window.React || !window.MOCK_CATALOG) return setTimeout(init, 50);
+    if (!window.React || !window.apiGet) return setTimeout(init, 50);
 
     const { createElement: h, useState, useEffect, useMemo, useCallback, Fragment } = React;
 
@@ -146,7 +146,7 @@
       // Low-stock check for bundled parts
       const lowStockMap = useMemo(function() {
         const map = {};
-        const catalog = window.MOCK_CATALOG || [];
+        const catalog = window.lsCatalog || window.MOCK_CATALOG || [];
         function check(preset) {
           if (!preset.parts || preset.parts.length === 0) return false;
           return preset.parts.some(function(p) {
@@ -176,7 +176,7 @@
         onAddLine(labor);
 
         if (preset.parts && preset.parts.length) {
-          const catalog = window.MOCK_CATALOG || [];
+          const catalog = window.lsCatalog || window.MOCK_CATALOG || [];
           preset.parts.forEach(function(p) {
             const item = catalog.find(function(c) { return c.sku === p.sku; });
             onAddPart({

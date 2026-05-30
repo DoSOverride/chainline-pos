@@ -20,7 +20,7 @@
       const staff = props.staff || (window.__currentStaff) || null;
       const myInitials = staff && staff.initials;
 
-      const [wos, setWos] = useState(window.MOCK_WO || []);
+      const [wos, setWos] = useState(window.lsWorkOrders || window.MOCK_WO || []);
 
       useEffect(function() {
         if (window.apiGet) {

@@ -814,10 +814,10 @@
   function InventoryScreen({ staff, setScreen }) {
     const isManager = staff && (staff.role === 'Manager' || staff.role === 'Owner');
 
-    const [items, setItems] = useState(MOCK_ITEMS);
-    const [loading, setLoading] = useState(false);
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [offline, setOffline] = useState(false);
-    const [totalCount, setTotalCount] = useState(MOCK_ITEMS.length);
+    const [totalCount, setTotalCount] = useState(0);
 
     // Filters
     const [query, setQuery] = useState('');
@@ -878,9 +878,14 @@
       } finally {
         setLoading(false);
       }
-      // fall through to mock
-      setItems(MOCK_ITEMS);
-      setTotalCount(MOCK_ITEMS.length);
+      // fall through to cached catalog (lsCatalog from bootstrap) or empty
+      const fallback = (window.lsCatalog || window.MOCK_CATALOG || []).map(function(it) {
+        return { id: it.sku, sku: it.sku, customSku: '', name: it.name, brand: it.brand || '', dept: it.dept || '',
+          qty: it.stock || 0, reorderPt: 2, reorderQty: 6, price: it.price || 0, cost: it.cost || 0,
+          lastReceived: it.cost || 0, upc: it.upc || '', description: '', tags: [] };
+      });
+      setItems(fallback);
+      setTotalCount(fallback.length);
       setOffline(true);
     }, []);
 
