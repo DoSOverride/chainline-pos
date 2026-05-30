@@ -148,7 +148,7 @@ async function bootstrapLiveData() {
 
   // Catalog — seed with popular/recent items so barcode fallback has real data
   try {
-    const catData = await apiGet('/api/items-search?q=');
+    const catData = await apiGet('/api/items-search?q=tube');
     if (catData && Array.isArray(catData.items) && catData.items.length > 0) {
       catData.items.map(normaliseItem).forEach(it => lsCatalog.push(it));
       window.MOCK_CATALOG = lsCatalog;
