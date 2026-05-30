@@ -927,6 +927,7 @@ const NAV_TOOLS = [
   { id: 'messages',          label: 'Messages',        mobileLabel: 'SMS',     Icon: 'MessageBubble' },
   { id: 'bookings',         label: 'Bookings',        mobileLabel: 'Book',    Icon: 'Calendar' },
   { id: 'purchase-orders',  label: 'Purchase Orders', mobileLabel: 'POs',     Icon: 'Box'      },
+  { id: 'vendor-catalog',   label: 'Vendor Catalog',  mobileLabel: 'Vendors', Icon: 'Search'   },
   { id: 'reports',          label: 'Reports',         mobileLabel: 'Reports', Icon: 'Clock'    },
   { id: 'settings',         label: 'Settings',        mobileLabel: 'Settings', Icon: 'Dots'    },
 ];
@@ -5033,6 +5034,132 @@ function BookingsScreen({ setScreen }) {
       h('button', { className: 'btn primary', onClick: () => setScreen('work-orders') },
         h(Ico.Wrench, { size: 13 }), ' View Work Orders'
       )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────
+   SCREEN — VENDOR CATALOG
+───────────────────────────────────────── */
+function VendorCatalogScreen() {
+  var _vs  = useState([]);   var vendors = _vs[0];  var setVendors  = _vs[1];
+  var _sv  = useState(null); var selectedVendor = _sv[0]; var setSelectedVendor = _sv[1];
+  var _it  = useState([]);   var items   = _it[0];  var setItems    = _it[1];
+  var _sr  = useState('');   var search  = _sr[0];  var setSearch   = _sr[1];
+  var _ld  = useState(false);var loading = _ld[0];  var setLoading  = _ld[1];
+  var _tt  = useState(0);    var total   = _tt[0];  var setTotal    = _tt[1];
+  var _vl  = useState(true); var vendorsLoading = _vl[0]; var setVendorsLoading = _vl[1];
+  var searchTimer = useRef(null);
+
+  useEffect(function() {
+    apiGet('/api/pos-vendors-full')
+      .then(function(data) {
+        var arr = Array.isArray(data) ? data : [];
+        setVendors([{ vendorID: 'hlc', name: 'HLC (Highland Cycle)', itemCount: null }].concat(arr));
+        setVendorsLoading(false);
+      })
+      .catch(function() { setVendorsLoading(false); });
+  }, []);
+
+  useEffect(function() {
+    if (!selectedVendor) return;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(function() {
+      setLoading(true);
+      setItems([]);
+      var qs = search ? '&search=' + encodeURIComponent(search) : '';
+      apiGet('/api/pos-vendor-items?vendorID=' + selectedVendor.vendorID + qs + '&limit=100')
+        .then(function(data) {
+          setItems((data && data.items) || []);
+          setTotal((data && data.total) || 0);
+          setLoading(false);
+        })
+        .catch(function() { setLoading(false); });
+    }, search ? 350 : 0);
+    return function() { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [selectedVendor, search]);
+
+  function fmtP(n) { return n > 0 ? '$' + parseFloat(n).toFixed(2) : '—'; }
+
+  return h('div', { className: 'screen vendor-catalog' },
+    h(PageHead, { title: 'Vendor Catalog', sub: 'All suppliers & item search' }),
+
+    vendorsLoading
+      ? h('div', { className: 'vendor-chips' }, h('span', { style: { color: 'var(--text3)', fontSize: 12 } }, 'Loading vendors…'))
+      : h('div', { className: 'vendor-chips' },
+          vendors.map(function(v) {
+            var active = selectedVendor && selectedVendor.vendorID === v.vendorID;
+            return h('button', {
+              key: v.vendorID,
+              className: 'chip' + (active ? ' active' : ''),
+              onClick: function() { setSelectedVendor(v); setSearch(''); setItems([]); },
+            }, v.name, v.itemCount != null && h('span', { className: 'chip-count' }, v.itemCount));
+          })
+        ),
+
+    selectedVendor && h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '0 0 14px' } },
+      h('div', { style: { position: 'relative', flex: 1 } },
+        h('span', { style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' } }, h(Ico.Search, { size: 13 })),
+        h('input', { className: 'input', style: { paddingLeft: 30 }, placeholder: 'Search ' + selectedVendor.name + '…', value: search, onChange: function(e) { setSearch(e.target.value); } })
+      ),
+      !loading && items.length > 0 && h('span', { style: { fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap' } }, items.length + (total > items.length ? ' of ' + total : '') + ' items')
+    ),
+
+    !selectedVendor && !vendorsLoading && h('div', { style: { padding: '48px 0', textAlign: 'center', color: 'var(--text3)' } },
+      h('div', { style: { marginBottom: 8 } }, h(Ico.Box, { size: 28 })),
+      h('div', { style: { fontSize: 13 } }, 'Select a vendor above to browse their catalog')
+    ),
+
+    loading && h('div', { className: 'vendor-items' },
+      [1,2,3,4,5,6].map(function(i) {
+        return h('div', { key: i, className: 'vendor-item-card', style: { opacity: 0.35 } },
+          h('div', { style: { height: 14, background: 'var(--border)', borderRadius: 3, marginBottom: 6, width: '70%' } }),
+          h('div', { style: { height: 11, background: 'var(--border)', borderRadius: 3, width: '40%' } })
+        );
+      })
+    ),
+
+    !loading && selectedVendor && items.length === 0 && h('div', { style: { padding: '36px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 12 } },
+      search ? 'No results for "' + search + '"' : 'No items found for this vendor'
+    ),
+
+    !loading && items.length > 0 && h('div', { className: 'vendor-items' },
+      items.map(function(item) {
+        var inStock = item.qoh != null && item.qoh > 0;
+        var isHlc   = item.source === 'hlc';
+        var dk = (item.systemSku || '') + '|' + (item.customSku || '');
+        return h('div', { key: dk, className: 'vendor-item-card' },
+          h('div', { className: 'item-info' },
+            h('div', { className: 'item-name' }, item.description),
+            item.brand && h('div', { style: { fontSize: 10, color: 'var(--text3)', marginBottom: 2 } }, item.brand),
+            h('div', { className: 'item-sku mono' }, item.customSku || item.systemSku),
+            item.upc && h('div', { className: 'item-upc' }, 'UPC: ' + item.upc)
+          ),
+          h('div', { className: 'item-pricing' },
+            item.defaultCost > 0 && h('div', { className: 'vendor-price' }, 'Cost: ' + fmtP(item.defaultCost)),
+            h('div', { className: 'our-price' }, 'Price: ' + fmtP(item.price)),
+            h('div', { className: 'stock-badge ' + (item.qoh == null ? 'oos' : inStock ? 'in-stock' : 'oos') },
+              item.qoh == null ? (isHlc ? 'Check live' : '—') : inStock ? item.qoh + ' in stock' : 'Out of stock'
+            )
+          ),
+          h('div', { className: 'item-actions' },
+            h('button', {
+              className: 'btn-sm',
+              onClick: function() {
+                if (window.addItemToActiveSale) { window.addItemToActiveSale({ id: item.systemSku || item.customSku, name: item.description, sku: item.customSku || item.systemSku, price: item.price || 0, qty: 1, source: item.source || 'ls' }); toast('Added to sale'); }
+                else toast('Open a sale first');
+              },
+            }, '+ Sale'),
+            h('button', {
+              className: 'btn-sm',
+              onClick: function() {
+                if (window.addItemToActiveWO) { window.addItemToActiveWO({ id: item.systemSku || item.customSku, name: item.description, sku: item.customSku || item.systemSku, price: item.price || 0, cost: item.defaultCost || 0 }); toast('Added to WO'); }
+                else toast('Open a work order first');
+              },
+            }, '+ WO')
+          )
+        );
+      })
     )
   );
 }
