@@ -4140,6 +4140,8 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
               h('div', { className: 'name' },
                 i.name,
                 i.taxablePst === false && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--text3)', background: 'var(--bg3)', padding: '1px 5px' } }, 'PST-EXEMPT'),
+                i.specialOrder && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: '#fff', background: '#b45309', padding: '1px 5px' } }, i.source === 'hlc' ? 'HLC ORDER' : i.source === 'ogc' ? 'OGC ORDER' : 'SPECIAL ORDER'),
+                i.specialOrder && i.leadTime && h('span', { style: { marginLeft: 4, fontFamily: 'var(--mono)', fontSize: 9, color: '#b45309' } }, i.leadTime),
                 i.discount > 0 && h('span', { style: { marginLeft: 6, fontFamily: 'var(--mono)', fontSize: 9, letterSpacing: '.1em', textTransform: 'uppercase', color: '#fff', background: 'var(--accent)', padding: '1px 5px' } }, '-' + (i.discountType === 'pct' ? i.discount + '%' : '$' + i.discount))
               ),
               h('div', { className: 'sku' }, i.sku, i.upc ? ' \xb7 ' + i.upc : '')

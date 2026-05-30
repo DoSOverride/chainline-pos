@@ -638,6 +638,7 @@
     const [notes, setNotes] = useState(() => loadNotes(initialCustomer.id));
     const [noteInput, setNoteInput] = useState('');
     const [history, setHistory] = useState(MOCK_HISTORY[initialCustomer.id] || []);
+    const [expandedSaleId, setExpandedSaleId] = useState(null);
     const [workOrders, setWorkOrders] = useState(MOCK_WORKORDERS[initialCustomer.id] || []);
     const [consent, setConsent] = useState(false);
     const [contactEmail, setContactEmail] = useState(false);
@@ -691,7 +692,52 @@
         }
       }).catch(() => {});
 
-      /* Fetch workorders for this customer */
+      /* Fetch full customer data: richer sales with line items, bikes, all WOs */
+      apiFetch('/api/pos-customer/' + id + '/full').then(result => {
+        if (!result) return;
+        // Richer sales data (includes items per sale)
+        if (result.sales && Array.isArray(result.sales)) {
+          setHistory(result.sales.map(s => ({
+            id: 'S-' + s.id,
+            date: (s.date || '').slice(0, 10),
+            items: (s.items || []).map(l => l.qty + 'x ' + l.desc).join(', ') || 'Sale #' + s.id,
+            lineItems: s.items || [],
+            total: parseFloat(s.total || 0),
+            method: s.method || '',
+          })));
+        }
+        // Bikes extracted from purchase history
+        if (result.bikes && Array.isArray(result.bikes) && result.bikes.length > 0) {
+          setBikes(result.bikes.map((b, i) => ({
+            id: 'ls-' + i,
+            make: '',
+            model: b.desc,
+            serial: b.serial || '',
+            color: '',
+            year: b.purchaseDate ? new Date(b.purchaseDate).getFullYear() : '',
+            purchaseDate: (b.purchaseDate || '').slice(0, 10),
+            sku: b.sku,
+            saleId: b.saleId,
+            lastServiced: '',
+          })));
+        }
+        // All WOs (open + closed)
+        if (result.workOrders && Array.isArray(result.workOrders)) {
+          const mapped = result.workOrders.map(w => ({
+            id: 'WO-' + (w.workorderID || w.id),
+            workorderID: w.workorderID || w.id,
+            bike: w.bike || w.description || 'Unknown bike',
+            svc: w.svc || w.note || w.description || '',
+            due: w.timeIn ? fmtDate(w.timeIn) : '-',
+            status: w.status || 'open',
+            total: parseFloat(w.total || 0),
+            raw: w,
+          }));
+          if (mapped.length > 0) setWorkOrders(mapped);
+        }
+      }).catch(() => {});
+
+      /* Fallback: also search KV workorders by customer name */
       const cname = (initialCustomer.firstName || '') + ' ' + (initialCustomer.lastName || '');
       apiFetch('/api/workorders?q=' + encodeURIComponent(cname.trim())).then(result => {
         if (result && result.workorders) {
@@ -705,7 +751,12 @@
             total: parseFloat(w.total || 0),
             raw: w,
           }));
-          if (mapped.length > 0) setWorkOrders(mapped);
+          // Merge: add KV-backed WOs not already present
+          setWorkOrders(prev => {
+            const ids = new Set(prev.map(w => w.id));
+            const added = mapped.filter(w => !ids.has(w.id));
+            return added.length > 0 ? [...prev, ...added] : prev;
+          });
         }
       }).catch(() => {});
     }, [initialCustomer.id]);
@@ -752,11 +803,14 @@
     const salesCount = (customer.salesCount != null ? customer.salesCount : history.length);
     const woCount    = (customer.woCount != null ? customer.woCount : workOrders.length);
 
+    const bikesCount = bikes.filter(b => b.id.startsWith('ls-') || b.id.startsWith('b')).length;
+
     const TOP_TABS = [
       { id: 'details',       label: 'Details',    icon: I.User },
       { id: 'items',         label: 'Items',      icon: I.List,   count: itemsCount },
       { id: 'sales',         label: 'Sales',      icon: I.Cart,   count: salesCount },
       { id: 'workorders',    label: 'Workorders', icon: I.Wrench, count: woCount },
+      { id: 'bikes',         label: 'Bikes',      icon: I.Bike,   count: bikesCount || null },
       { id: 'account',       label: 'Account',    icon: I.Dollar },
       { id: 'merge',         label: 'Merge',      icon: I.Merge },
     ];
@@ -1143,22 +1197,61 @@
                         )
                       ),
                       h('tbody', null,
-                        history.map(sale =>
-                          h('tr', { key: sale.id },
-                            h('td', { className: 'num', style: { fontWeight: 600, fontSize: 12 } }, sale.id),
-                            h('td', { style: { fontSize: 12, color: 'var(--text-2)' } }, fmtDate(sale.date)),
-                            h('td', { style: { fontSize: 12, maxWidth: 280 } }, sale.items),
-                            h('td', { style: { fontSize: 11, fontFamily: 'var(--font-mono)' } }, sale.method),
-                            h('td', { className: 'num', style: { textAlign: 'right', fontWeight: 600 } }, fmt$(sale.total)),
-                            h('td', null,
-                              h('button', {
-                                className: 'btn ghost',
-                                style: { height: 24, padding: '0 8px', fontSize: 11 },
-                                onClick: () => window._posToast && window._posToast('Reprinting ' + sale.id, 'success'),
-                              }, 'Reprint')
+                        history.flatMap(sale => {
+                          const expanded = expandedSaleId === sale.id;
+                          const hasLines = sale.lineItems && sale.lineItems.length > 0;
+                          const rows = [
+                            h('tr', {
+                              key: sale.id,
+                              style: { cursor: hasLines ? 'pointer' : 'default', background: expanded ? 'var(--bg-2)' : '' },
+                              onClick: () => hasLines && setExpandedSaleId(expanded ? null : sale.id),
+                            },
+                              h('td', { className: 'num', style: { fontWeight: 600, fontSize: 12 } },
+                                hasLines && h('span', { style: { marginRight: 4, color: 'var(--text-3)', fontSize: 10 } }, expanded ? '▼' : '▶'),
+                                sale.id
+                              ),
+                              h('td', { style: { fontSize: 12, color: 'var(--text-2)' } }, fmtDate(sale.date)),
+                              h('td', { style: { fontSize: 12, maxWidth: 280, color: 'var(--text-2)' } }, sale.items),
+                              h('td', { style: { fontSize: 11, fontFamily: 'var(--font-mono)' } }, sale.method),
+                              h('td', { className: 'num', style: { textAlign: 'right', fontWeight: 600 } }, fmt$(sale.total)),
+                              h('td', null,
+                                h('button', {
+                                  className: 'btn ghost',
+                                  style: { height: 24, padding: '0 8px', fontSize: 11 },
+                                  onClick: e => { e.stopPropagation(); window._posToast && window._posToast('Reprinting ' + sale.id, 'success'); },
+                                }, 'Reprint')
+                              )
                             )
-                          )
-                        )
+                          ];
+                          if (expanded && hasLines) {
+                            rows.push(h('tr', { key: sale.id + '-lines', style: { background: 'var(--bg-2)' } },
+                              h('td', { colSpan: 6, style: { padding: '0 16px 12px 32px' } },
+                                h('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } },
+                                  h('thead', null,
+                                    h('tr', null,
+                                      h('th', { style: { textAlign: 'left', padding: '4px 8px', color: 'var(--text-3)', fontWeight: 500, fontSize: 11 } }, 'Qty'),
+                                      h('th', { style: { textAlign: 'left', padding: '4px 8px', color: 'var(--text-3)', fontWeight: 500, fontSize: 11 } }, 'Description'),
+                                      h('th', { style: { textAlign: 'right', padding: '4px 8px', color: 'var(--text-3)', fontWeight: 500, fontSize: 11 } }, 'Unit'),
+                                    )
+                                  ),
+                                  h('tbody', null,
+                                    sale.lineItems.map((li, j) =>
+                                      h('tr', { key: j },
+                                        h('td', { style: { padding: '3px 8px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } }, li.qty),
+                                        h('td', { style: { padding: '3px 8px' } },
+                                          li.desc,
+                                          li.isBike && h('span', { style: { marginLeft: 6, fontSize: 10, color: '#22c55e', fontWeight: 600 } }, 'BIKE')
+                                        ),
+                                        h('td', { style: { padding: '3px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)' } }, li.price ? fmt$(li.price) : ''),
+                                      )
+                                    )
+                                  )
+                                )
+                              )
+                            ));
+                          }
+                          return rows;
+                        })
                       )
                     )
                   )
@@ -1170,6 +1263,50 @@
                 ? h(window.CustomerItemsTab, { customerId: customer.id })
                 : h('div', { style: { padding: '40px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 } },
                     'Items module not loaded')
+            ),
+
+            /* ── BIKES TAB — bikes purchased / on file ── */
+            leftNav === 'bikes' && h('div', { style: { padding: '20px 24px' } },
+              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 } },
+                h('div', { style: { fontSize: 14, fontWeight: 600 } }, 'Bikes on File'),
+                h('div', { style: { fontSize: 12, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' } },
+                  'From purchase history · Lightspeed')
+              ),
+              bikes.length === 0
+                ? h('div', { style: { padding: '40px 0', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 } },
+                    'No bikes found in purchase history')
+                : h('div', { style: { border: '1px solid var(--line)', overflowX: 'auto' } },
+                    h('table', { className: 'tbl' },
+                      h('thead', null,
+                        h('tr', null,
+                          h('th', null, 'Bike'),
+                          h('th', { style: { width: 120 } }, 'SKU'),
+                          h('th', { style: { width: 110 } }, 'Serial #'),
+                          h('th', { style: { width: 100 } }, 'Purchased'),
+                          h('th', { style: { width: 90 } }, 'Last Service'),
+                        )
+                      ),
+                      h('tbody', null,
+                        bikes.map((b, i) =>
+                          h('tr', { key: b.id || i },
+                            h('td', null,
+                              h('div', { style: { fontWeight: 600, fontSize: 13 } },
+                                [b.year, b.make, b.model].filter(Boolean).join(' ') || b.model || 'Unknown bike'),
+                              b.color && h('div', { style: { fontSize: 11, color: 'var(--text-3)' } }, b.color)
+                            ),
+                            h('td', { style: { fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-2)' } }, b.sku || '—'),
+                            h('td', { style: { fontSize: 12, fontFamily: 'var(--font-mono)' } }, b.serial || '—'),
+                            h('td', { style: { fontSize: 12, color: 'var(--text-2)' } }, b.purchaseDate ? fmtDate(b.purchaseDate) : '—'),
+                            h('td', { style: { fontSize: 12 } },
+                              b.lastServiced
+                                ? h('span', { style: { color: 'var(--text-2)' } }, fmtDate(b.lastServiced))
+                                : h('span', { style: { color: 'var(--text-3)' } }, 'None on record')
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
             ),
 
             /* ── ACCOUNT TAB ── */
