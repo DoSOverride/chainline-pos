@@ -2938,6 +2938,9 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
   // Initial load
   useEffect(() => { fetchWos(); }, []);
 
+  // Reset visible count when filter changes
+  useEffect(() => { setVisibleCount(50); }, [tab, search]);
+
   // Refetch when a new WO is created elsewhere (NewWorkOrderScreen dispatches this)
   useEffect(() => {
     function onWoCreated() { fetchWos(); }
@@ -2984,6 +2987,9 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
     if (!b.dateDue) return -1;
     return a.dateDue < b.dateDue ? -1 : a.dateDue > b.dateDue ? 1 : 0;
   });
+
+  const visibleWos = sorted.slice(0, visibleCount);
+  const hasMore = sorted.length > visibleCount;
 
   const slow = useLoadTimeout(loading, 10000);
   const ptr = usePullToRefresh(fetchWos);
@@ -3143,11 +3149,11 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                   h('button', {
                     className: 'btn',
                     style: { fontSize: 11 },
-                    onClick: () => { setTab('all'); setSearch(''); },
+                    onClick: () => { setTab('all'); setSearch(''); setVisibleCount(50); },
                   }, 'Clear filters')
                 )
               )
-            : sorted.map(r =>
+            : visibleWos.map(r =>
                 h('tr', { key: r.id, style: { cursor: 'pointer' }, onClick: () => openWo(r) },
                   h('td', null,
                     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
@@ -3256,6 +3262,17 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                   )
                 )
               )
+        ),
+        hasMore && !loading && h('tbody', null,
+          h('tr', null,
+            h('td', { colSpan: 9, style: { textAlign: 'center', padding: '12px 0', borderTop: '1px solid var(--line)' } },
+              h('button', {
+                className: 'btn ghost',
+                style: { fontSize: 11 },
+                onClick: () => setVisibleCount(c => c + 50),
+              }, 'Show more (' + (sorted.length - visibleCount) + ' remaining)')
+            )
+          )
         )
       )
     ),
@@ -3264,8 +3281,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
       className: 'row',
       style: { justifyContent: 'space-between', marginTop: 12, color: 'var(--text-2)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' },
     },
-      h('span', null, 'Showing ' + filtered.length + ' of ' + wos.length),
-      h('span', null, 'Page 1 / 1')
+      h('span', null, 'Showing ' + Math.min(visibleCount, sorted.length) + ' of ' + sorted.length + (sorted.length < wos.length ? ' (filtered)' : '')),
+      !hasMore && sorted.length < wos.length && h('span', null, wos.length + ' total')
     ),
 
   );
@@ -5151,73 +5168,405 @@ function SettingsScreen() {
   }
 
   const STABS = [
-    { id: 'general', label: 'General' }, { id: 'staff', label: 'Staff' },
-    { id: 'payment', label: 'Payment Types' }, { id: 'tax', label: 'Tax Classes' },
-    { id: 'receipt', label: 'Receipt' }, { id: 'services', label: 'Services' },
-    { id: 'customers', label: 'Customer Types' }, { id: 'barcode', label: 'Barcode' },
+    { id: 'general',      label: 'General' },
+    { id: 'staff',        label: 'Staff' },
+    { id: 'payment',      label: 'Payment' },
+    { id: 'tax',          label: 'Tax' },
+    { id: 'receipt',      label: 'Receipt' },
+    { id: 'printer',      label: 'Printer' },
+    { id: 'display',      label: 'Display' },
+    { id: 'integrations', label: 'Integrations' },
+    { id: 'services',     label: 'Services' },
+    { id: 'customers',    label: 'Customer Types' },
+    { id: 'barcode',      label: 'Barcode' },
+    { id: 'backup',       label: 'Backup & Export' },
   ];
+
+  // ── Printer tab state
+  const [testPrintResult, setTestPrintResult] = useState('');
+  // ── Integrations tab state
+  const [intSyncStatus, setIntSyncStatus] = useState({ ls: null, shopify: null });
+
+  function doTestPrint(type) {
+    if (type === 'receipt') {
+      const w = window.open('', '_blank', 'width=400,height=600');
+      w.document.write('<html><head><title>Test Receipt</title><style>body{font-family:monospace;padding:16px;}</style></head><body>');
+      w.document.write('<pre>' + settings.receiptHeader + '\n\n--- TEST RECEIPT ---\nDate: ' + new Date().toLocaleDateString() + '\nItem: Test Item  $0.00\n\nGST: $0.00\nTotal: $0.00\n\n' + settings.receiptFooter + '</pre>');
+      w.document.write('</body></html>');
+      w.document.close();
+      w.print();
+      setTestPrintResult('Receipt print dialog opened');
+    } else if (type === 'label') {
+      setTestPrintResult('^XA\n^FO50,50^ADN,36,20^FDHook #A1^FS\n^FO50,100^ADN,24,14^FDTest Bike^FS\n^XZ');
+    }
+  }
+
+  function doSyncNow(system) {
+    setIntSyncStatus(function(s) { return Object.assign({}, s, { [system]: 'syncing' }); });
+    var req = system === 'ls' ? window.apiPost('/api/sync/lightspeed', {}) : window.apiPost('/api/sync/shopify', {});
+    req.then(function() {
+      setIntSyncStatus(function(s) { return Object.assign({}, s, { [system]: 'ok' }); });
+      toast('Sync complete', 'success');
+    }).catch(function() {
+      setIntSyncStatus(function(s) { return Object.assign({}, s, { [system]: 'error' }); });
+      toast('Sync failed', 'error');
+    });
+  }
+
+  function doExportWosCsv() {
+    var wos = window.lsWorkOrders || window.MOCK_WO || [];
+    var rows = [['ID','Customer','Bike','Status','Mechanic','Due','Priority']].concat(
+      wos.map(function(w) { return [w.id, w.cust, w.bike, w.status, w.mech, w.due, w.prio ? 'Yes' : 'No']; })
+    );
+    var csv = rows.map(function(r) { return r.map(function(c) { return '"' + String(c || '').replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+    var a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'chainline-workorders-' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+    toast('Work orders exported', 'success');
+  }
+
+  function doExportSalesCsv() {
+    toast('Sales export: connect to Lightspeed API for live data', 'info');
+  }
+
+  function doPrintDailyReport() {
+    var w = window.open('', '_blank', 'width=700,height=900');
+    var today = new Date().toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    var wos = window.lsWorkOrders || window.MOCK_WO || [];
+    var open = wos.filter(function(wo) { return wo.status !== 'finished' && wo.status !== 'cancelled'; }).length;
+    var done = wos.filter(function(wo) { return wo.status === 'finished'; }).length;
+    w.document.write('<html><head><title>Daily Report</title><style>body{font-family:sans-serif;padding:24px;max-width:600px;}h1{font-size:18px;}table{border-collapse:collapse;width:100%;}td,th{border:1px solid #ccc;padding:6px 10px;font-size:12px;}@media print{button{display:none;}}</style></head><body>');
+    w.document.write('<h1>ChainLine Daily Report — ' + today + '</h1>');
+    w.document.write('<p>Open WOs: <b>' + open + '</b> &nbsp; Done: <b>' + done + '</b></p>');
+    w.document.write('<table><tr><th>ID</th><th>Customer</th><th>Bike</th><th>Status</th><th>Mechanic</th></tr>');
+    wos.forEach(function(wo) {
+      w.document.write('<tr><td>' + (wo.id||'') + '</td><td>' + (wo.cust||'') + '</td><td>' + (wo.bike||'') + '</td><td>' + (wo.status||'') + '</td><td>' + (wo.mech||'') + '</td></tr>');
+    });
+    w.document.write('</table><br><button onclick="window.print()">Print</button></body></html>');
+    w.document.close();
+    toast('Daily report opened', 'success');
+  }
+
+  function StatusDot(props) {
+    var color = props.ok ? '#34d399' : props.error ? '#f87171' : props.busy ? '#fbbf24' : '#6b7280';
+    var label = props.ok ? 'Connected' : props.error ? 'Error' : props.busy ? 'Syncing…' : 'Unknown';
+    return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+      h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 } }),
+      h('span', { style: { fontSize: 12, color: color } }, label)
+    );
+  }
 
   return h(Fragment, null,
     h(PageHead, { title: 'Settings', sub: 'Configuration' }),
-    h('div', { className: 'sub-tabs', style: { marginBottom: 16 } },
+    h('div', { className: 'sub-tabs', style: { marginBottom: 16, flexWrap: 'wrap' } },
       STABS.map(function(t) {
         return h('button', { key: t.id, className: 'sub-tab' + (tab === t.id ? ' active' : ''), onClick: function() { setTab(t.id); } }, t.label);
       })
     ),
     h('div', { className: 'card' },
+
+      /* ── GENERAL ── */
       tab === 'general' && h('div', { style: { padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
         h(Field, { label: 'Shop Name' }, h('input', { className: 'input', value: settings.shopName, onChange: function(e) { save({ shopName: e.target.value }); } })),
         h(Field, { label: 'Phone' },     h('input', { className: 'input mono', value: settings.phone,    onChange: function(e) { save({ phone: e.target.value }); } })),
         h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Address' }, h('input', { className: 'input', value: settings.address, onChange: function(e) { save({ address: e.target.value }); } }))),
         h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Email' },   h('input', { className: 'input mono', type: 'email', value: settings.email, onChange: function(e) { save({ email: e.target.value }); } }))),
         h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'API PIN', sub: 'Staff PIN for worker API auth. Must match POS_PIN worker secret. Stored in localStorage only.' },
-          h('input', { className: 'input mono', type: 'password', placeholder: '••••', autocomplete: 'off',
+          h('input', { className: 'input mono', type: 'password', placeholder: '••••', autoComplete: 'off',
             defaultValue: (function() { try { return localStorage.getItem('pos-api-pin') || ''; } catch { return ''; } })(),
             onChange: function(e) {
               try { localStorage.setItem('pos-api-pin', e.target.value); } catch {}
               toast('API PIN updated', 'success');
             }
           })
-        ))
+        )),
+        h('div', { style: { gridColumn: '1/-1' } },
+          h('div', { className: 'panel-section-head', style: { marginBottom: 8 } }, 'Tax Rates'),
+          h('div', { style: { display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' } },
+            h(Field, { label: 'GST %' }, h('input', { className: 'input mono', type: 'number', min: 0, max: 25, step: 0.5,
+              value: (settings.taxes.find(function(t) { return t.id === 1; }) || {}).rate || 5,
+              onChange: function(e) { save({ taxes: settings.taxes.map(function(t) { return t.id === 1 ? Object.assign({}, t, { rate: parseFloat(e.target.value) || 5 }) : t; }) }); },
+              style: { width: 80 }
+            })),
+            h(Field, { label: 'PST %' }, h('input', { className: 'input mono', type: 'number', min: 0, max: 25, step: 0.5,
+              value: (settings.taxes.find(function(t) { return t.id === 2; }) || {}).rate || 7,
+              onChange: function(e) { save({ taxes: settings.taxes.map(function(t) { return t.id === 2 ? Object.assign({}, t, { rate: parseFloat(e.target.value) || 7 }) : t; }) }); },
+              style: { width: 80 }
+            })),
+            h(Field, { label: 'GST Number' }, h('input', { className: 'input mono', value: settings.gst || '',
+              onChange: function(e) { save({ gst: e.target.value }); },
+              style: { width: 200 }
+            }))
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text3)', marginTop: 4 } },
+            'PST exemptions: bikes, parts, helmets, bike lights (managed via Shopify tax overrides)'
+          )
+        )
       ),
+
+      /* ── STAFF ── */
       tab === 'staff' && h('div', { style: { padding: 18 } },
+        h('div', { className: 'panel-section-head', style: { marginBottom: 12 } }, 'Staff Members'),
         staffList.map(function(s, i) {
-          return h('div', { key: s.id, className: 'aside-row', style: { gap: 10 } },
+          return h('div', { key: s.id, className: 'aside-row', style: { gap: 10, padding: '8px 0', borderBottom: '1px solid var(--line2)' } },
             h(AvInit, { initials: s.initials, tone: s.tone }),
-            h('span', { style: { flex: 1, marginLeft: 8 } }, s.name),
+            h('div', { style: { flex: 1, marginLeft: 8 } },
+              h('div', { style: { fontWeight: 500 } }, s.name),
+              h('div', { style: { fontSize: 11, color: 'var(--text2)' } }, s.role)
+            ),
             h(Badge, { kind: s.role === 'Owner' ? 'inprogress' : s.role === 'Manager' ? 'booked' : 'open' }, s.role),
-            h(Toggle, { on: s.active, onChange: function(v) { setStaffList(function(ls) { return ls.map(function(x,ii) { return ii===i ? Object.assign({},x,{active:v}) : x; }); }); } }),
-            h('button', { className: 'btn ghost', style: { height: 24, padding: '0 8px', fontSize: 11 }, onClick: function() { toast('PIN change: coming soon'); } }, 'Change PIN')
+            h(Toggle, {
+              on: s.active,
+              onChange: function(v) {
+                setStaffList(function(ls) { return ls.map(function(x, ii) { return ii === i ? Object.assign({}, x, { active: v }) : x; }); });
+              }
+            }),
+            h('button', {
+              className: 'btn ghost',
+              style: { height: 26, padding: '0 10px', fontSize: 11 },
+              onClick: function() {
+                var pin = window.prompt('New PIN for ' + s.name + ' (4 digits):');
+                if (pin && /^\d{4}$/.test(pin)) {
+                  setStaffList(function(ls) { return ls.map(function(x, ii) { return ii === i ? Object.assign({}, x, { pin: pin }) : x; }); });
+                  toast('PIN updated for ' + s.name, 'success');
+                } else if (pin !== null) {
+                  toast('PIN must be 4 digits', 'error');
+                }
+              }
+            }, 'Change PIN')
           );
-        })
+        }),
+        h('div', { style: { marginTop: 16 } },
+          h('button', {
+            className: 'btn primary',
+            onClick: function() {
+              var name = window.prompt('New staff member name:');
+              if (!name || !name.trim()) return;
+              var pin = window.prompt('PIN (4 digits):');
+              if (!pin || !/^\d{4}$/.test(pin)) { toast('PIN must be 4 digits', 'error'); return; }
+              var role = window.prompt('Role (Mechanic / Manager / Owner / Warranty):') || 'Mechanic';
+              var initials = name.trim().split(' ').map(function(p) { return p[0] || ''; }).join('').toUpperCase().slice(0,2);
+              var newStaff = { id: Date.now(), name: name.trim(), initials: initials, role: role, tone: initials.toLowerCase(), pin: pin, active: true };
+              setStaffList(function(ls) { return ls.concat([newStaff]); });
+              toast('Added ' + name, 'success');
+            }
+          }, '+ Add Staff')
+        )
       ),
+
+      /* ── PAYMENT ── */
       tab === 'payment' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
         Object.entries(settings.paymentTypes).map(function(entry) {
-          const k = entry[0], v = entry[1];
-          const label = k === 'cash' ? 'Cash' : k === 'card' ? 'Card / Tap' : k === 'giftcard' ? 'Gift Card' : 'Store Credit';
+          var k = entry[0], v = entry[1];
+          var label = k === 'cash' ? 'Cash' : k === 'card' ? 'Card / Tap' : k === 'giftcard' ? 'Gift Card' : 'Store Credit';
           return h(Toggle, { key: k, on: v, onChange: function(val) {
-            const pt = Object.assign({}, settings.paymentTypes);
+            var pt = Object.assign({}, settings.paymentTypes);
             pt[k] = val;
             save({ paymentTypes: pt });
           }, label: label });
         })
       ),
+
+      /* ── TAX ── */
       tab === 'tax' && h('div', { style: { padding: 18 } },
         settings.taxes.map(function(t, i) {
           return h('div', { key: t.id, className: 'aside-row' },
             h('span', { style: { flex: 1 } }, t.name + ' ' + t.rate + '%'),
             h(Toggle, { on: t.active, onChange: function(v) {
-              save({ taxes: settings.taxes.map(function(x,ii) { return ii===i ? Object.assign({},x,{active:v}) : x; }) });
+              save({ taxes: settings.taxes.map(function(x, ii) { return ii === i ? Object.assign({}, x, { active: v }) : x; }) });
             }})
           );
         })
       ),
+
+      /* ── RECEIPT ── */
       tab === 'receipt' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
         h(Field, { label: 'Header Text' }, h('textarea', { className: 'textarea', rows: 2, value: settings.receiptHeader, onChange: function(e) { save({ receiptHeader: e.target.value }); } })),
         h(Field, { label: 'Footer Text' }, h('textarea', { className: 'textarea', rows: 2, value: settings.receiptFooter, onChange: function(e) { save({ receiptFooter: e.target.value }); } })),
         h(Toggle, { on: settings.showTaxLine,   onChange: function(v) { save({ showTaxLine: v }); },   label: 'Show tax breakdown on receipt' }),
         h(Toggle, { on: settings.showStaffName, onChange: function(v) { save({ showStaffName: v }); }, label: 'Show staff name on receipt' })
       ),
+
+      /* ── PRINTER ── */
+      tab === 'printer' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 20 } },
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Receipt Printer'),
+          h('div', { style: { fontSize: 12, color: 'var(--text2)', marginBottom: 10 } },
+            'Uses browser window.print() — works with any AirPrint or USB receipt printer set as default.'
+          ),
+          h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+            h('button', { className: 'btn', onClick: function() { doTestPrint('receipt'); } }, 'Test Print Receipt'),
+            testPrintResult && !testPrintResult.startsWith('^XA') && h('span', { style: { fontSize: 11, color: 'var(--text2)', fontFamily: 'var(--mono)' } }, testPrintResult)
+          )
+        ),
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Label Printer (ZPL)'),
+          h('div', { style: { fontSize: 12, color: 'var(--text2)', marginBottom: 10 } },
+            'Zebra ZPL template for hook labels. Send via raw socket or Zebra Browser Print app.'
+          ),
+          h(Field, { label: 'ZPL Template', hint: 'Variables: {{hookId}} {{customer}} {{bike}} {{date}}' },
+            h('textarea', {
+              className: 'textarea', rows: 5,
+              style: { fontFamily: 'var(--mono)', fontSize: 11 },
+              value: settings.zplTemplate || '^XA\n^FO20,20^ADN,36,20^FD{{hookId}}^FS\n^FO20,70^ADN,24,14^FD{{customer}}^FS\n^FO20,100^ADN,20,12^FD{{bike}}^FS\n^FO20,130^ADN,18,10^FD{{date}}^FS\n^XZ',
+              onChange: function(e) { save({ zplTemplate: e.target.value }); }
+            })
+          ),
+          h('button', { className: 'btn', onClick: function() { doTestPrint('label'); } }, 'Preview ZPL'),
+          testPrintResult && testPrintResult.startsWith('^XA') && h('pre', {
+            style: { marginTop: 8, padding: 10, background: 'var(--bg)', border: '1px solid var(--line)', fontSize: 11, fontFamily: 'var(--mono)', overflowX: 'auto' }
+          }, testPrintResult)
+        )
+      ),
+
+      /* ── DISPLAY ── */
+      tab === 'display' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 16 } },
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Appearance'),
+          h(Field, { label: 'Theme' },
+            h('select', {
+              className: 'input',
+              style: { width: 200 },
+              value: settings.theme || 'dark',
+              onChange: function(e) {
+                save({ theme: e.target.value });
+                document.documentElement.setAttribute('data-theme', e.target.value);
+              }
+            },
+              h('option', { value: 'dark' }, 'Dark'),
+              h('option', { value: 'light' }, 'Light'),
+              h('option', { value: 'auto' }, 'Auto (system)')
+            )
+          )
+        ),
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Locale & Format'),
+          h(Field, { label: 'Currency Display' },
+            h('select', {
+              className: 'input', style: { width: 200 },
+              value: settings.currency || 'CAD',
+              onChange: function(e) { save({ currency: e.target.value }); }
+            },
+              h('option', { value: 'CAD' }, 'CAD — Canadian Dollar'),
+              h('option', { value: 'USD' }, 'USD — US Dollar')
+            )
+          ),
+          h(Field, { label: 'Date Format' },
+            h('select', {
+              className: 'input', style: { width: 200 },
+              value: settings.dateFormat || 'DD/MM',
+              onChange: function(e) { save({ dateFormat: e.target.value }); }
+            },
+              h('option', { value: 'DD/MM' }, 'DD/MM/YYYY'),
+              h('option', { value: 'MM/DD' }, 'MM/DD/YYYY'),
+              h('option', { value: 'YYYY-MM-DD' }, 'YYYY-MM-DD (ISO)')
+            )
+          )
+        ),
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Floor View'),
+          h(Toggle, {
+            on: settings.floorShowPricing !== false,
+            onChange: function(v) { save({ floorShowPricing: v }); },
+            label: 'Show pricing on floor / kanban cards'
+          }),
+          h(Toggle, {
+            on: settings.floorShowPhone !== false,
+            onChange: function(v) { save({ floorShowPhone: v }); },
+            label: 'Show customer phone number on cards'
+          })
+        )
+      ),
+
+      /* ── INTEGRATIONS ── */
+      tab === 'integrations' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 20 } },
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+            h('span', { style: { fontWeight: 600 } }, 'Lightspeed'),
+            h(StatusDot, { ok: intSyncStatus.ls === 'ok', error: intSyncStatus.ls === 'error', busy: intSyncStatus.ls === 'syncing' })
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 10 } },
+            'POS system. WOs, customers and catalog sync via the worker /api/ endpoints.'
+          ),
+          h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+            h('button', { className: 'btn', onClick: function() { doSyncNow('ls'); } },
+              intSyncStatus.ls === 'syncing' ? '⟳ Syncing…' : '↻ Sync Now'
+            ),
+            h('button', { className: 'btn ghost', onClick: function() {
+              window.apiGet('/api/workorders').then(function(d) {
+                setIntSyncStatus(function(s) { return Object.assign({}, s, { ls: 'ok' }); });
+                toast('Lightspeed reachable — ' + ((d && d.workorders && d.workorders.length) || 0) + ' WOs', 'success');
+              }).catch(function() {
+                setIntSyncStatus(function(s) { return Object.assign({}, s, { ls: 'error' }); });
+                toast('Lightspeed unreachable', 'error');
+              });
+            }}, 'Test Connection')
+          )
+        ),
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+            h('span', { style: { fontWeight: 600 } }, 'Shopify'),
+            h(StatusDot, { ok: intSyncStatus.shopify === 'ok', error: intSyncStatus.shopify === 'error', busy: intSyncStatus.shopify === 'syncing' })
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 10 } },
+            'Online store. HLC dropship + tax override collections sync nightly via GH Actions.'
+          ),
+          h('button', { className: 'btn', onClick: function() { doSyncNow('shopify'); } },
+            intSyncStatus.shopify === 'syncing' ? '⟳ Syncing…' : '↻ Trigger Sync'
+          )
+        ),
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+            h('span', { style: { fontWeight: 600 } }, 'RingCentral (SMS)'),
+            h('span', { style: { fontSize: 11, color: settings.ringcentralToken ? '#34d399' : '#9ca3af' } },
+              settings.ringcentralToken ? '● Configured' : '○ Not configured'
+            )
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 10 } },
+            'Used for "WO Ready" SMS notifications to customers.'
+          ),
+          h(Field, { label: 'JWT Token' },
+            h('input', {
+              className: 'input mono', type: 'password', placeholder: 'rc_jwt_…',
+              value: settings.ringcentralToken || '',
+              onChange: function(e) { save({ ringcentralToken: e.target.value }); }
+            })
+          ),
+          h('button', { className: 'btn ghost', style: { marginTop: 6 }, onClick: function() {
+            if (!settings.ringcentralToken) { toast('Enter JWT token first', 'error'); return; }
+            window.apiPost('/api/sms/test', { message: 'ChainLine POS test SMS — ignore.' })
+              .then(function() { toast('Test SMS sent', 'success'); })
+              .catch(function() { toast('SMS failed — check token', 'error'); });
+          }}, 'Send Test SMS')
+        ),
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+            h('span', { style: { fontWeight: 600 } }, 'Stripe Terminal'),
+            h('span', { style: { fontSize: 11, color: settings.stripeKey ? '#34d399' : '#9ca3af' } },
+              settings.stripeKey ? '● Configured' : '○ Not configured'
+            )
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 10 } },
+            'Card reader payments. STRIPE_SECRET_KEY must also be set as a CF Worker secret.'
+          ),
+          h(Field, { label: 'Secret Key' },
+            h('input', {
+              className: 'input mono', type: 'password', placeholder: 'sk_live_…',
+              value: settings.stripeKey || '',
+              onChange: function(e) { save({ stripeKey: e.target.value }); }
+            })
+          ),
+          h('button', { className: 'btn ghost', style: { marginTop: 6 }, onClick: function() {
+            if (!settings.stripeKey) { toast('Enter Stripe key first', 'error'); return; }
+            window.apiPost('/api/stripe/test', {})
+              .then(function() { toast('Stripe connection OK', 'success'); })
+              .catch(function() { toast('Stripe test failed', 'error'); });
+          }}, 'Test Payment')
+        )
+      ),
+
+      /* ── SERVICES ── */
       tab === 'services' && h('div', { style: { padding: 18 } },
         h('div', { className: 'panel-section-head', style: { marginBottom: 8 } }, 'Work Order Statuses'),
         settings.customStatuses.map(function(s, i) {
@@ -5240,6 +5589,8 @@ function SettingsScreen() {
           }}, h(Ico.Plus, { size: 12 }))
         )
       ),
+
+      /* ── CUSTOMERS ── */
       tab === 'customers' && h('div', { style: { padding: 18 } },
         h('div', { className: 'panel-section-head', style: { marginBottom: 8 } }, 'Customer Types & Discounts'),
         h('div', { style: { fontSize: 11, color: 'var(--text3, var(--text-3))', marginBottom: 14 } },
@@ -5257,7 +5608,7 @@ function SettingsScreen() {
               className: 'input mono', type: 'number', min: 0, max: 100, value: ct.discountPct,
               style: { width: 64, height: 28, padding: '2px 6px', textAlign: 'right' },
               onChange: function(e) {
-                const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                var v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
                 save({ customerTypes: settings.customerTypes.map(function(x, ii) { return ii === i ? Object.assign({}, x, { discountPct: v }) : x; }) });
               }
             }),
@@ -5268,6 +5619,8 @@ function SettingsScreen() {
           );
         })
       ),
+
+      /* ── BARCODE ── */
       tab === 'barcode' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 12 } },
         h(Field, { label: 'Scanner Input Delay (ms)', hint: 'Max time between keystrokes qualifying as a scan. Default: 50ms.' },
           h('input', { className: 'input mono', type: 'number', value: settings.scannerDelay, onChange: function(e) { save({ scannerDelay: parseInt(e.target.value)||50 }); }, style: { width: 120 } })
@@ -5280,7 +5633,7 @@ function SettingsScreen() {
             onChange: function(e) { setScannerTest(e.target.value); },
             onKeyDown: function(e) {
               if (e.key === 'Enter') {
-                const f = MOCK_CATALOG.find(function(c) { return c.sku === scannerTest; });
+                var f = MOCK_CATALOG.find(function(c) { return c.sku === scannerTest; });
                 setTestResult(f ? 'Found: ' + f.name + ' - ' + fmt$(f.price) : 'Not found: ' + scannerTest);
                 setScannerTest('');
               }
@@ -5289,11 +5642,59 @@ function SettingsScreen() {
           })
         ),
         testResult && h('div', { style: { padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--line)', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--green)' } }, testResult)
-      )
-    )
-  );
-}
+      ),
 
+      /* ── BACKUP & EXPORT ── */
+      tab === 'backup' && h('div', { style: { padding: 18, display: 'flex', flexDirection: 'column', gap: 20 } },
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Export Data'),
+          h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap' } },
+            h('button', { className: 'btn', onClick: doExportWosCsv }, 'Export Work Orders CSV'),
+            h('button', { className: 'btn', onClick: doExportSalesCsv }, 'Export Sales CSV')
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginTop: 8 } },
+            'Work orders export from live data. Sales export requires Lightspeed API access.'
+          )
+        ),
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Reports'),
+          h('button', { className: 'btn', onClick: doPrintDailyReport }, 'Print Daily Report'),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginTop: 6 } },
+            'Opens a print-ready summary of all current work orders.'
+          )
+        ),
+        h('div', null,
+          h('div', { className: 'panel-section-head', style: { marginBottom: 10 } }, 'Settings Backup'),
+          h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap' } },
+            h('button', { className: 'btn', onClick: function() {
+              var data = JSON.stringify(settings, null, 2);
+              var a = document.createElement('a');
+              a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+              a.download = 'chainline-pos-settings-' + new Date().toISOString().slice(0,10) + '.json';
+              a.click();
+              toast('Settings exported', 'success');
+            }}, 'Export Settings JSON'),
+            h('button', { className: 'btn ghost', onClick: function() {
+              var input = document.createElement('input');
+              input.type = 'file'; input.accept = '.json';
+              input.onchange = function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                  try {
+                    var imported = JSON.parse(ev.target.result);
+                    save(imported);
+                    toast('Settings imported', 'success');
+                  } catch(err) { toast('Invalid JSON file', 'error'); }
+                };
+                reader.readAsText(file);
+              };
+              input.click();
+            }}, 'Import Settings JSON')
+          )
+        )
+      )
 /* ─────────────────────────────────────────
    SCREEN — BOOKINGS
 ───────────────────────────────────────── */
