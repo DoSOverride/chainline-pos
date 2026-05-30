@@ -2478,3 +2478,269 @@ td .skel-line {
   font-family: var(--ui);
 }
 .btn-sm:hover { background: var(--accent-glow); border-color: var(--accent); color: var(--text); }
+
+
+/* ════════════════════════════════════════════
+   MOBILE OPTIMIZATION PASS — 2026-05-30
+   Covers: WO card list, swipe hints, pull-to-refresh,
+   skeleton card, topbar safe-area, search full-width,
+   settings grid, EOD grid, reports date row
+   ════════════════════════════════════════════ */
+
+/* ── Topbar: safe-area inset-top on notched phones ── */
+@media (max-width: 768px) {
+  .topbar {
+    height: auto;
+    min-height: var(--topbar-h);
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: 10px;
+  }
+}
+
+/* ── Search field: full-width on mobile ── */
+@media (max-width: 768px) {
+  .filters .search-field {
+    max-width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+
+/* ── Pull-to-refresh indicator ── */
+.ptr-indicator {
+  text-align: center;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text2);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+}
+.ptr-indicator.ptr-pulling { color: var(--accent); }
+
+/* ── WO Mobile Card List ── */
+.wo-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.wo-card-mobile {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px 10px;
+  cursor: pointer;
+  position: relative;
+  min-height: 88px;
+  transition: background 80ms;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wo-card-mobile:active { background: var(--bg3); }
+.wo-card-mobile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.wo-card-mobile-id {
+  display: flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.06em;
+}
+.wo-card-mobile-cust {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.wo-card-mobile-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 0.06em;
+}
+.wo-card-mobile-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.wo-card-mobile-actions .btn,
+.wo-card-mobile-actions .btn-icon {
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 10px;
+}
+.wo-card-swipe-hint {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+  text-align: center;
+  padding-top: 6px;
+  opacity: 0.6;
+}
+.wo-card-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text2);
+}
+
+/* ── SkeletonCard rows ── */
+.skel-card-row {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.skel-card-main { flex: 1; }
+.skel-card-side { flex-shrink: 0; }
+
+/* ── Settings grid: override inline style on mobile ── */
+@media (max-width: 768px) {
+  /* Inline style uses gridTemplateColumns: '1fr 1fr' — force 1-col */
+  .card > div[style*="grid-template-columns"][style*="1fr 1fr"],
+  .card > div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* EOD modal 2-col grid → 1-col */
+  .eod-grid {
+    grid-template-columns: 1fr !important;
+  }
+  /* Reports custom date range — stack vertically */
+  .reports-date-range {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .reports-date-range input { width: 100% !important; }
+  /* Aside-row in settings: wrap on very narrow */
+  .aside-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* ── Pay buttons: stacked on mobile ── */
+@media (max-width: 480px) {
+  .pay-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .pay-btn {
+    border-right: none !important;
+    border-bottom: 1px solid var(--line2);
+    min-height: 56px;
+  }
+  .pay-btn:last-child { border-bottom: none; }
+}
+
+/* ── Bottom nav: taller touch targets, safe area ── */
+@media (max-width: 768px) {
+  #sidebar, .sidebar {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .nav-item {
+    min-height: 52px;
+    padding: 10px 6px 8px;
+    flex: 1;
+  }
+  .nav-item svg {
+    width: 26px !important;
+    height: 26px !important;
+  }
+  .nav-item-label-mobile {
+    font-size: 10px;
+  }
+}
+
+/* ── Buttons: minimum 44px touch targets ── */
+@media (max-width: 768px) {
+  .btn {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .btn.ghost {
+    min-height: 40px;
+  }
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+  /* Page head action buttons full-width stack */
+  .page-head .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .page-head .actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Table scroll: Customers / Inventory / POs on mobile ── */
+@media (max-width: 768px) {
+  /* Wrap tables in overflow-x scroll so they don't bust layout */
+  .card > table.tbl,
+  .card > .tbl {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  /* Ensure table resets to proper display inside overflow wrapper */
+  .card > table.tbl thead,
+  .card > table.tbl tbody,
+  .card > table.tbl tr {
+    display: table-row-group;
+  }
+  .card > table.tbl thead { display: table-header-group; }
+  .card > table.tbl {
+    display: table;
+    min-width: 500px;
+  }
+  /* But for Customers/Inventory, show as card-style instead */
+  .tbl-mobile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .tbl-mobile-card thead { display: none; }
+  .tbl-mobile-card tbody { display: flex; flex-direction: column; }
+  .tbl-mobile-card tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg2);
+  }
+  .tbl-mobile-card td {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 !important;
+    font-size: 13px;
+    min-height: 0;
+    white-space: normal;
+  }
+  .tbl-mobile-card td:first-child { flex: 1 1 100%; font-weight: 500; }
+  .tbl-mobile-card td:last-child { margin-left: auto; }
+}

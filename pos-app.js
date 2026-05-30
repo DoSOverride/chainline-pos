@@ -2089,7 +2089,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
         customerItem: customerItem, warranty: warranty, saveParts: saveParts,
         dateIn: dateIn, timeIn: timeIn, dateDue: dateDue, timeDue: timeDue, hookIn: hookIn, hookOut: hookOut,
         receiptNote: receiptNote, internalNote: internalNote, notePos: notePos, lines: lines,
-      });
+      }).catch(() => toast('Auto-save failed — check connection', 'error'));
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line
@@ -2196,8 +2196,10 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       message: 'Remove customer from this work order?',
       onConfirm: () => {
         setConfirm(null);
-        if (wo.id) apiPut('/api/workorder/' + wo.id, { customer: null });
-        toast('Customer removed', 'success');
+        if (wo.id) apiPut('/api/workorder/' + wo.id, { customer: null })
+          .then(() => toast('Customer removed', 'success'))
+          .catch(() => toast('Failed to remove customer', 'error'));
+        else toast('Customer removed', 'success');
       },
     });
   }
@@ -4705,7 +4707,8 @@ function ItemDetail({ item, onClose }) {
 
   function save() {
     apiPost('/api/inventory/' + item.sku, { price: priceNum, cost: costNum, stock: qty })
-      .then(function() { toast('Saved', 'success'); });
+      .then(function() { toast('Saved', 'success'); })
+      .catch(function() { toast('Failed to save — check connection', 'error'); });
     setEditing(false);
   }
 

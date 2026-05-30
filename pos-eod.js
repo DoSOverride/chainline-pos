@@ -33,7 +33,7 @@
   const STEPS = ['count', 'summary', 'done'];
 
   /* ─── EOD Modal ─── */
-  function EODModal({ onClose, cashSales = 4960.00, cardTotal = 14820.50, otherTotal = 2230.00, openingFloat = 200.00 }) {
+  function EODModal({ onClose, cashSales = 4960.00, cardTotal = 14820.50, otherTotal = 2230.00, openingFloat = 200.00, wosCompleted = null, wosCreated = null }) {
     const [step, setStep] = useState('count');
     const [counts, setCounts] = useState(() => Object.fromEntries(DENOMS.map(d => [d.value, ''])));
     const firstRef = useRef(null);
@@ -255,7 +255,9 @@
               { label: 'Other',            val: fmt$(otherTotal),        color: '#aaa' },
               null,
               { label: 'Grand Total',      val: fmt$(grandTotal),        color: '#c8392c', bold: true, large: true },
-            ].map((row, i) => row === null
+              wosCompleted != null && { label: 'WOs Completed',    val: String(wosCompleted),    color: '#aaa' },
+              wosCreated   != null && { label: 'WOs Created',      val: String(wosCreated),      color: '#aaa' },
+            ].filter(row => row !== false).map((row, i) => row === null
               ? h('div', { key: 'sep' + i, style: { height: 1, background: '#1d1d1d', margin: '8px 0' } })
               : h('div', {
                   key: row.label,
@@ -310,7 +312,7 @@
           h('div', { style: { fontSize: 12, color: '#666', marginBottom: 24 } },
             'Saved to local records - ' + todayISO()
           ),
-          h('div', { style: { display: 'flex', gap: 10, justifyContent: 'center' } },
+          h('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' } },
             h('button', {
               onClick: () => printZ(buildRecord()),
               style: {
@@ -318,6 +320,31 @@
                 background: '#1a1a1a', color: '#aaa', fontSize: 12, cursor: 'pointer',
               },
             }, 'Print Z-Report'),
+            h('button', {
+              onClick: () => {
+                const rec = buildRecord();
+                const lines = [
+                  'ChainLine Cycle — End of Day Report',
+                  'Date: ' + rec.date,
+                  '',
+                  'Cash Sales: ' + fmt$(rec.cashSales),
+                  'Card / Debit: ' + fmt$(rec.cardTotal),
+                  'Other: ' + fmt$(rec.otherTotal),
+                  'Grand Total: ' + fmt$(rec.grandTotal),
+                  '',
+                  'Cash Counted: ' + fmt$(rec.cashCounted),
+                  'Variance: ' + (rec.variance >= 0 ? '+' : '') + fmt$(rec.variance),
+                  wosCompleted != null ? 'WOs Completed: ' + wosCompleted : '',
+                  wosCreated   != null ? 'WOs Created: '   + wosCreated   : '',
+                ].filter(Boolean).join('\n');
+                const mailto = 'mailto:bikes@chainline.ca?subject=' + encodeURIComponent('EOD Report ' + rec.date) + '&body=' + encodeURIComponent(lines);
+                window.location.href = mailto;
+              },
+              style: {
+                padding: '8px 18px', borderRadius: 8, border: '1px solid #333',
+                background: '#1a1a1a', color: '#aaa', fontSize: 12, cursor: 'pointer',
+              },
+            }, 'Email Report'),
             h('button', {
               onClick: onClose,
               style: {
