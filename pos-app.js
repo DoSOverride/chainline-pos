@@ -3286,7 +3286,10 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
               });
             }
             function readyWo() {
-              setMarkReadyWo(r);
+              setMarkStatusWo(r); setMarkStatusTarget('ready');
+            }
+            function finishedWo() {
+              setMarkStatusWo(r); setMarkStatusTarget('finished');
             }
             const swipeProps = useSwipe(smsWo, readyWo);
             return h('div', Object.assign({ key: r.id, className: 'wo-card-mobile', onClick: function() { openWo(r); } }, swipeProps),
@@ -3323,6 +3326,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                   { label: 'View detail',      onClick: function() { openWo(r); } },
                   { label: 'Mark In Progress', onClick: function() { apiPost('/api/workorder/' + r.id + '/status', { status: 'inprogress' }).then(function(res) { if (res && !res.error) { toast('Marked In Progress', 'success'); fetchWos(); } else toast('Failed', 'error'); }); } },
                   { label: 'Mark Ready',       onClick: readyWo },
+                  { label: 'Mark Done',        onClick: finishedWo },
                   { label: 'SMS Customer',     onClick: smsWo },
                   'divider',
                   { label: 'Delete', onClick: function() { toast('Deleted', 'error'); }, danger: true },
@@ -3421,7 +3425,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                         title: 'Mark Ready',
                         onClick: e => {
                           e.stopPropagation();
-                          setMarkReadyWo(r);
+                          setMarkStatusWo(r); setMarkStatusTarget('ready');
                         },
                       }, h(Ico.Check, { size: 13 })),
                       h(WONotifyButton, { wo: r }),
@@ -3435,15 +3439,8 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
                               });
                           }
                         },
-                        { label: 'Mark Ready',     onClick: () => setMarkReadyWo(r) },
-                        { label: 'Mark Done',      onClick: () => {
-                            apiPost('/api/workorder/' + r.id + '/status', { status: 'finished' })
-                              .then(res => {
-                                if (res && !res.error) { toast('Marked Done', 'success'); fetchWos(); }
-                                else toast('Failed to update status', 'error');
-                              });
-                          }
-                        },
+                        { label: 'Mark Ready',     onClick: () => { setMarkStatusWo(r); setMarkStatusTarget('ready'); } },
+                        { label: 'Mark Done',      onClick: () => { setMarkStatusWo(r); setMarkStatusTarget('finished'); } },
                         'divider',
                         { label: 'Print Work Order', onClick: () => toast('Printing...', 'success') },
                         { label: 'SMS Customer',   onClick: () => {
