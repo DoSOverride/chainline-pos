@@ -13,15 +13,15 @@ const { createRoot } = ReactDOM;
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
 const STAFF = [
-  { id:  1, name: 'Jason',   initials: 'JA', role: 'Warranty', tone: 'ja' },
-  { id:  5, name: 'Phil',    initials: 'PH', role: 'Mechanic', tone: 'ph' },
-  { id:  6, name: 'Steve',   initials: 'ST', role: 'Mechanic', tone: 'st' },
-  { id:  7, name: 'Matt',    initials: 'MA', role: 'Manager',  tone: 'ma' },
-  { id:  8, name: 'Darrin',  initials: 'DA', role: 'Owner',    tone: 'da' },
-  { id:  9, name: 'Tao',     initials: 'TC', role: 'Manager',  tone: 'tc' },
-  { id: 10, name: 'Beckett', initials: 'BE', role: 'Mechanic', tone: 'be' },
-  { id: 11, name: 'Curren',  initials: 'CU', role: 'Mechanic', tone: 'cu' },
-  { id: 12, name: 'Danny',   initials: 'DN', role: 'Mechanic', tone: 'dn' },
+  { id:  1, name: 'Jason',   initials: 'JA', role: 'Warranty', tone: 'ja', pin: '1139' },
+  { id:  5, name: 'Phil',    initials: 'PH', role: 'Mechanic', tone: 'ph', pin: '1139' },
+  { id:  6, name: 'Steve',   initials: 'ST', role: 'Mechanic', tone: 'st', pin: '1139' },
+  { id:  7, name: 'Matt',    initials: 'MA', role: 'Manager',  tone: 'ma', pin: '1139' },
+  { id:  8, name: 'Darrin',  initials: 'DA', role: 'Owner',    tone: 'da', pin: '1139' },
+  { id:  9, name: 'Tao',     initials: 'TC', role: 'Manager',  tone: 'tc', pin: '1139' },
+  { id: 10, name: 'Beckett', initials: 'BE', role: 'Mechanic', tone: 'be', pin: '1139' },
+  { id: 11, name: 'Curren',  initials: 'CU', role: 'Mechanic', tone: 'cu', pin: '1139' },
+  { id: 12, name: 'Danny',   initials: 'DN', role: 'Mechanic', tone: 'dn', pin: '1139' },
 ];
 
 const MECHANICS = STAFF.filter(s => s.role === 'Mechanic' || s.role === 'Manager').map(s => ({
