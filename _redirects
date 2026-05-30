@@ -1,1 +1,13 @@
-/* /index.html 200
+/workorders  /index.html  200
+/service     /index.html  200
+/sales       /index.html  200
+/customers   /index.html  200
+/inventory   /index.html  200
+/floor       /index.html  200
+/reports     /index.html  200
+/settings    /index.html  200
+/messages    /index.html  200
+/vendors     /index.html  200
+/queue       /index.html  200
+/orders      /index.html  200
+/*           /index.html  200
