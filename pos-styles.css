@@ -1321,6 +1321,34 @@ input[type="date"], .mono-input {
    SALES REGISTER
    ════════════════════════════════════════════ */
 .item-results { border-bottom: 1px solid var(--line); }
+
+.search-mode-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg2);
+}
+.search-mode-tabs .tab {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+.search-mode-tabs .tab:hover { color: var(--text); }
+.search-mode-tabs .tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
 .item-row {
   display: grid;
   grid-template-columns: 1fr 100px 80px;

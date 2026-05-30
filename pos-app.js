@@ -1945,6 +1945,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   const [woLineSearching, setWoLineSearching] = useState(false);
   const [woDistResults, setWoDistResults] = useState([]);
   const [woDistSearching, setWoDistSearching] = useState(false);
+  const [woShowCatalog, setWoShowCatalog] = useState(false);
   const [lines, setLines] = useState(wo.lines || []);
   const [presetCat, setPresetCat] = useState(null); // 'services' | 'mountain' | 'road' | null
 
@@ -2019,7 +2020,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
     : lineQ ? MOCK_CATALOG.filter(c => c.name.toLowerCase().includes(lineQ.toLowerCase()) || c.sku.toLowerCase().includes(lineQ.toLowerCase())).slice(0,5)
     : [];
 
-  // WO line item search: LS API first, then distributor catalog
+  // WO line item search: LS API always; distributor only in Catalog mode
   useEffect(() => {
     if (!lineQ || lineQ.trim().length < 2) { setWoLineResults([]); setWoDistResults([]); return; }
     const t = setTimeout(() => {
@@ -2040,20 +2041,24 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
         })
         .catch(function() { setWoLineResults([]); })
         .finally(function() { setWoLineSearching(false); });
-      // Distributor search with a 600ms extra delay
-      setTimeout(function() {
-        setWoDistSearching(true);
-        apiGet('/api/pos-parts-search?q=' + encodeURIComponent(lineQ.trim()))
-          .then(function(data) {
-            var distOnly = (data && data.items ? data.items : []).filter(function(i) { return i.source !== 'ls'; });
-            setWoDistResults(distOnly.slice(0, 6));
-          })
-          .catch(function() { setWoDistResults([]); })
-          .finally(function() { setWoDistSearching(false); });
-      }, 600);
+      // Distributor search only when Catalog tab is active
+      if (woShowCatalog) {
+        setTimeout(function() {
+          setWoDistSearching(true);
+          apiGet('/api/pos-parts-search?q=' + encodeURIComponent(lineQ.trim()))
+            .then(function(data) {
+              var distOnly = (data && data.items ? data.items : []).filter(function(i) { return i.source !== 'ls'; });
+              setWoDistResults(distOnly.slice(0, 6));
+            })
+            .catch(function() { setWoDistResults([]); })
+            .finally(function() { setWoDistSearching(false); });
+        }, 600);
+      } else {
+        setWoDistResults([]);
+      }
     }, 350);
     return function() { clearTimeout(t); };
-  }, [lineQ]);
+  }, [lineQ, woShowCatalog]);
 
   function addLine(it) {
     setLines(l => [...l, {
@@ -2704,6 +2709,16 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
             )
           );
         })(),
+        lineQ && lineQ.trim().length >= 2 && h('div', { className: 'search-mode-tabs', style: { margin: '4px 0 2px' } },
+          h('button', {
+            className: 'tab' + (!woShowCatalog ? ' active' : ''),
+            onClick: function() { setWoShowCatalog(false); setWoDistResults([]); },
+          }, 'In Stock'),
+          h('button', {
+            className: 'tab' + (woShowCatalog ? ' active' : ''),
+            onClick: function() { setWoShowCatalog(true); },
+          }, 'Catalog')
+        ),
         lineQ && woLineSearching && h('div', { style: { padding: '6px 12px', background: 'var(--bg3)', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--mono)' } }, 'Searching inventory...'),
         lineQ && lineResults.length > 0 && h('div', { style: { background: 'var(--bg3)', borderBottom: '1px solid var(--line)' } },
           lineResults.map(c =>
@@ -2720,8 +2735,8 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
             )
           )
         ),
-        lineQ && woDistSearching && h('div', { style: { padding: '6px 12px', background: 'var(--bg3)', fontSize: 11, color: '#b45309', fontFamily: 'var(--mono)' } }, 'Checking distributors...'),
-        lineQ && !woDistSearching && woDistResults.length > 0 && h('div', { style: { background: 'var(--bg3)', borderTop: '2px solid var(--line2)' } },
+        lineQ && woShowCatalog && woDistSearching && h('div', { style: { padding: '6px 12px', background: 'var(--bg3)', fontSize: 11, color: '#b45309', fontFamily: 'var(--mono)' } }, 'Checking distributors...'),
+        lineQ && woShowCatalog && !woDistSearching && woDistResults.length > 0 && h('div', { style: { background: 'var(--bg3)', borderTop: '2px solid var(--line2)' } },
           h('div', { style: { padding: '4px 8px', fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text3)' } }, 'Distributor — Special Order'),
           woDistResults.map(function(c) {
             var sourceBadge = c.source === 'hlc' ? 'HLC' : c.source === 'ogc' ? 'OGC' : c.source === 'oss' ? 'OSS' : (c.source || 'DIST').toUpperCase();
@@ -4042,6 +4057,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
   const [searching, setSearching] = useState(false);
   const [distResults, setDistResults] = useState([]);
   const [distSearching, setDistSearching] = useState(false);
+  const [showCatalog, setShowCatalog] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
 
   // ── Parked sales (§19) ────────────────────────────────────
@@ -4136,9 +4152,9 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     return () => clearTimeout(t);
   }, [query]);
 
-  // Distributor catalog search — fires 600ms after query change, shows HLC/OGC items below LS results
+  // Distributor catalog search — only fires when Catalog tab is active
   useEffect(() => {
-    if (query.trim().length < 2) { setDistResults([]); return; }
+    if (!showCatalog || query.trim().length < 2) { setDistResults([]); return; }
     const t = setTimeout(() => {
       setDistSearching(true);
       apiGet('/api/pos-parts-search?q=' + encodeURIComponent(query.trim()))
@@ -4150,7 +4166,7 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
         .finally(function() { setDistSearching(false); });
     }, 600);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, showCatalog]);
 
   function addItem(it) {
     const existing = items.find(i => i.sku === it.sku);
@@ -4374,6 +4390,17 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
           )
         ),
 
+        query && query.trim().length >= 2 && h('div', { className: 'search-mode-tabs' },
+          h('button', {
+            className: 'tab' + (!showCatalog ? ' active' : ''),
+            onClick: function() { setShowCatalog(false); setDistResults([]); },
+          }, 'In Stock'),
+          h('button', {
+            className: 'tab' + (showCatalog ? ' active' : ''),
+            onClick: function() { setShowCatalog(true); },
+          }, 'Catalog')
+        ),
+
         query && searching && h('div', { className: 'item-results' },
           h('div', { style: { padding: '12px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 11 } },
             'Searching...')
@@ -4397,14 +4424,14 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
             'No results for "' + query + '"')
         ),
 
-        // ── Distributor results (HLC / OGC) ──────────────────────────────────
-        query && distSearching && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
+        // ── Distributor results (HLC / OGC) — only shown in Catalog mode ──────
+        query && showCatalog && distSearching && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
           h('div', { style: { padding: '8px 14px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 } },
             h('span', { style: { display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#b45309', animation: 'pulse 1s infinite' } }),
             'Checking distributors...'
           )
         ),
-        query && !distSearching && distResults.length > 0 && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
+        query && showCatalog && !distSearching && distResults.length > 0 && h('div', { className: 'item-results', style: { borderTop: '2px solid var(--line2)' } },
           h('div', { style: { padding: '6px 14px 4px', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)', display: 'flex', gap: 8 } },
             'Distributor Catalog — Special Order'
           ),
