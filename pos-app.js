@@ -1122,7 +1122,7 @@ function Sidebar({ screen, setScreen, staff, onLogout }) {
   );
 
   return h('aside', { className: 'sidebar' },
-    h('div', { className: 'sidebar-brand' },
+    h('div', { className: 'sidebar-brand', onClick: () => { window.history.pushState(null,'','/'); setScreen('dashboard'); }, style: { cursor: 'pointer' } },
       h('div', { className: 'brand-mark' }),
       h('div', { style: { display: 'flex', flexDirection: 'column' } },
         h('span', { className: 'brand-name' }, 'ChainLine'),
