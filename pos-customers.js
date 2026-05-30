@@ -175,7 +175,7 @@
   /* ── API ── */
   async function apiFetch(path) {
     try {
-      const r = await fetch(WORKER + path);
+      const r = await fetch(WORKER + path, { headers: { 'X-POS-Auth': getApiPin() } });
       if (!r.ok) return null;
       return await r.json();
     } catch { return null; }
@@ -692,11 +692,22 @@
         }
       }).catch(() => {});
 
-      /* Fetch full customer data: richer sales with line items, bikes, all WOs */
+      /* Fetch full customer data: richer sales with line items, bikes, all WOs, and 16yr history enrichment */
       apiFetch('/api/pos-customer/' + id + '/full').then(result => {
         if (!result) return;
+        // Enrich customer stats from 16yr sales index
+        if (result.customer) {
+          const rc = result.customer;
+          setCustomer(prev => ({
+            ...prev,
+            totalSpent:  rc.totalSpent  > 0 ? rc.totalSpent  : (prev.totalSpent  || 0),
+            visitCount:  rc.visitCount  > 0 ? rc.visitCount  : (prev.visitCount  || 0),
+            lastVisit:   rc.lastVisit   || prev.lastVisit   || '',
+            topItems:    rc.topItems    || prev.topItems    || [],
+          }));
+        }
         // Richer sales data (includes items per sale)
-        if (result.sales && Array.isArray(result.sales)) {
+        if (result.sales && Array.isArray(result.sales) && result.sales.length > 0) {
           setHistory(result.sales.map(s => ({
             id: 'S-' + s.id,
             date: (s.date || '').slice(0, 10),
@@ -704,6 +715,16 @@
             lineItems: s.items || [],
             total: parseFloat(s.total || 0),
             method: s.method || '',
+          })));
+        } else if (result.recentTransactions && result.recentTransactions.length > 0) {
+          // Fall back to historical snapshot transactions when LS is unavailable
+          setHistory(result.recentTransactions.map(t => ({
+            id: 'S-' + t.id,
+            date: t.date,
+            items: t.items || '',
+            lineItems: [],
+            total: parseFloat(t.total || 0),
+            method: t.method || '',
           })));
         }
         // Bikes extracted from purchase history
@@ -1317,6 +1338,7 @@
                   { label: 'Lifetime Spend', value: fmt$(customer.totalSpent || 0), mono: true },
                   { label: 'Visits', value: String(customer.visitCount || 0), mono: true },
                   { label: 'Member Since', value: fmtDate(customer.memberSince), mono: false },
+                  ...(customer.lastVisit ? [{ label: 'Last Visit', value: fmtDate(customer.lastVisit), mono: false }] : []),
                 ].map(stat =>
                   h('div', {
                     key: stat.label,
@@ -1324,6 +1346,21 @@
                   },
                     h('div', { style: { fontSize: 18, fontWeight: 700, fontFamily: stat.mono ? 'var(--font-mono)' : undefined, color: 'var(--text)' } }, stat.value),
                     h('div', { style: { fontSize: 11, color: 'var(--text-3)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-mono)' } }, stat.label)
+                  )
+                )
+              ),
+              /* Top purchased items from 16yr history */
+              (customer.topItems && customer.topItems.length > 0) && h('div', { style: { marginBottom: 20 } },
+                h('div', { style: { fontSize: 13, fontWeight: 600, marginBottom: 8 } }, 'Top Purchases'),
+                h('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                  customer.topItems.slice(0, 5).map((item, i) =>
+                    h('div', {
+                      key: i,
+                      style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-2)', border: '1px solid var(--line)', fontSize: 12 }
+                    },
+                      h('span', { style: { fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', minWidth: 16 } }, '#' + (i + 1)),
+                      h('span', { style: { color: 'var(--text-1)', flex: 1 } }, item)
+                    )
                   )
                 )
               ),
@@ -1416,6 +1453,10 @@
               h('div', { style: { fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text)', marginBottom: 10 } }, fmt$(customer.totalSpent || 0)),
               h('div', { style: { fontSize: 12, color: 'var(--text-3)', marginBottom: 3 } }, 'Visits'),
               h('div', { style: { fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text)', marginBottom: 10 } }, String(customer.visitCount || 0)),
+              customer.lastVisit && h(Fragment, null,
+                h('div', { style: { fontSize: 12, color: 'var(--text-3)', marginBottom: 3 } }, 'Last Visit'),
+                h('div', { style: { fontSize: 12, fontWeight: 600, color: 'var(--text)', marginBottom: 10 } }, fmtDate(customer.lastVisit)),
+              ),
               h('div', { style: { fontSize: 12, color: 'var(--text-3)', marginBottom: 3 } }, 'Member'),
               h('div', { style: { fontSize: 13, fontWeight: 600, color: 'var(--text)' } }, fmtMemberSince(customer.memberSince))
             )
@@ -1450,23 +1491,28 @@
         const trimmed = q.trim();
         if (trimmed.length < 2) { setCustomers((window.lsCustomers && window.lsCustomers.length > 0) ? window.lsCustomers : MOCK_CUSTOMERS_FULL); return; }
         setLoading(true);
-        const result = await apiFetch('/api/customers?q=' + encodeURIComponent(trimmed));
+        const result = await apiFetch('/api/pos-customers?q=' + encodeURIComponent(trimmed));
         setLoading(false);
         const mapped = (result && result.customers && result.customers.length > 0)
           ? result.customers.map(c => ({
-              id: c.customerID,
+              id: c.id || c.customerID,
               firstName: c.firstName || '',
               lastName: c.lastName || '',
-              phone: c.Phones?.Phone?.[0]?.number || c.Phones?.Phone?.number || '',
-              email: c.Emails?.ContactEmail?.[0]?.address || '',
-              memberSince: c.Customer?.createTime?.slice(0, 10) || '2024-01-01',
-              bikesCount: 0, totalSpent: 0, visitCount: 0,
-              tags: c.Customer?.noSale ? ['No Sale'] : [],
+              phone: c.mobile || c.phone || '',
+              email: c.email || '',
+              memberSince: c.memberSince || '',
+              bikesCount: 0,
+              totalSpent: parseFloat(c.totalSales || c.totalSpent || 0),
+              visitCount: parseInt(c.visitCount || 0, 10),
+              lastVisit: c.lastVisit || '',
+              topItems: c.topItems || [],
+              tags: [],
               customerType: 'Customer',
+              city: c.city || '', province: c.province || 'BC', address: '', address2: '',
+              postalCode: c.postal || '', country: 'CA', company: c.company || '',
               phoneHome: '', phoneWork: '', phoneMobile: '', phonePager: '', phoneFax: '',
               discount: 'Default', salesTax: 'Default',
-              address: '', address2: '', city: '', province: 'BC', postalCode: '', country: 'CA',
-              email2: '', website: '', custom: '', seatHeight: '', birthDate: '', title: '', company: '',
+              email2: '', website: '', custom: '', seatHeight: '', birthDate: '', title: '',
             }))
           : null;
         if (mapped) setCustomers(mapped);
@@ -1571,8 +1617,9 @@
             ),
             customers.map((c, idx) => {
               const name = c.firstName + ' ' + c.lastName;
+              // Prefer real lastVisit from sales index; fall back to mock history
               const hist = MOCK_HISTORY[c.id] || [];
-              const lastVisit = hist.length ? hist[0].date : null;
+              const lastVisit = c.lastVisit || (hist.length ? hist[0].date : null);
               return h('tr', {
                 key: c.id,
                 style: { cursor: 'pointer' },

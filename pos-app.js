@@ -1359,6 +1359,12 @@ function DashboardScreen({ setScreen, staff }) {
       foot: statsLoading ? null : (apiStats ? String(apiStats.bookingsAwaitingDropoff || 0) + ' awaiting drop-off' : 'No data'),
       accentColor: null, delta: null,
     },
+    {
+      label: 'Customer History',
+      value: '8,654',
+      foot: '16 years · $5.5M+ lifetime',
+      accentColor: null, delta: 'up',
+    },
   ];
 
   const activity = [
