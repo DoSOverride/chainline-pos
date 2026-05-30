@@ -191,11 +191,15 @@
       return await r.json();
     } catch { return null; }
   }
+  function getApiPin() {
+    try { return localStorage.getItem('pos-api-pin') || ''; } catch { return ''; }
+  }
+
   async function apiPut(path, body) {
     try {
       const r = await fetch(WORKER + path, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-POS-Auth': '1139' },
+        headers: { 'Content-Type': 'application/json', 'X-POS-Auth': getApiPin() },
         body: JSON.stringify(body),
       });
       if (!r.ok) return null;

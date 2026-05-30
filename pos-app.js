@@ -13,15 +13,15 @@ const { createRoot } = ReactDOM;
 const WORKER = 'https://still-term-f1ec.taocaruso77.workers.dev';
 
 const STAFF = [
-  { id:  1, name: 'Jason',   initials: 'JA', pin: '1139', role: 'Warranty', tone: 'ja' },
-  { id:  5, name: 'Phil',    initials: 'PH', pin: '1139', role: 'Mechanic', tone: 'ph' },
-  { id:  6, name: 'Steve',   initials: 'ST', pin: '1139', role: 'Mechanic', tone: 'st' },
-  { id:  7, name: 'Matt',    initials: 'MA', pin: '1139', role: 'Manager',  tone: 'ma' },
-  { id:  8, name: 'Darrin',  initials: 'DA', pin: '1139', role: 'Owner',    tone: 'da' },
-  { id:  9, name: 'Tao',     initials: 'TC', pin: '1139', role: 'Manager',  tone: 'tc' },
-  { id: 10, name: 'Beckett', initials: 'BE', pin: '1139', role: 'Mechanic', tone: 'be' },
-  { id: 11, name: 'Curren',  initials: 'CU', pin: '1139', role: 'Mechanic', tone: 'cu' },
-  { id: 12, name: 'Danny',   initials: 'DN', pin: '1139', role: 'Mechanic', tone: 'dn' },
+  { id:  1, name: 'Jason',   initials: 'JA', role: 'Warranty', tone: 'ja' },
+  { id:  5, name: 'Phil',    initials: 'PH', role: 'Mechanic', tone: 'ph' },
+  { id:  6, name: 'Steve',   initials: 'ST', role: 'Mechanic', tone: 'st' },
+  { id:  7, name: 'Matt',    initials: 'MA', role: 'Manager',  tone: 'ma' },
+  { id:  8, name: 'Darrin',  initials: 'DA', role: 'Owner',    tone: 'da' },
+  { id:  9, name: 'Tao',     initials: 'TC', role: 'Manager',  tone: 'tc' },
+  { id: 10, name: 'Beckett', initials: 'BE', role: 'Mechanic', tone: 'be' },
+  { id: 11, name: 'Curren',  initials: 'CU', role: 'Mechanic', tone: 'cu' },
+  { id: 12, name: 'Danny',   initials: 'DN', role: 'Mechanic', tone: 'dn' },
 ];
 
 const MECHANICS = STAFF.filter(s => s.role === 'Mechanic' || s.role === 'Manager').map(s => ({
@@ -75,6 +75,12 @@ function fmt$(n) {
 function round2(n) { return Math.round(n * 100) / 100; }
 
 /* ── API ── */
+// PIN is stored in localStorage('pos-api-pin') — set in Settings → General.
+// Never hardcode here; rotate via Settings after changing the POS_PIN worker secret.
+function getApiPin() {
+  try { return localStorage.getItem('pos-api-pin') || ''; } catch { return ''; }
+}
+
 async function apiGet(path) {
   try {
     const r = await fetch(WORKER + path);
@@ -87,7 +93,7 @@ async function apiPost(path, body) {
   try {
     const r = await fetch(WORKER + path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': '1139' },
+      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': getApiPin() },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -99,7 +105,7 @@ async function apiPut(path, body) {
   try {
     const r = await fetch(WORKER + path, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': '1139' },
+      headers: { 'Content-Type': 'application/json', 'X-POS-Auth': getApiPin() },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -111,7 +117,7 @@ async function apiDelete(path) {
   try {
     const r = await fetch(WORKER + path, {
       method: 'DELETE',
-      headers: { 'X-POS-Auth': '1139' },
+      headers: { 'X-POS-Auth': getApiPin() },
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
@@ -3667,7 +3673,16 @@ function SettingsScreen() {
         h(Field, { label: 'Shop Name' }, h('input', { className: 'input', value: settings.shopName, onChange: function(e) { save({ shopName: e.target.value }); } })),
         h(Field, { label: 'Phone' },     h('input', { className: 'input mono', value: settings.phone,    onChange: function(e) { save({ phone: e.target.value }); } })),
         h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Address' }, h('input', { className: 'input', value: settings.address, onChange: function(e) { save({ address: e.target.value }); } }))),
-        h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Email' },   h('input', { className: 'input mono', type: 'email', value: settings.email, onChange: function(e) { save({ email: e.target.value }); } })))
+        h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'Email' },   h('input', { className: 'input mono', type: 'email', value: settings.email, onChange: function(e) { save({ email: e.target.value }); } }))),
+        h('div', { style: { gridColumn: '1/-1' } }, h(Field, { label: 'API PIN', sub: 'Staff PIN for worker API auth. Must match POS_PIN worker secret. Stored in localStorage only.' },
+          h('input', { className: 'input mono', type: 'password', placeholder: '••••', autocomplete: 'off',
+            defaultValue: (function() { try { return localStorage.getItem('pos-api-pin') || ''; } catch { return ''; } })(),
+            onChange: function(e) {
+              try { localStorage.setItem('pos-api-pin', e.target.value); } catch {}
+              toast('API PIN updated', 'success');
+            }
+          })
+        ))
       ),
       tab === 'staff' && h('div', { style: { padding: 18 } },
         staffList.map(function(s, i) {
