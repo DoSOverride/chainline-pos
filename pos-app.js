@@ -2138,8 +2138,9 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
       const body = encodeURIComponent('Hi ' + (wo.cust || '') + ',\n\nYour work order details:\nWO: ' + (wo.id || '') + '\nStatus: ' + status + '\nTotal: ' + fmt$(total) + '\n\nThanks,\nChainLine Cycle');
       window.location.href = 'mailto:' + wo.email + '?subject=' + subj + '&body=' + body;
     }
-    if (wo.id) apiPost('/api/workorder/' + wo.id + '/email', { to: wo.email });
-    toast('Email sent', 'success');
+    if (wo.id) apiPost('/api/workorder/' + wo.id + '/email', { to: wo.email })
+      .catch(() => {}); // best-effort log — mailto already opened
+    if (wo.email) toast('Email opened in mail app', 'success');
   }
   function handleRequestPayment() {
     if (window.RequestPaymentModal) setShowRequestPay(true);
@@ -2176,7 +2177,7 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
     }).then(r => {
       if (r && r.id) toast('Duplicated as ' + r.id, 'success');
       else toast('Duplicated', 'success');
-    });
+    }).catch(() => toast('Failed to duplicate work order', 'error'));
   }
   function handleDelete() {
     setConfirm({
