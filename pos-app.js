@@ -674,6 +674,50 @@ function OfflineBanner() {
   );
 }
 
+// PST-exempt dept/category keywords (BC: bikes, helmets, bike lights per RSBC 1996 c.431 Sched I)
+const PST_EXEMPT_DEPTS = ['bicycle', 'bikes', 'e-bike', 'ebike', 'helmet', 'helmets', 'bike light', 'bike lights', 'lighting'];
+function isPstExempt(item) {
+  if (item.taxablePst === false) return true;
+  const haystack = ((item.dept || '') + ' ' + (item.category || '') + ' ' + (item.name || '')).toLowerCase();
+  // Labour/service SKU prefix check
+  if ((item.sku || '').toUpperCase().startsWith('LAB-') || (item.sku || '').toUpperCase().startsWith('SVC-')) return true;
+  return PST_EXEMPT_DEPTS.some(kw => haystack.includes(kw));
+}
+
+function StripeBanner() {
+  const [status, setStatus] = useState(null); // null = loading, false = configured, 'unconfigured' = show banner
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    apiGet('/api/stripe-status').then(d => {
+      if (d && !d.configured) setStatus('unconfigured');
+      else if (d && d.mode === 'test') setStatus('test');
+      else setStatus('ok');
+    }).catch(() => setStatus(null));
+  }, []);
+  if (dismissed || status === null || status === 'ok') return null;
+  const isTest = status === 'test';
+  const bg    = isTest ? 'rgba(180,130,0,0.08)' : 'rgba(200,57,44,0.08)';
+  const bdr   = isTest ? '1px solid rgba(180,130,0,0.3)' : '1px solid rgba(200,57,44,0.25)';
+  const dot   = isTest ? '#b48200' : 'var(--accent)';
+  const msg   = isTest
+    ? 'Stripe TEST mode · card charges are simulated'
+    : 'Payments not configured · set STRIPE_SECRET_KEY in Cloudflare Worker secrets';
+  return h('div', { style: {
+    background: bg, borderBottom: bdr,
+    borderLeft: '3px solid ' + dot, padding: '7px 20px',
+    fontFamily: 'var(--mono)', fontSize: 10.5, letterSpacing: '.12em', textTransform: 'uppercase',
+    color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 8,
+  }},
+    h('span', { style: { color: dot } }, '●'),
+    msg,
+    h('button', {
+      onClick: () => setDismissed(true),
+      style: { marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: '0 4px' },
+      'aria-label': 'Dismiss',
+    }, '\xd7')
+  );
+}
+
 function ConnectionStatus() {
   const online = useConnectionStatus();
   return h('div', { className: 'conn-status' },
@@ -913,7 +957,7 @@ function DashboardScreen({ setScreen }) {
   const stats = [
     { label: 'Open Work Orders',  value: String(apiStats?.openWorkOrders ?? 23),       foot: '8 in progress',       accentColor: null,            delta: null },
     { label: 'Overdue',           value: String(apiStats?.overdueWorkOrders ?? 4),      foot: 'Action required',     accentColor: 'var(--accent)',  delta: null },
-    { label: "Today's Revenue",   value: apiStats?.todaysRevenue != null ? fmt$(apiStats.todaysRevenue) : '$3,842.18', foot: '+18.4% vs avg', accentColor: null, delta: 'up' },
+    { label: "Today's Revenue",   value: apiStats?.todayRevenue != null ? fmt$(apiStats.todayRevenue) : '$3,842.18', foot: '+18.4% vs avg', accentColor: null, delta: 'up' },
     { label: 'Bookings This Week',value: String(apiStats?.bookingsThisWeek ?? 17),      foot: '3 awaiting drop-off', accentColor: null,            delta: null },
   ];
 
@@ -1136,7 +1180,8 @@ function WorkOrderDetail({ wo, onClose, fullPage, setScreen }) {
   function addLine(it) {
     setLines(l => [...l, {
       sku: it.sku, name: it.name, qty: 1, price: it.price,
-      taxablePst: it.taxablePst !== false, employee: employee, status: 'Open',
+      // BC PST: auto-exempt bikes, helmets, bike lights, labour (RSBC 1996 c.431)
+      taxablePst: !isPstExempt(it), employee: employee, status: 'Open',
     }]);
     setLineQ('');
   }
@@ -2570,7 +2615,7 @@ function ReceiptModal({ receipt, onClose }) {
         h('button', { className: 'btn primary', style: { flex: 1 }, onClick: onClose },
           h(Ico.Plus, { size: 13 }), ' New Sale'
         ),
-        h('button', { className: 'btn', onClick: () => { if (window.printReceipt) window.printReceipt({ customerName: displayName, items: saleItems.map(i => ({ name: i.name, qty: i.qty, price: i.price })), subtotal, gst, pst, total, paymentMethod: method }); } }, 'Print Receipt')
+        h('button', { className: 'btn', onClick: () => { if (window.printReceipt) window.printReceipt({ customerName: displayName, items: saleItems.map(i => ({ name: i.name, qty: i.qty, price: i.price, taxablePst: i.taxablePst })), subtotal, gst, pst, total, paymentMethod: method }); } }, 'Print Receipt')
       )
     )
   );
@@ -2824,12 +2869,14 @@ function SalesScreen({ onBarcodeScan, pendingCustomer, onClearPending, saleCount
     if (existing) {
       setItems(items.map(i => i.sku === it.sku ? { ...i, qty: i.qty + 1 } : i));
     } else {
+      // BC PST: auto-exempt bikes, helmets, bike lights, labour (RSBC 1996 c.431)
+      const taxablePst = !isPstExempt(it);
       setItems([...items, {
         sku: it.sku,
         name: it.name,
         qty: 1,
         price: it.price,
-        taxablePst: it.taxablePst !== false,
+        taxablePst,
         upc: it.upc,
         stock: it.stock,
         cost: it.cost,
@@ -4039,6 +4086,7 @@ function App() {
       h('main', { className: 'main' },
         h(Topbar, { screen, topbarSearchRef, onOpenSearch: function() { setShowGlobalSearch(true); } }),
         h(OfflineBanner),
+        h(StripeBanner),
         h('div', { className: 'content' }, renderScreen()),
         h(StatusStrip)
       )
@@ -4064,6 +4112,8 @@ window.AvInit         = AvInit;
 window.Field          = Field;
 window.Toggle         = Toggle;
 window.Ico            = Ico;
+window.isPstExempt    = isPstExempt;
+window.PST_EXEMPT_DEPTS = PST_EXEMPT_DEPTS;
 window.toast          = toast;
 
 /* ── Mount ── */
