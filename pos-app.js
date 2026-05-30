@@ -5206,6 +5206,8 @@ function SettingsScreen() {
   const [testPrintResult, setTestPrintResult] = useState('');
   // ── Integrations tab state
   const [intSyncStatus, setIntSyncStatus] = useState({ ls: null, shopify: null });
+  const [lsStatusData, setLsStatusData] = useState(null);
+  const [lsStatusLoading, setLsStatusLoading] = useState(false);
 
   function doTestPrint(type) {
     if (type === 'receipt') {
@@ -5230,6 +5232,17 @@ function SettingsScreen() {
     }).catch(function() {
       setIntSyncStatus(function(s) { return Object.assign({}, s, { [system]: 'error' }); });
       toast('Sync failed', 'error');
+    });
+  }
+
+  function doFetchLsStatus() {
+    setLsStatusLoading(true);
+    window.apiGet('/api/ls-status').then(function(d) {
+      setLsStatusData(d);
+      setLsStatusLoading(false);
+    }).catch(function() {
+      setLsStatusData({ connected: false, error: 'Fetch failed' });
+      setLsStatusLoading(false);
     });
   }
 
@@ -5583,6 +5596,98 @@ function SettingsScreen() {
               .then(function() { toast('Stripe connection OK', 'success'); })
               .catch(function() { toast('Stripe test failed', 'error'); });
           }}, 'Test Payment')
+        ),
+
+        /* ── LS Live Status ── */
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 } },
+            h('span', { style: { fontWeight: 600 } }, 'Lightspeed Connection Details'),
+            lsStatusData && h(StatusDot, {
+              ok: lsStatusData.connected,
+              error: !lsStatusData.connected
+            })
+          ),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 10 } },
+            'Live token health, sync timestamps and last-sale push status.'
+          ),
+          lsStatusData && h('div', { style: { fontSize: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginBottom: 10 } },
+            h('span', { style: { color: 'var(--text3)' } }, 'Connected'),
+            h('span', { style: { color: lsStatusData.connected ? '#34d399' : '#f87171' } },
+              lsStatusData.connected ? 'Yes' : 'No'
+            ),
+            h('span', { style: { color: 'var(--text3)' } }, 'Token expires'),
+            h('span', null, lsStatusData.tokenExpiry
+              ? new Date(lsStatusData.tokenExpiry).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })
+              : '—'
+            ),
+            h('span', { style: { color: 'var(--text3)' } }, 'Items synced'),
+            h('span', null, lsStatusData.lastSync && lsStatusData.lastSync.items
+              ? new Date(lsStatusData.lastSync.items).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : '—'
+            ),
+            h('span', { style: { color: 'var(--text3)' } }, 'Customers synced'),
+            h('span', null, lsStatusData.lastSync && lsStatusData.lastSync.customers
+              ? new Date(lsStatusData.lastSync.customers).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : '—'
+            ),
+            h('span', { style: { color: 'var(--text3)' } }, 'Sales synced'),
+            h('span', null, lsStatusData.lastSync && lsStatusData.lastSync.sales
+              ? new Date(lsStatusData.lastSync.sales).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : '—'
+            ),
+            lsStatusData.scopeWarning && h('span', { style: { gridColumn: '1/-1', color: '#fb923c', marginTop: 4 } },
+              '⚠ ' + lsStatusData.scopeWarning
+            )
+          ),
+          h('button', { className: 'btn ghost', onClick: doFetchLsStatus, disabled: lsStatusLoading },
+            lsStatusLoading ? '⟳ Fetching…' : '↻ Check Now'
+          )
+        ),
+
+        /* ── Migration Status ── */
+        h('div', { style: { padding: 14, background: 'var(--bg2)', border: '1px solid var(--line)' } },
+          h('div', { style: { fontWeight: 600, marginBottom: 8 } }, 'Migration Readiness'),
+          h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 12 } },
+            'Features that work independently of Lightspeed (offline-capable or Shopify-only).'
+          ),
+          (function() {
+            var FEATURES = [
+              { label: 'Work Order management (create / update / status)',  ok: true,  note: 'R2-backed, works offline' },
+              { label: 'Work Order SMS notifications (customer-ready SMS)', ok: !!settings.ringcentralToken, note: settings.ringcentralToken ? 'RingCentral configured' : 'Needs RingCentral JWT token' },
+              { label: 'Cash + card payment recording',                    ok: true,  note: 'Stored locally, pushed to LS on sync' },
+              { label: 'Sale → Lightspeed sync',                           ok: true,  note: '/api/pos-sync-sale-to-ls — live sync on sale complete' },
+              { label: 'WO status → Lightspeed sync',                      ok: true,  note: 'Fires on every status change if lsId set' },
+              { label: 'Inventory lookup (parts/gear)',                     ok: true,  note: '/api/parts via HLC+LS worker' },
+              { label: 'Customer search + history',                        ok: true,  note: '/api/pos-customer — LS + R2 fallback' },
+              { label: 'Stripe Terminal card reader',                      ok: !!settings.stripeKey, note: settings.stripeKey ? 'Stripe key configured' : 'Needs sk_live_ key + CF secret' },
+              { label: 'Receipt printing',                                 ok: true,  note: 'Browser print — no hardware dependency' },
+              { label: 'Daily report + WO CSV export',                     ok: true,  note: 'Client-side, works offline' },
+              { label: 'Shopify online orders (HLC dropship)',             ok: true,  note: 'Nightly GH Action + worker webhook' },
+              { label: 'Barcode scanner lookup',                           ok: true,  note: '/api/barcode — UPC → LS item' },
+            ];
+            var done = FEATURES.filter(function(f) { return f.ok; }).length;
+            var pct  = Math.round(done / FEATURES.length * 100);
+            return h('div', null,
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 } },
+                h('div', { style: { flex: 1, height: 8, background: 'var(--line)', borderRadius: 4, overflow: 'hidden' } },
+                  h('div', { style: { width: pct + '%', height: '100%', background: pct >= 80 ? '#34d399' : pct >= 50 ? '#fbbf24' : '#f87171', transition: 'width 0.3s' } })
+                ),
+                h('span', { style: { fontSize: 13, fontWeight: 700, minWidth: 40 } }, pct + '%')
+              ),
+              h('div', { style: { fontSize: 11, color: 'var(--text2)', marginBottom: 8 } },
+                done + ' of ' + FEATURES.length + ' features ready without full LS dependency'
+              ),
+              FEATURES.map(function(f, i) {
+                return h('div', { key: i, style: { display: 'flex', alignItems: 'flex-start', gap: 8, padding: '5px 0', borderTop: i > 0 ? '1px solid var(--line2)' : 'none' } },
+                  h('span', { style: { fontSize: 14, flexShrink: 0, marginTop: 1 } }, f.ok ? '✓' : '○'),
+                  h('div', null,
+                    h('div', { style: { fontSize: 12, color: f.ok ? 'var(--text)' : 'var(--text2)' } }, f.label),
+                    h('div', { style: { fontSize: 11, color: 'var(--text3)' } }, f.note)
+                  )
+                );
+              })
+            );
+          })()
         )
       ),
 
