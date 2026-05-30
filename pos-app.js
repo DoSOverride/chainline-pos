@@ -2938,7 +2938,7 @@ function WorkOrdersScreen({ setScreen, onOpenWo }) {
 
   function fetchWos() {
     setLoading(true);
-    return apiGet('/api/workorders')
+    return apiGet('/api/workorders?status=all')
       .then(data => {
         // KV-backed worker always returns { workorders: [...] }. Even empty.
         // Treat any successful response as authoritative — do NOT keep MOCK_WO if API succeeds.
